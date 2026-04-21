@@ -43,7 +43,7 @@ final class SiteRepository
             'trust_points' => self::content('home.trust.items', []),
             'usp_points' => self::content('home.usp.items', []),
             'top_pros' => Database::query(
-                "SELECT id, full_name, slug, role, specialization, profile_pic, rating, verification_status, years_experience, city
+                "SELECT id, full_name, slug, role, specialization, profile_pic, rating, verification_status, years_experience, city, primary_work_type, primary_work_area
                  FROM pros
                  WHERE is_active = 1
                  ORDER BY verification_status DESC, rating DESC, updated_at DESC
@@ -56,7 +56,11 @@ final class SiteRepository
 
     public static function cityOptions(): array
     {
-        return ['Delhi', 'Gurgaon', 'Noida'];
+        $rows = Database::query("SELECT DISTINCT city FROM pros WHERE is_active = 1 AND city IS NOT NULL AND city <> '' ORDER BY city");
+        if ($rows === []) {
+            return ['Delhi', 'Gurgaon', 'Noida'];
+        }
+        return array_map(static fn(array $row): string => (string)$row['city'], $rows);
     }
 
     public static function requirementOptions(): array
@@ -67,6 +71,16 @@ final class SiteRepository
             return ['Kitchen', 'Wardrobe', 'Full Home'];
         }
         return $options;
+    }
+
+    public static function proFilterOptions(): array
+    {
+        return [
+            'roles' => array_map(static fn(array $r): string => (string)$r['role'], Database::query("SELECT DISTINCT role FROM pros WHERE is_active=1 ORDER BY role")),
+            'cities' => array_map(static fn(array $r): string => (string)$r['city'], Database::query("SELECT DISTINCT city FROM pros WHERE is_active=1 AND city IS NOT NULL AND city <> '' ORDER BY city")),
+            'work_types' => array_map(static fn(array $r): string => (string)$r['primary_work_type'], Database::query("SELECT DISTINCT primary_work_type FROM pros WHERE is_active=1 AND primary_work_type IS NOT NULL AND primary_work_type <> '' ORDER BY primary_work_type")),
+            'work_areas' => array_map(static fn(array $r): string => (string)$r['primary_work_area'], Database::query("SELECT DISTINCT primary_work_area FROM pros WHERE is_active=1 AND primary_work_area IS NOT NULL AND primary_work_area <> '' ORDER BY primary_work_area")),
+        ];
     }
 
     public static function listPros(array $filters = []): array
@@ -82,6 +96,14 @@ final class SiteRepository
             $where[] = 'city = ?';
             $params[] = $filters['city'];
         }
+        if (!empty($filters['work_type'])) {
+            $where[] = 'primary_work_type = ?';
+            $params[] = $filters['work_type'];
+        }
+        if (!empty($filters['work_area'])) {
+            $where[] = 'primary_work_area = ?';
+            $params[] = $filters['work_area'];
+        }
         if (isset($filters['budget_min']) && $filters['budget_min'] !== '') {
             $where[] = 'starting_price >= ?';
             $params[] = (float)$filters['budget_min'];
@@ -91,7 +113,8 @@ final class SiteRepository
             $params[] = (float)$filters['budget_max'];
         }
 
-        $sql = "SELECT id, full_name, slug, role, specialization, profile_pic, cover_photo, verification_status, rating, years_experience, starting_price, city
+        $sql = "SELECT id, full_name, slug, role, profile_description, specialization, profile_pic, cover_photo, verification_status, rating,
+                       years_experience, starting_price, min_project_value, max_project_value, city, primary_work_type, primary_work_area
                 FROM pros
                 WHERE " . implode(' AND ', $where) . "
                 ORDER BY verification_status DESC, rating DESC, updated_at DESC";
@@ -108,6 +131,10 @@ final class SiteRepository
 
         $pro['service_areas'] = json_decode((string)($pro['service_areas'] ?? '[]'), true) ?: [];
         $pro['offerings_json'] = json_decode((string)($pro['offerings_json'] ?? '[]'), true) ?: [];
+        $pro['materials_json'] = json_decode((string)($pro['materials_json'] ?? '[]'), true) ?: [];
+        $pro['design_styles_json'] = json_decode((string)($pro['design_styles_json'] ?? '[]'), true) ?: [];
+        $pro['languages_json'] = json_decode((string)($pro['languages_json'] ?? '[]'), true) ?: [];
+        $pro['certifications_json'] = json_decode((string)($pro['certifications_json'] ?? '[]'), true) ?: [];
 
         return $pro;
     }
@@ -115,18 +142,21 @@ final class SiteRepository
     public static function proProfileData(int $proId): array
     {
         $projects = Database::query(
-            'SELECT id, project_name, total_cost, bhk_type, year_completed, timeline_months, location, work_type, media_json
+            'SELECT id, slug, project_name, project_description, total_cost, bhk_type, year_completed, timeline_months, project_duration_label,
+                    location, work_type, area_of_work, materials_json, media_json, video_url, design_style, team_size, warranty_years,
+                    testimonial_client_name, testimonial_text, testimonial_rating
              FROM projects WHERE pro_id = ? ORDER BY year_completed DESC, id DESC',
             [$proId]
         );
 
         foreach ($projects as &$project) {
             $project['media_json'] = json_decode((string)($project['media_json'] ?? '[]'), true) ?: [];
+            $project['materials_json'] = json_decode((string)($project['materials_json'] ?? '[]'), true) ?: [];
         }
         unset($project);
 
         $reviews = Database::query(
-            'SELECT id, client_name, rating, review_text, verified_purchase, photos_json, created_at
+            'SELECT id, client_name, rating, review_text, verified_purchase, work_type, area_of_work, materials_highlight, photos_json, created_at
              FROM reviews WHERE pro_id = ? ORDER BY created_at DESC',
             [$proId]
         );
@@ -140,6 +170,46 @@ final class SiteRepository
             'projects' => $projects,
             'reviews' => $reviews,
         ];
+    }
+
+    public static function getProjectBySlug(string $slug): ?array
+    {
+        $row = Database::one(
+            'SELECT p.*, pr.id AS pro_id, pr.full_name AS pro_name, pr.slug AS pro_slug, pr.profile_pic AS pro_profile_pic,
+                    pr.role AS pro_role, pr.city AS pro_city, pr.primary_work_type AS pro_work_type, pr.primary_work_area AS pro_work_area
+             FROM projects p
+             JOIN pros pr ON pr.id = p.pro_id
+             WHERE p.slug = ? AND pr.is_active = 1',
+            [$slug]
+        );
+
+        if (!$row) {
+            return null;
+        }
+
+        $row['media_json'] = json_decode((string)($row['media_json'] ?? '[]'), true) ?: [];
+        $row['materials_json'] = json_decode((string)($row['materials_json'] ?? '[]'), true) ?: [];
+
+        return $row;
+    }
+
+    public static function listOtherProjectsByPro(int $proId, string $excludeSlug): array
+    {
+        $rows = Database::query(
+            'SELECT id, slug, project_name, total_cost, location, work_type, area_of_work, media_json
+             FROM projects
+             WHERE pro_id = ? AND slug <> ?
+             ORDER BY year_completed DESC, id DESC
+             LIMIT 6',
+            [$proId, $excludeSlug]
+        );
+
+        foreach ($rows as &$row) {
+            $row['media_json'] = json_decode((string)($row['media_json'] ?? '[]'), true) ?: [];
+        }
+        unset($row);
+
+        return $rows;
     }
 
     public static function calculateEstimate(string $floorPlan, string $packageTier, array $rooms): float

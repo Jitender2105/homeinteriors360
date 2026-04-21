@@ -61,6 +61,8 @@ try {
         $filters = [
             'role' => $_GET['role'] ?? null,
             'city' => $_GET['city'] ?? null,
+            'work_type' => $_GET['work_type'] ?? null,
+            'work_area' => $_GET['work_area'] ?? null,
             'budget_min' => $_GET['budget_min'] ?? null,
             'budget_max' => $_GET['budget_max'] ?? null,
         ];
@@ -74,6 +76,15 @@ try {
         }
         $profile = SiteRepository::proProfileData((int)$pro['id']);
         jsonResponse(['pro' => $pro, 'projects' => $profile['projects'], 'reviews' => $profile['reviews']]);
+    }
+
+    if (preg_match('#^/api/portfolio/([a-z0-9-]+)$#i', $path, $match) && $method === 'GET') {
+        $project = SiteRepository::getProjectBySlug((string)$match[1]);
+        if (!$project) {
+            jsonResponse(['error' => 'Portfolio project not found'], 404);
+        }
+        $related = SiteRepository::listOtherProjectsByPro((int)$project['pro_id'], (string)$project['slug']);
+        jsonResponse(['project' => $project, 'related_projects' => $related]);
     }
 
     if ($path === '/api/site-content' && $method === 'GET') {
@@ -204,6 +215,7 @@ try {
             'active' => 'directory',
             'content' => $content,
             'pros' => SiteRepository::listPros([]),
+            'filterOptions' => SiteRepository::proFilterOptions(),
         ]);
         exit;
     }
@@ -232,6 +244,23 @@ try {
             'title' => (string)SiteRepository::content('seo.calculator.title', 'Design Cost Calculator'),
             'active' => 'calculator',
             'content' => $content,
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/portfolio/([a-z0-9-]+)$#i', $path, $match)) {
+        $project = SiteRepository::getProjectBySlug((string)$match[1]);
+        if (!$project) {
+            http_response_code(404);
+            echo 'Portfolio project not found';
+            exit;
+        }
+        render('public/portfolio-detail', [
+            'title' => $project['project_name'] . ' | ' . (string)SiteRepository::content('seo.portfolio.title_suffix', 'HomeInteriors360'),
+            'active' => 'directory',
+            'content' => $content,
+            'project' => $project,
+            'relatedProjects' => SiteRepository::listOtherProjectsByPro((int)$project['pro_id'], (string)$project['slug']),
         ]);
         exit;
     }

@@ -1,9 +1,9 @@
 <?php
 require __DIR__ . '/../partials/header.php';
-$roles = array_values(array_unique(array_filter(array_map(static fn(array $p): string => (string)($p['role'] ?? ''), $pros))));
-$cities = array_values(array_unique(array_filter(array_map(static fn(array $p): string => (string)($p['city'] ?? ''), $pros))));
-sort($roles);
-sort($cities);
+$roles = $filterOptions['roles'] ?? [];
+$cities = $filterOptions['cities'] ?? [];
+$workTypes = $filterOptions['work_types'] ?? [];
+$workAreas = $filterOptions['work_areas'] ?? [];
 ?>
 <section class="section">
   <div class="container directory-layout" data-reveal>
@@ -12,20 +12,16 @@ sort($cities);
       <p><?= htmlspecialchars((string)($content['directory.subtitle'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
 
       <label><?= htmlspecialchars((string)($content['directory.filter.role'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
-      <select id="fRole">
-        <option value=""></option>
-        <?php foreach ($roles as $role): ?>
-          <option value="<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?></option>
-        <?php endforeach; ?>
-      </select>
+      <select id="fRole"><option value=""></option><?php foreach ($roles as $role): ?><option value="<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
 
       <label><?= htmlspecialchars((string)($content['directory.filter.city'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
-      <select id="fCity">
-        <option value=""></option>
-        <?php foreach ($cities as $city): ?>
-          <option value="<?= htmlspecialchars($city, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($city, ENT_QUOTES, 'UTF-8') ?></option>
-        <?php endforeach; ?>
-      </select>
+      <select id="fCity"><option value=""></option><?php foreach ($cities as $city): ?><option value="<?= htmlspecialchars($city, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($city, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
+
+      <label><?= htmlspecialchars((string)($content['directory.filter.work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
+      <select id="fWorkType"><option value=""></option><?php foreach ($workTypes as $workType): ?><option value="<?= htmlspecialchars($workType, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($workType, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
+
+      <label><?= htmlspecialchars((string)($content['directory.filter.work_area'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
+      <select id="fWorkArea"><option value=""></option><?php foreach ($workAreas as $workArea): ?><option value="<?= htmlspecialchars($workArea, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($workArea, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
 
       <label><?= htmlspecialchars((string)($content['directory.filter.budget'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
       <div class="budget-grid">
@@ -42,6 +38,8 @@ sort($cities);
             <div>
               <h4><?= htmlspecialchars((string)$pro['full_name'], ENT_QUOTES, 'UTF-8') ?></h4>
               <p><?= htmlspecialchars((string)($pro['role'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($pro['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+              <p><?= htmlspecialchars((string)($content['profile.work_type'] ?? 'Type of Work'), ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string)($pro['primary_work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+              <p><?= htmlspecialchars((string)($content['profile.work_area'] ?? 'Area of Work'), ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string)($pro['primary_work_area'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
               <p>★ <?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?><?php if ((int)($pro['verification_status'] ?? 0) === 1): ?> <span class="verify-badge"><?= htmlspecialchars((string)($content['directory.verified'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></p>
               <p><?= htmlspecialchars((string)($content['directory.starting_from'] ?? ''), ENT_QUOTES, 'UTF-8') ?> ₹<?= number_format((float)($pro['starting_price'] ?? 0), 0) ?></p>
               <p><?= htmlspecialchars((string)($content['directory.experience'] ?? ''), ENT_QUOTES, 'UTF-8') ?> <?= (int)($pro['years_experience'] ?? 0) ?>+</p>
@@ -59,6 +57,8 @@ sort($cities);
 (() => {
   const role = document.getElementById('fRole');
   const city = document.getElementById('fCity');
+  const workType = document.getElementById('fWorkType');
+  const workArea = document.getElementById('fWorkArea');
   const min = document.getElementById('fBudgetMin');
   const max = document.getElementById('fBudgetMax');
   const results = document.getElementById('proResults');
@@ -69,19 +69,27 @@ sort($cities);
     startingFrom: <?= json_encode((string)($content['directory.starting_from'] ?? ''), JSON_UNESCAPED_UNICODE) ?>,
     experience: <?= json_encode((string)($content['directory.experience'] ?? ''), JSON_UNESCAPED_UNICODE) ?>,
     cta: <?= json_encode((string)($content['directory.cta'] ?? ''), JSON_UNESCAPED_UNICODE) ?>,
+    workTypeLabel: <?= json_encode((string)($content['profile.work_type'] ?? 'Type of Work'), JSON_UNESCAPED_UNICODE) ?>,
+    workAreaLabel: <?= json_encode((string)($content['profile.work_area'] ?? 'Area of Work'), JSON_UNESCAPED_UNICODE) ?>,
   };
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>\"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  }
 
   function card(pro) {
     return `
       <article class="listing-card">
-        <img src="${pro.profile_pic || ''}" alt="${pro.full_name || ''}">
+        <img src="${esc(pro.profile_pic || '')}" alt="${esc(pro.full_name || '')}">
         <div>
-          <h4>${pro.full_name || ''}</h4>
-          <p>${pro.role || ''} · ${pro.city || ''}</p>
-          <p>★ ${pro.rating || 0} ${Number(pro.verification_status) === 1 ? `<span class="verify-badge">${labels.verified}</span>` : ''}</p>
+          <h4>${esc(pro.full_name || '')}</h4>
+          <p>${esc(pro.role || '')} · ${esc(pro.city || '')}</p>
+          <p>${labels.workTypeLabel}: ${esc(pro.primary_work_type || '')}</p>
+          <p>${labels.workAreaLabel}: ${esc(pro.primary_work_area || '')}</p>
+          <p>★ ${esc(pro.rating || 0)} ${Number(pro.verification_status) === 1 ? `<span class="verify-badge">${labels.verified}</span>` : ''}</p>
           <p>${labels.startingFrom} ₹${Number(pro.starting_price || 0).toLocaleString('en-IN')}</p>
           <p>${labels.experience} ${Number(pro.years_experience || 0)}+</p>
-          <a class="btn-link" href="/professionals/${pro.slug}">${labels.cta}</a>
+          <a class="btn-link" href="/professionals/${esc(pro.slug || '')}">${labels.cta}</a>
         </div>
       </article>
     `;
@@ -91,6 +99,8 @@ sort($cities);
     const qs = new URLSearchParams();
     if (role.value) qs.set('role', role.value);
     if (city.value) qs.set('city', city.value);
+    if (workType.value) qs.set('work_type', workType.value);
+    if (workArea.value) qs.set('work_area', workArea.value);
     if (min.value) qs.set('budget_min', min.value);
     if (max.value) qs.set('budget_max', max.value);
 
@@ -101,7 +111,7 @@ sort($cities);
     emptyState.style.display = list.length ? 'none' : 'block';
   }
 
-  [role, city, min, max].forEach((el) => {
+  [role, city, workType, workArea, min, max].forEach((el) => {
     el.addEventListener('input', load);
     el.addEventListener('change', load);
   });
