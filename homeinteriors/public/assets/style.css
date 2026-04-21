@@ -156,12 +156,19 @@ img { max-width: 100%; display: block; }
 .multi-step .step.active { display: grid; gap: 12px; }
 .step label { font-size: 14px; color: var(--muted); }
 
-input, select, textarea, button {
+input:not([type="checkbox"]):not([type="radio"]), select, textarea, button {
   width: 100%;
   border-radius: 12px;
   border: 1px solid var(--line);
   padding: 11px 13px;
   font: inherit;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--primary);
 }
 
 button, .btn-primary, .btn-muted, .btn-link {
@@ -408,7 +415,27 @@ button, .btn-primary, .btn-muted, .btn-link {
 .calculator-card .step { display: none; }
 .calculator-card .step.active { display: block; }
 .select-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.select-grid label { display: flex; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
+.calculator-card .select-grid label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  min-height: 50px;
+}
+.calculator-card .select-grid label:has(input:checked) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(13, 36, 56, 0.08) inset;
+  background: #eef3f8;
+}
+.calculator-card .step h3 {
+  margin: 0 0 12px;
+}
+.calculator-card .step-actions {
+  margin-top: 18px;
+}
 .estimate { font-size: 22px; font-weight: 700; margin-top: 16px; color: var(--primary); }
 
 .admin-card { padding: 20px; display: grid; gap: 12px; }
@@ -539,5 +566,23 @@ textarea {
   .portfolio-card,
   .review-card {
     border-radius: 14px;
+  }
+
+  .calculator-card {
+    padding: 16px;
+  }
+  .calculator-card .select-grid {
+    grid-template-columns: 1fr;
+  }
+  .calculator-card .select-grid label {
+    min-height: 46px;
+    font-size: 14px;
+  }
+  .calculator-card .step-actions {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .estimate {
+    font-size: 20px;
   }
 }
