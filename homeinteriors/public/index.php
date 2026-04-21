@@ -2,7 +2,17 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/src/bootstrap.php';
+$bootstrapSameDir = __DIR__ . '/src/bootstrap.php';
+$bootstrapParentDir = __DIR__ . '/../src/bootstrap.php';
+if (is_file($bootstrapSameDir)) {
+    require $bootstrapSameDir;
+} elseif (is_file($bootstrapParentDir)) {
+    require $bootstrapParentDir;
+} else {
+    http_response_code(500);
+    echo 'Bootstrap file not found';
+    exit;
+}
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';

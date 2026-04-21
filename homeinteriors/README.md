@@ -1,19 +1,19 @@
-# HomeInteriors PHP Migration
+# HomeInteriors360 PHP App
 
-This folder contains a PHP (frontend + backend) migration of the Interior360 Node.js app.
+This folder contains the PHP frontend + backend for HomeInteriors360.
 
 ## Included
 
-- Public pages: `/`, `/articles`, `/designs`, `/designer/{slug}`
-- Lead form and lead APIs
+- Public pages: `/`, `/professionals`, `/professionals/{slug}`, `/cost-calculator`
+- Lead capture with homepage/profile/calculator sources
 - Admin auth and dashboard
-- Admin pages: leads, content, form-options, interior-designers
-- APIs equivalent to the Node version:
+- Admin pages: `/admin`, `/admin/content`, `/admin/leads`, `/admin/pros`
+- APIs:
   - `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`
-  - `/api/form-options`, `/api/localities`, `/api/site-content`, `/api/leads`
-  - `/api/admin/content`, `/api/admin/form-options`
-  - `/api/admin/interior-designers`, `/api/admin/interior-designers/{id}`
-  - `/api/admin/interior-designers/{id}/sections`
+  - `/api/homepage`, `/api/pros`, `/api/pros/{slug}`, `/api/site-content`
+  - `/api/leads`, `/api/calculator/estimate`
+  - `/api/admin/content`, `/api/admin/leads`, `/api/admin/leads/status`
+  - `/api/admin/pros`, `/api/admin/pros/verify`
 
 ## Setup
 
@@ -23,6 +23,17 @@ This folder contains a PHP (frontend + backend) migration of the Interior360 Nod
    - `cp .env.example .env.local`
 3. Update DB credentials in `.env.local`
 4. Serve `public/` as document root.
+5. Set `APP_KEY` in `.env.local` (long random secret).
+
+## Hostinger Git Sync
+
+Use one of these deployment layouts:
+
+1. Recommended:
+   - Repository path/docroot points to `homeinteriors/public`
+   - Keep `homeinteriors/src` and `homeinteriors/database` in deployment
+2. Flat layout (`public_html` contains `index.php`, `src`, `assets`):
+   - The bootstrap loader already supports this layout too.
 
 ## Default admin
 
@@ -34,5 +45,5 @@ Change this immediately in production.
 ## Notes
 
 - Pretty URL routing uses `public/.htaccess`.
-- Auth is session-based in PHP.
+- Auth is session-based with signed cookie fallback (for shared-hosting session edge cases).
 - Super admin-only routes require user role = `super_admin`.
