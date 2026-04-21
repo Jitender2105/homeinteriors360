@@ -37,6 +37,7 @@ CREATE TABLE pros (
   verification_status BOOLEAN NOT NULL DEFAULT FALSE,
   rating DECIMAL(3,2) NOT NULL DEFAULT 0,
   years_experience INT NOT NULL DEFAULT 0,
+  projects_delivered INT NOT NULL DEFAULT 0,
   starting_price DECIMAL(12,2) NOT NULL DEFAULT 0,
   min_project_value DECIMAL(12,2) DEFAULT NULL,
   max_project_value DECIMAL(12,2) DEFAULT NULL,
@@ -148,7 +149,7 @@ ON DUPLICATE KEY UPDATE email = VALUES(email), role = VALUES(role), is_active = 
 
 INSERT INTO pros (
   full_name, slug, profile_pic, cover_photo, role, profile_description, specialization,
-  primary_work_type, primary_work_area, verification_status, rating, years_experience,
+  primary_work_type, primary_work_area, verification_status, rating, years_experience, projects_delivered,
   starting_price, min_project_value, max_project_value, consultation_fee, city, service_areas,
   materials_json, design_styles_json, languages_json, certifications_json, response_time_hours,
   bio, why_work_with_me, offerings_json, is_active
@@ -167,6 +168,7 @@ VALUES
   1,
   4.9,
   12,
+  64,
   550000,
   450000,
   3500000,
@@ -196,6 +198,7 @@ VALUES
   1,
   4.7,
   15,
+  41,
   850000,
   700000,
   5500000,
@@ -225,6 +228,7 @@ VALUES
   1,
   4.6,
   14,
+  89,
   400000,
   300000,
   4000000,

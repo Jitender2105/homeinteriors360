@@ -28,6 +28,25 @@ $workAreas = $filterOptions['work_areas'] ?? [];
         <input id="fBudgetMin" type="number" placeholder="Min" />
         <input id="fBudgetMax" type="number" placeholder="Max" />
       </div>
+
+      <label>Experience (min years)</label>
+      <input id="fExperienceMin" type="number" placeholder="e.g. 5" />
+
+      <label>Projects Delivered (min)</label>
+      <input id="fProjectsMin" type="number" placeholder="e.g. 20" />
+
+      <label>Rating (min)</label>
+      <input id="fRatingMin" type="number" step="0.1" min="0" max="5" placeholder="e.g. 4.2" />
+
+      <label>Sort By</label>
+      <select id="fSortBy">
+        <option value="rating_desc">Rating: High to Low</option>
+        <option value="experience_desc">Experience: High to Low</option>
+        <option value="projects_desc">Projects: High to Low</option>
+        <option value="price_asc">Price: Low to High</option>
+        <option value="price_desc">Price: High to Low</option>
+        <option value="newest">Newest Added</option>
+      </select>
     </aside>
 
     <div>
@@ -43,6 +62,7 @@ $workAreas = $filterOptions['work_areas'] ?? [];
               <p>★ <?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?><?php if ((int)($pro['verification_status'] ?? 0) === 1): ?> <span class="verify-badge"><?= htmlspecialchars((string)($content['directory.verified'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></p>
               <p><?= htmlspecialchars((string)($content['directory.starting_from'] ?? ''), ENT_QUOTES, 'UTF-8') ?> ₹<?= number_format((float)($pro['starting_price'] ?? 0), 0) ?></p>
               <p><?= htmlspecialchars((string)($content['directory.experience'] ?? ''), ENT_QUOTES, 'UTF-8') ?> <?= (int)($pro['years_experience'] ?? 0) ?>+</p>
+              <p>Projects Delivered: <?= (int)($pro['projects_delivered'] ?? 0) ?></p>
               <a class="btn-link" href="/professionals/<?= htmlspecialchars((string)$pro['slug'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($content['directory.cta'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
             </div>
           </article>
@@ -61,6 +81,10 @@ $workAreas = $filterOptions['work_areas'] ?? [];
   const workArea = document.getElementById('fWorkArea');
   const min = document.getElementById('fBudgetMin');
   const max = document.getElementById('fBudgetMax');
+  const expMin = document.getElementById('fExperienceMin');
+  const projectsMin = document.getElementById('fProjectsMin');
+  const ratingMin = document.getElementById('fRatingMin');
+  const sortBy = document.getElementById('fSortBy');
   const results = document.getElementById('proResults');
   const emptyState = document.getElementById('emptyState');
 
@@ -89,6 +113,7 @@ $workAreas = $filterOptions['work_areas'] ?? [];
           <p>★ ${esc(pro.rating || 0)} ${Number(pro.verification_status) === 1 ? `<span class="verify-badge">${labels.verified}</span>` : ''}</p>
           <p>${labels.startingFrom} ₹${Number(pro.starting_price || 0).toLocaleString('en-IN')}</p>
           <p>${labels.experience} ${Number(pro.years_experience || 0)}+</p>
+          <p>Projects Delivered: ${Number(pro.projects_delivered || 0)}</p>
           <a class="btn-link" href="/professionals/${esc(pro.slug || '')}">${labels.cta}</a>
         </div>
       </article>
@@ -103,6 +128,10 @@ $workAreas = $filterOptions['work_areas'] ?? [];
     if (workArea.value) qs.set('work_area', workArea.value);
     if (min.value) qs.set('budget_min', min.value);
     if (max.value) qs.set('budget_max', max.value);
+    if (expMin.value) qs.set('experience_min', expMin.value);
+    if (projectsMin.value) qs.set('projects_min', projectsMin.value);
+    if (ratingMin.value) qs.set('rating_min', ratingMin.value);
+    if (sortBy.value) qs.set('sort_by', sortBy.value);
 
     const response = await fetch(`/api/pros?${qs.toString()}`);
     const data = await response.json();
@@ -111,7 +140,7 @@ $workAreas = $filterOptions['work_areas'] ?? [];
     emptyState.style.display = list.length ? 'none' : 'block';
   }
 
-  [role, city, workType, workArea, min, max].forEach((el) => {
+  [role, city, workType, workArea, min, max, expMin, projectsMin, ratingMin, sortBy].forEach((el) => {
     el.addEventListener('input', load);
     el.addEventListener('change', load);
   });

@@ -65,6 +65,10 @@ try {
             'work_area' => $_GET['work_area'] ?? null,
             'budget_min' => $_GET['budget_min'] ?? null,
             'budget_max' => $_GET['budget_max'] ?? null,
+            'experience_min' => $_GET['experience_min'] ?? null,
+            'projects_min' => $_GET['projects_min'] ?? null,
+            'rating_min' => $_GET['rating_min'] ?? null,
+            'sort_by' => $_GET['sort_by'] ?? null,
         ];
         jsonResponse(['pros' => SiteRepository::listPros($filters)]);
     }
@@ -198,6 +202,74 @@ try {
         jsonResponse(['success' => true]);
     }
 
+    if ($path === '/api/admin/professionals') {
+        Auth::requireAuth();
+        if ($method === 'GET') {
+            jsonResponse(['professionals' => SiteRepository::listProfessionalsForAdmin()]);
+        }
+        $body = requestJson();
+        if ($method === 'POST') {
+            if (empty($body['full_name']) || empty($body['slug'])) {
+                jsonResponse(['error' => 'full_name and slug are required'], 400);
+            }
+            $id = SiteRepository::createProfessional($body);
+            jsonResponse(['success' => true, 'id' => $id]);
+        }
+    }
+
+    if (preg_match('#^/api/admin/professionals/(\\d+)$#', $path, $match)) {
+        Auth::requireAuth();
+        $id = (int)$match[1];
+        $body = requestJson();
+        if ($method === 'PUT') {
+            if (empty($body['full_name']) || empty($body['slug'])) {
+                jsonResponse(['error' => 'full_name and slug are required'], 400);
+            }
+            SiteRepository::updateProfessional($id, $body);
+            jsonResponse(['success' => true]);
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deleteProfessional($id);
+            jsonResponse(['success' => true]);
+        }
+    }
+
+    if ($path === '/api/admin/portfolios') {
+        Auth::requireAuth();
+        if ($method === 'GET') {
+            $proId = isset($_GET['pro_id']) ? (int)$_GET['pro_id'] : null;
+            jsonResponse([
+                'portfolios' => SiteRepository::listPortfolioForAdmin($proId),
+                'professionals' => SiteRepository::professionalOptions(),
+            ]);
+        }
+        $body = requestJson();
+        if ($method === 'POST') {
+            if (empty($body['pro_id']) || empty($body['slug']) || empty($body['project_name'])) {
+                jsonResponse(['error' => 'pro_id, slug and project_name are required'], 400);
+            }
+            $id = SiteRepository::createPortfolio($body);
+            jsonResponse(['success' => true, 'id' => $id]);
+        }
+    }
+
+    if (preg_match('#^/api/admin/portfolios/(\\d+)$#', $path, $match)) {
+        Auth::requireAuth();
+        $id = (int)$match[1];
+        $body = requestJson();
+        if ($method === 'PUT') {
+            if (empty($body['pro_id']) || empty($body['slug']) || empty($body['project_name'])) {
+                jsonResponse(['error' => 'pro_id, slug and project_name are required'], 400);
+            }
+            SiteRepository::updatePortfolio($id, $body);
+            jsonResponse(['success' => true]);
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deletePortfolio($id);
+            jsonResponse(['success' => true]);
+        }
+    }
+
     // Public pages
     if ($path === '/') {
         render('public/home', [
@@ -314,6 +386,29 @@ try {
             'active' => 'admin',
             'content' => $content,
             'pros' => SiteRepository::listPros([]),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/professionals') {
+        Auth::requireAuth();
+        render('admin/professionals', [
+            'title' => 'Professionals Manager',
+            'active' => 'admin',
+            'content' => $content,
+            'professionals' => SiteRepository::listProfessionalsForAdmin(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/portfolios') {
+        Auth::requireAuth();
+        render('admin/portfolios', [
+            'title' => 'Portfolio Manager',
+            'active' => 'admin',
+            'content' => $content,
+            'portfolios' => SiteRepository::listPortfolioForAdmin(),
+            'professionals' => SiteRepository::professionalOptions(),
         ]);
         exit;
     }

@@ -5,6 +5,7 @@ ALTER TABLE pros
   ADD COLUMN IF NOT EXISTS profile_description TEXT,
   ADD COLUMN IF NOT EXISTS primary_work_type VARCHAR(120) DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS primary_work_area VARCHAR(120) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS projects_delivered INT NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS min_project_value DECIMAL(12,2) DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS max_project_value DECIMAL(12,2) DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS consultation_fee DECIMAL(12,2) DEFAULT NULL,
@@ -51,7 +52,11 @@ UPDATE pros
 SET
   primary_work_type = COALESCE(NULLIF(primary_work_type, ''), 'Full Home'),
   primary_work_area = COALESCE(NULLIF(primary_work_area, ''), 'Apartments'),
-  profile_description = COALESCE(profile_description, bio);
+  profile_description = COALESCE(profile_description, bio),
+  projects_delivered = CASE
+    WHEN projects_delivered > 0 THEN projects_delivered
+    ELSE COALESCE((SELECT COUNT(*) FROM projects WHERE projects.pro_id = pros.id), 0)
+  END;
 
 INSERT INTO site_content (key_name, content_value, content_type)
 VALUES
