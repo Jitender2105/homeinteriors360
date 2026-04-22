@@ -4,16 +4,12 @@
     <input name="name" placeholder="Full Name *" required>
     <input name="phone" placeholder="Contact Number *" required>
     <input name="email" placeholder="Email Address">
+    <input name="society_area" placeholder="Society / Area">
+    <input name="budget" placeholder="Budget">
     <select name="work_type" required>
       <option value="">Select Project Type *</option>
       <?php foreach (($workTypes ?? []) as $w): ?>
         <option value="<?= htmlspecialchars($w['option_value']) ?>"><?= htmlspecialchars($w['option_value']) ?></option>
-      <?php endforeach; ?>
-    </select>
-    <select name="budget" required>
-      <option value="">Select Budget *</option>
-      <?php foreach (($budgets ?? []) as $b): ?>
-        <option value="<?= htmlspecialchars($b['option_value']) ?>"><?= htmlspecialchars($b['option_value']) ?></option>
       <?php endforeach; ?>
     </select>
     <select name="locality">

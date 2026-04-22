@@ -2,10 +2,11 @@
 <section class="section">
   <div class="container" data-reveal>
     <h1>Portfolio Manager</h1>
-    <p class="muted-line">Upload complete portfolio details for each professional. Use comma-separated image URLs and materials.</p>
+    <p class="muted-line">Upload complete portfolio details for each professional. Images now upload directly from the browser.</p>
 
-    <form id="portfolioForm" class="admin-card" style="margin-bottom:16px;">
+    <form id="portfolioForm" class="admin-card" style="margin-bottom:16px;" enctype="multipart/form-data">
       <input type="hidden" name="id" />
+      <input type="hidden" name="current_media_json" />
       <div class="budget-grid">
         <select name="pro_id" required>
           <option value="">Select Professional</option>
@@ -39,7 +40,11 @@
         <input name="warranty_years" type="number" placeholder="Warranty (Years)" />
       </div>
       <input name="materials_json" placeholder="Materials (comma separated)" />
-      <textarea name="media_json" rows="2" placeholder="Image URLs (comma separated, 4-5 recommended)"></textarea>
+      <label class="file-field">
+        <span>Upload Portfolio Images</span>
+        <input type="file" name="media_files[]" accept="image/*" multiple />
+      </label>
+      <div id="portfolioMediaPreview" class="image-preview-strip"></div>
       <input name="video_url" placeholder="Video URL (optional)" />
       <div class="budget-grid">
         <input name="testimonial_client_name" placeholder="Testimonial Customer Name" />
@@ -85,8 +90,18 @@
   const form = document.getElementById('portfolioForm');
   const msg = document.getElementById('portfolioMsg');
   const resetBtn = document.getElementById('portfolioReset');
+  const mediaPreview = document.getElementById('portfolioMediaPreview');
 
+  const esc = (value) => String(value ?? '').replace(/[&<>\"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const parseCsv = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+  const parseArray = (v) => {
+    try {
+      const arr = Array.isArray(v) ? v : JSON.parse(v || '[]');
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return parseCsv(v);
+    }
+  };
   const stringifyCsv = (v) => {
     try {
       const arr = Array.isArray(v) ? v : JSON.parse(v || '[]');
@@ -101,8 +116,9 @@
         form.elements[name].value = item[name];
       }
     });
-    form.elements.media_json.value = stringifyCsv(item.media_json);
+    form.elements.current_media_json.value = JSON.stringify(parseArray(item.media_json));
     form.elements.materials_json.value = stringifyCsv(item.materials_json);
+    mediaPreview.innerHTML = parseArray(item.media_json).map((src) => `<img src="${esc(src)}" alt="portfolio">`).join('');
   }
 
   document.querySelectorAll('.edit-portfolio').forEach((btn) => {
@@ -122,23 +138,26 @@
     });
   });
 
-  resetBtn.addEventListener('click', () => form.reset());
+  resetBtn.addEventListener('click', () => {
+    form.reset();
+    form.elements.current_media_json.value = '';
+    mediaPreview.innerHTML = '';
+  });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
-    const payload = Object.fromEntries(fd.entries());
-    const id = payload.id;
-    payload.media_json = parseCsv(payload.media_json);
-    payload.materials_json = parseCsv(payload.materials_json);
+    const id = fd.get('id');
+    fd.set('materials_json', parseCsv(fd.get('materials_json')).join(', '));
+    if (id) {
+      fd.set('_method', 'PUT');
+    }
 
     const url = id ? `/api/admin/portfolios/${id}` : '/api/admin/portfolios';
-    const method = id ? 'PUT' : 'POST';
     const res = await fetch(url, {
-      method,
+      method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: fd
     });
     const data = await res.json();
     if (res.ok) {

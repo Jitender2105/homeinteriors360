@@ -16,6 +16,9 @@ if (is_file($bootstrapSameDir)) {
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if ($method === 'POST' && !empty($_POST['_method'])) {
+    $method = strtoupper((string)$_POST['_method']);
+}
 $content = SiteRepository::allContent();
 
 try {
@@ -107,7 +110,7 @@ try {
     }
 
     if ($path === '/api/leads' && $method === 'POST') {
-        $body = requestJson();
+        $body = requestData();
         if (empty($body['name']) || empty($body['phone']) || empty($body['city']) || empty($body['requirement'])) {
             jsonResponse(['error' => 'Name, phone, city and requirement are required'], 400);
         }
@@ -115,6 +118,8 @@ try {
             'name' => (string)$body['name'],
             'phone' => (string)$body['phone'],
             'city' => (string)$body['city'],
+            'society_area' => (string)($body['society_area'] ?? ''),
+            'budget' => (string)($body['budget'] ?? ''),
             'requirement' => (string)$body['requirement'],
             'source' => (string)($body['source'] ?? 'homepage'),
             'pro_id' => isset($body['pro_id']) ? (int)$body['pro_id'] : null,
@@ -140,6 +145,8 @@ try {
                 'name' => (string)$body['name'],
                 'phone' => (string)$body['phone'],
                 'city' => (string)$body['city'],
+                'society_area' => (string)($body['society_area'] ?? ''),
+                'budget' => (string)($body['budget'] ?? ''),
                 'requirement' => (string)($body['requirement'] ?? 'Design Cost Calculator'),
                 'source' => 'calculator',
                 'floor_plan' => (string)$body['floor_plan'],
@@ -207,11 +214,13 @@ try {
         if ($method === 'GET') {
             jsonResponse(['professionals' => SiteRepository::listProfessionalsForAdmin()]);
         }
-        $body = requestJson();
         if ($method === 'POST') {
+            $body = requestData();
             if (empty($body['full_name']) || empty($body['slug'])) {
                 jsonResponse(['error' => 'full_name and slug are required'], 400);
             }
+            $body['profile_pic'] = saveUploadedFile($_FILES['profile_pic'] ?? [], 'professionals', null);
+            $body['cover_photo'] = saveUploadedFile($_FILES['cover_photo'] ?? [], 'professionals', null);
             $id = SiteRepository::createProfessional($body);
             jsonResponse(['success' => true, 'id' => $id]);
         }
@@ -220,11 +229,13 @@ try {
     if (preg_match('#^/api/admin/professionals/(\\d+)$#', $path, $match)) {
         Auth::requireAuth();
         $id = (int)$match[1];
-        $body = requestJson();
         if ($method === 'PUT') {
+            $body = requestData();
             if (empty($body['full_name']) || empty($body['slug'])) {
                 jsonResponse(['error' => 'full_name and slug are required'], 400);
             }
+            $body['profile_pic'] = saveUploadedFile($_FILES['profile_pic'] ?? [], 'professionals', (string)($body['current_profile_pic'] ?? ''));
+            $body['cover_photo'] = saveUploadedFile($_FILES['cover_photo'] ?? [], 'professionals', (string)($body['current_cover_photo'] ?? ''));
             SiteRepository::updateProfessional($id, $body);
             jsonResponse(['success' => true]);
         }
@@ -243,11 +254,13 @@ try {
                 'professionals' => SiteRepository::professionalOptions(),
             ]);
         }
-        $body = requestJson();
         if ($method === 'POST') {
+            $body = requestData();
             if (empty($body['pro_id']) || empty($body['slug']) || empty($body['project_name'])) {
                 jsonResponse(['error' => 'pro_id, slug and project_name are required'], 400);
             }
+            $existingMedia = getJsonArrayField($body, 'current_media_json', []);
+            $body['media_json'] = saveUploadedFiles($_FILES['media_files'] ?? [], 'portfolio', $existingMedia);
             $id = SiteRepository::createPortfolio($body);
             jsonResponse(['success' => true, 'id' => $id]);
         }
@@ -256,11 +269,13 @@ try {
     if (preg_match('#^/api/admin/portfolios/(\\d+)$#', $path, $match)) {
         Auth::requireAuth();
         $id = (int)$match[1];
-        $body = requestJson();
         if ($method === 'PUT') {
+            $body = requestData();
             if (empty($body['pro_id']) || empty($body['slug']) || empty($body['project_name'])) {
                 jsonResponse(['error' => 'pro_id, slug and project_name are required'], 400);
             }
+            $existingMedia = getJsonArrayField($body, 'current_media_json', []);
+            $body['media_json'] = saveUploadedFiles($_FILES['media_files'] ?? [], 'portfolio', $existingMedia);
             SiteRepository::updatePortfolio($id, $body);
             jsonResponse(['success' => true]);
         }

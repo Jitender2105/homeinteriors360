@@ -9,6 +9,8 @@
             <th>Name</th>
             <th>Phone</th>
             <th>City</th>
+            <th>Society / Area</th>
+            <th>Budget</th>
             <th>Requirement</th>
             <th>Source</th>
             <th>Pro</th>
@@ -23,6 +25,8 @@
               <td><?= htmlspecialchars((string)$lead['name'], ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars((string)$lead['phone'], ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars((string)$lead['city'], ENT_QUOTES, 'UTF-8') ?></td>
+              <td><?= htmlspecialchars((string)($lead['society_area'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+              <td><?= htmlspecialchars((string)($lead['budget'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars((string)$lead['requirement'], ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars((string)$lead['source'], ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars((string)($lead['pro_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>

@@ -52,8 +52,41 @@ $workAreas = $filterOptions['work_areas'] ?? [];
     <div>
       <div class="cards-grid" id="proResults">
         <?php foreach ($pros as $pro): ?>
-          <article class="listing-card">
-            <img src="<?= htmlspecialchars((string)($pro['profile_pic'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+          <?php
+            $slides = [];
+            if (!empty($pro['profile_pic'])) {
+                $slides[] = [
+                    'image' => $pro['profile_pic'],
+                    'title' => $pro['full_name'] ?? '',
+                    'location' => $pro['city'] ?? '',
+                    'work_type' => $pro['primary_work_type'] ?? '',
+                    'area_of_work' => $pro['primary_work_area'] ?? '',
+                ];
+            }
+            foreach (($pro['portfolio_previews'] ?? []) as $preview) {
+                $image = $preview['media_json'][0] ?? '';
+                if (!$image) {
+                    continue;
+                }
+                $slides[] = [
+                    'image' => $image,
+                    'title' => $preview['project_name'] ?? '',
+                    'location' => $preview['location'] ?? '',
+                    'work_type' => $preview['work_type'] ?? '',
+                    'area_of_work' => $preview['area_of_work'] ?? '',
+                ];
+            }
+            $slidesJson = htmlspecialchars(json_encode($slides, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+          ?>
+          <article class="listing-card" data-carousel-slides="<?= $slidesJson ?>">
+            <div class="listing-carousel">
+              <img class="listing-carousel-image" src="<?= htmlspecialchars((string)($slides[0]['image'] ?? ($pro['profile_pic'] ?? '')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+              <div class="listing-carousel-caption">
+                <strong><?= htmlspecialchars((string)($slides[0]['title'] ?? $pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                <span><?= htmlspecialchars((string)($slides[0]['location'] ?? $pro['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                <small><?= htmlspecialchars((string)($slides[0]['work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?><?= !empty($slides[0]['area_of_work']) ? ' · ' . htmlspecialchars((string)$slides[0]['area_of_work'], ENT_QUOTES, 'UTF-8') : '' ?></small>
+              </div>
+            </div>
             <div>
               <h4><?= htmlspecialchars((string)$pro['full_name'], ENT_QUOTES, 'UTF-8') ?></h4>
               <p><?= htmlspecialchars((string)($pro['role'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($pro['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
@@ -102,9 +135,37 @@ $workAreas = $filterOptions['work_areas'] ?? [];
   }
 
   function card(pro) {
+    const slides = [];
+    if (pro.profile_pic) {
+      slides.push({
+        image: pro.profile_pic,
+        title: pro.full_name || '',
+        location: pro.city || '',
+        work_type: pro.primary_work_type || '',
+        area_of_work: pro.primary_work_area || '',
+      });
+    }
+    (pro.portfolio_previews || []).forEach((preview) => {
+      const image = (preview.media_json || [])[0] || '';
+      if (!image) return;
+      slides.push({
+        image,
+        title: preview.project_name || '',
+        location: preview.location || '',
+        work_type: preview.work_type || '',
+        area_of_work: preview.area_of_work || '',
+      });
+    });
     return `
-      <article class="listing-card">
-        <img src="${esc(pro.profile_pic || '')}" alt="${esc(pro.full_name || '')}">
+      <article class="listing-card" data-carousel-slides="${esc(JSON.stringify(slides))}">
+        <div class="listing-carousel">
+          <img class="listing-carousel-image" src="${esc((slides[0] && slides[0].image) || pro.profile_pic || '')}" alt="${esc(pro.full_name || '')}">
+          <div class="listing-carousel-caption">
+            <strong>${esc((slides[0] && slides[0].title) || pro.full_name || '')}</strong>
+            <span>${esc((slides[0] && slides[0].location) || pro.city || '')}</span>
+            <small>${esc((slides[0] && slides[0].work_type) || '')}${(slides[0] && slides[0].area_of_work) ? ' · ' + esc(slides[0].area_of_work) : ''}</small>
+          </div>
+        </div>
         <div>
           <h4>${esc(pro.full_name || '')}</h4>
           <p>${esc(pro.role || '')} · ${esc(pro.city || '')}</p>
@@ -138,12 +199,39 @@ $workAreas = $filterOptions['work_areas'] ?? [];
     const list = data.pros || [];
     results.innerHTML = list.map(card).join('');
     emptyState.style.display = list.length ? 'none' : 'block';
+    initCarousels();
   }
 
   [role, city, workType, workArea, min, max, expMin, projectsMin, ratingMin, sortBy].forEach((el) => {
     el.addEventListener('input', load);
     el.addEventListener('change', load);
   });
+
+  const timers = new Map();
+  function initCarousels() {
+    timers.forEach((timer) => clearInterval(timer));
+    timers.clear();
+    document.querySelectorAll('[data-carousel-slides]').forEach((card) => {
+      const slides = JSON.parse(card.dataset.carouselSlides || '[]');
+      if (!Array.isArray(slides) || slides.length < 2) return;
+      const image = card.querySelector('.listing-carousel-image');
+      const title = card.querySelector('.listing-carousel-caption strong');
+      const location = card.querySelector('.listing-carousel-caption span');
+      const detail = card.querySelector('.listing-carousel-caption small');
+      let idx = 0;
+      const tick = () => {
+        idx = (idx + 1) % slides.length;
+        image.src = slides[idx].image || image.src;
+        image.alt = slides[idx].title || '';
+        title.textContent = slides[idx].title || '';
+        location.textContent = slides[idx].location || '';
+        detail.textContent = `${slides[idx].work_type || ''}${slides[idx].area_of_work ? ' · ' + slides[idx].area_of_work : ''}`;
+      };
+      timers.set(card, setInterval(tick, 2800));
+    });
+  }
+
+  initCarousels();
 })();
 </script>
 <?php require __DIR__ . '/../partials/footer.php'; ?>

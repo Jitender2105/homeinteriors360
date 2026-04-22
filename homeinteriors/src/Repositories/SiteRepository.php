@@ -90,6 +90,41 @@ final class SiteRepository
         ];
     }
 
+    private static function attachPortfolioPreviews(array $pros): array
+    {
+        if ($pros === []) {
+            return [];
+        }
+
+        $ids = array_map(static fn(array $pro): int => (int)$pro['id'], $pros);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::query(
+            "SELECT pro_id, slug, project_name, location, work_type, area_of_work, media_json
+             FROM projects
+             WHERE pro_id IN ({$placeholders})
+             ORDER BY year_completed DESC, id DESC",
+            $ids
+        );
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $proId = (int)$row['pro_id'];
+            $grouped[$proId] ??= [];
+            if (count($grouped[$proId]) >= 4) {
+                continue;
+            }
+            $row['media_json'] = self::parseJsonArray($row['media_json'] ?? '[]');
+            $grouped[$proId][] = $row;
+        }
+
+        foreach ($pros as &$pro) {
+            $pro['portfolio_previews'] = $grouped[(int)$pro['id']] ?? [];
+        }
+        unset($pro);
+
+        return $pros;
+    }
+
     public static function listPros(array $filters = []): array
     {
         $where = ['pros.is_active = 1'];
@@ -154,7 +189,7 @@ final class SiteRepository
                 WHERE " . implode(' AND ', $where) . "
                 ORDER BY {$orderBy}";
 
-        return Database::query($sql, $params);
+        return self::attachPortfolioPreviews(Database::query($sql, $params));
     }
 
     public static function getProBySlug(string $slug): ?array
@@ -478,12 +513,14 @@ final class SiteRepository
     public static function createLead(array $data): int
     {
         return Database::exec(
-            'INSERT INTO leads (name, phone, city, requirement, pro_id, source, status, floor_plan, package_tier, rooms_json, estimate)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO leads (name, phone, city, society_area, budget, requirement, pro_id, source, status, floor_plan, package_tier, rooms_json, estimate)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $data['name'],
                 $data['phone'],
                 $data['city'],
+                $data['society_area'] ?? null,
+                $data['budget'] ?? null,
                 $data['requirement'],
                 isset($data['pro_id']) ? (int)$data['pro_id'] : null,
                 $data['source'] ?? 'homepage',

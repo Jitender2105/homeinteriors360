@@ -4,8 +4,10 @@
     <h1>Professionals Manager</h1>
     <p class="muted-line">Create and manage complete professional profiles. Use comma-separated values for multi-value fields.</p>
 
-    <form id="professionalForm" class="admin-card" style="margin-bottom:16px;">
+    <form id="professionalForm" class="admin-card" style="margin-bottom:16px;" enctype="multipart/form-data">
       <input type="hidden" name="id" />
+      <input type="hidden" name="current_profile_pic" />
+      <input type="hidden" name="current_cover_photo" />
       <div class="budget-grid">
         <input name="full_name" placeholder="Full Name" required />
         <input name="slug" placeholder="Slug (unique)" required />
@@ -15,8 +17,18 @@
         <input name="city" placeholder="City" />
       </div>
       <div class="budget-grid">
-        <input name="profile_pic" placeholder="Profile Image URL" />
-        <input name="cover_photo" placeholder="Cover Image URL" />
+        <label class="file-field">
+          <span>Profile Image Upload</span>
+          <input type="file" name="profile_pic" accept="image/*" />
+        </label>
+        <label class="file-field">
+          <span>Cover Image Upload</span>
+          <input type="file" name="cover_photo" accept="image/*" />
+        </label>
+      </div>
+      <div class="budget-grid">
+        <div class="image-preview-shell"><img id="profilePicPreview" alt="Profile preview" /></div>
+        <div class="image-preview-shell"><img id="coverPicPreview" alt="Cover preview" /></div>
       </div>
       <div class="budget-grid">
         <input name="primary_work_type" placeholder="Primary Work Type" />
@@ -93,6 +105,8 @@
   const form = document.getElementById('professionalForm');
   const msg = document.getElementById('professionalMsg');
   const resetBtn = document.getElementById('professionalReset');
+  const profilePreview = document.getElementById('profilePicPreview');
+  const coverPreview = document.getElementById('coverPicPreview');
 
   const parseCsv = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
   const stringifyCsv = (v) => {
@@ -118,6 +132,10 @@
     form.elements.design_styles_json.value = stringifyCsv(pro.design_styles_json);
     form.elements.languages_json.value = stringifyCsv(pro.languages_json);
     form.elements.certifications_json.value = stringifyCsv(pro.certifications_json);
+    form.elements.current_profile_pic.value = pro.profile_pic || '';
+    form.elements.current_cover_photo.value = pro.cover_photo || '';
+    profilePreview.src = pro.profile_pic || '';
+    coverPreview.src = pro.cover_photo || '';
   }
 
   document.querySelectorAll('.edit-prof').forEach((btn) => {
@@ -137,29 +155,35 @@
     });
   });
 
-  resetBtn.addEventListener('click', () => form.reset());
+  resetBtn.addEventListener('click', () => {
+    form.reset();
+    form.elements.current_profile_pic.value = '';
+    form.elements.current_cover_photo.value = '';
+    profilePreview.removeAttribute('src');
+    coverPreview.removeAttribute('src');
+  });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
     const id = fd.get('id');
-    const payload = Object.fromEntries(fd.entries());
-    payload.verification_status = form.elements.verification_status.checked;
-    payload.is_active = form.elements.is_active.checked;
-    payload.service_areas = parseCsv(payload.service_areas);
-    payload.materials_json = parseCsv(payload.materials_json);
-    payload.offerings_json = parseCsv(payload.offerings_json);
-    payload.design_styles_json = parseCsv(payload.design_styles_json);
-    payload.languages_json = parseCsv(payload.languages_json);
-    payload.certifications_json = parseCsv(payload.certifications_json);
+    fd.set('verification_status', form.elements.verification_status.checked ? '1' : '0');
+    fd.set('is_active', form.elements.is_active.checked ? '1' : '0');
+    fd.set('service_areas', parseCsv(fd.get('service_areas')).join(', '));
+    fd.set('materials_json', parseCsv(fd.get('materials_json')).join(', '));
+    fd.set('offerings_json', parseCsv(fd.get('offerings_json')).join(', '));
+    fd.set('design_styles_json', parseCsv(fd.get('design_styles_json')).join(', '));
+    fd.set('languages_json', parseCsv(fd.get('languages_json')).join(', '));
+    fd.set('certifications_json', parseCsv(fd.get('certifications_json')).join(', '));
+    if (id) {
+      fd.set('_method', 'PUT');
+    }
 
     const url = id ? `/api/admin/professionals/${id}` : '/api/admin/professionals';
-    const method = id ? 'PUT' : 'POST';
     const res = await fetch(url, {
-      method,
+      method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: fd
     });
     const data = await res.json();
     if (res.ok) {

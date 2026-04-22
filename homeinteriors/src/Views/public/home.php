@@ -49,6 +49,8 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
           <label><?= htmlspecialchars((string)($content['home.lead.step3_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
           <input type="text" name="name" required placeholder="<?= htmlspecialchars((string)($content['ui.name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
           <input type="tel" name="phone" required placeholder="<?= htmlspecialchars((string)($content['ui.phone'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+          <input type="text" name="society_area" placeholder="<?= htmlspecialchars((string)($content['ui.society_area'] ?? 'Society / Area'), ENT_QUOTES, 'UTF-8') ?>" />
+          <input type="text" name="budget" placeholder="<?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?>" />
         </div>
 
         <div class="step-actions">
@@ -92,9 +94,14 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
     <div class="service-grid">
       <?php foreach ($services as $service): ?>
         <article class="service-card">
-          <span class="service-icon"><?= htmlspecialchars((string)($service['icon'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-          <h3><?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
-          <p><?= htmlspecialchars((string)($service['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+          <?php if (!empty($service['image'])): ?>
+            <img class="card-image" src="<?= htmlspecialchars((string)$service['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+          <?php endif; ?>
+          <div class="service-copy">
+            <span class="service-icon"><?= htmlspecialchars((string)($service['icon'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+            <h3><?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
+            <p><?= htmlspecialchars((string)($service['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+          </div>
         </article>
       <?php endforeach; ?>
     </div>
@@ -107,6 +114,9 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
     <div class="h-scroll">
       <?php foreach ($testimonials as $testimonial): ?>
         <article class="quote-card">
+          <?php if (!empty($testimonial['image'])): ?>
+            <img class="quote-avatar" src="<?= htmlspecialchars((string)$testimonial['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+          <?php endif; ?>
           <p>“<?= htmlspecialchars((string)($testimonial['text'] ?? ''), ENT_QUOTES, 'UTF-8') ?>”</p>
           <h4><?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h4>
           <span><?= htmlspecialchars((string)($testimonial['location'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
@@ -122,7 +132,12 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
     <div class="marquee">
       <div class="marquee-track">
         <?php for ($i = 0; $i < 2; $i++): foreach ($brands as $brand): ?>
-          <span class="brand-pill"><?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+          <span class="brand-pill">
+            <?php $brandLogo = $brand['logo'] ?? $brand['url'] ?? ''; if (!empty($brandLogo)): ?>
+              <img src="<?= htmlspecialchars((string)$brandLogo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+            <?php endif; ?>
+            <span><?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+          </span>
         <?php endforeach; endfor; ?>
       </div>
     </div>
