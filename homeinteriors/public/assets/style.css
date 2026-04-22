@@ -265,6 +265,11 @@ button, .btn-primary, .btn-muted, .btn-link {
 .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
+.listing-list {
+  display: grid;
+  gap: 16px;
+}
+
 .service-card { padding: 0; overflow: hidden; }
 .service-copy { padding: 22px; display: grid; gap: 8px; }
 .card-image { width: 100%; height: 190px; object-fit: cover; display: block; }
@@ -360,6 +365,27 @@ button, .btn-primary, .btn-muted, .btn-link {
 .listing-carousel-caption small { font-size: 11px; opacity: 0.76; }
 .listing-card > div { padding: 14px; display: grid; gap: 7px; }
 .listing-card h4, .listing-card p { margin: 0; }
+.listing-card.premium {
+  border-color: #d7b26f;
+  box-shadow: 0 20px 40px rgba(183, 139, 58, 0.18);
+  background: linear-gradient(180deg, #fffaf0 0%, #ffffff 58%);
+}
+.listing-card.premium .listing-carousel-caption {
+  background: linear-gradient(135deg, rgba(188, 139, 74, 0.92), rgba(109, 73, 26, 0.84));
+}
+.premium-badge {
+  display: inline-flex;
+  align-self: start;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(255, 247, 221, 0.16);
+  color: #fff7dd;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
 .file-field {
   display: grid;
   gap: 8px;

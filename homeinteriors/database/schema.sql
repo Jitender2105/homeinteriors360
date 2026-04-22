@@ -35,6 +35,7 @@ CREATE TABLE pros (
   primary_work_type VARCHAR(120) DEFAULT NULL,
   primary_work_area VARCHAR(120) DEFAULT NULL,
   verification_status BOOLEAN NOT NULL DEFAULT FALSE,
+  is_premium BOOLEAN NOT NULL DEFAULT FALSE,
   rating DECIMAL(3,2) NOT NULL DEFAULT 0,
   years_experience INT NOT NULL DEFAULT 0,
   projects_delivered INT NOT NULL DEFAULT 0,
@@ -151,7 +152,7 @@ ON DUPLICATE KEY UPDATE email = VALUES(email), role = VALUES(role), is_active = 
 
 INSERT INTO pros (
   full_name, slug, profile_pic, cover_photo, role, profile_description, specialization,
-  primary_work_type, primary_work_area, verification_status, rating, years_experience, projects_delivered,
+  primary_work_type, primary_work_area, verification_status, is_premium, rating, years_experience, projects_delivered,
   starting_price, min_project_value, max_project_value, consultation_fee, city, service_areas,
   materials_json, design_styles_json, languages_json, certifications_json, response_time_hours,
   bio, why_work_with_me, offerings_json, is_active
@@ -167,6 +168,7 @@ VALUES
   'Residential Turnkey Designer',
   'Full Home',
   'Apartments',
+  1,
   1,
   4.9,
   12,
@@ -198,6 +200,7 @@ VALUES
   'Renovation',
   'Villa',
   1,
+  1,
   4.7,
   15,
   41,
@@ -228,6 +231,7 @@ VALUES
   'Execution',
   'Commercial',
   1,
+  0,
   4.6,
   14,
   89,

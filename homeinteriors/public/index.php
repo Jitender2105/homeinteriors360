@@ -296,32 +296,73 @@ try {
         exit;
     }
 
-    if ($path === '/professionals') {
+    if ($path === '/professionals' || preg_match('#^/professionals/([a-z0-9-]+)$#i', $path, $match)) {
+        $alias = $match[1] ?? null;
+        if ($alias !== null) {
+            $pro = SiteRepository::getProBySlug((string)$alias);
+            if ($pro) {
+                $profileData = SiteRepository::proProfileData((int)$pro['id']);
+                render('public/professional-profile', [
+                    'title' => $pro['full_name'] . ' | ' . (string)SiteRepository::content('seo.profile.title_suffix', 'HomeInteriors360'),
+                    'active' => 'directory',
+                    'content' => $content,
+                    'pro' => $pro,
+                    'projects' => $profileData['projects'],
+                    'reviews' => $profileData['reviews'],
+                ]);
+                exit;
+            }
+
+            $aliasData = SiteRepository::resolveDirectoryAlias((string)$alias);
+            if (!$aliasData) {
+                http_response_code(404);
+                echo 'Professional not found';
+                exit;
+            }
+            $initialFilters = array_filter(array_merge($aliasData['filters'] ?? [], [
+                'role' => $_GET['role'] ?? null,
+                'city' => $_GET['city'] ?? null,
+                'work_type' => $_GET['work_type'] ?? null,
+                'work_area' => $_GET['work_area'] ?? null,
+                'budget_min' => $_GET['budget_min'] ?? null,
+                'budget_max' => $_GET['budget_max'] ?? null,
+                'experience_min' => $_GET['experience_min'] ?? null,
+                'projects_min' => $_GET['projects_min'] ?? null,
+                'rating_min' => $_GET['rating_min'] ?? null,
+                'sort_by' => $_GET['sort_by'] ?? null,
+            ]), static fn(mixed $value): bool => $value !== null && $value !== '');
+            render('public/professionals', [
+                'title' => $aliasData['title'] . ' | ' . (string)SiteRepository::content('seo.directory.title', 'Find Professionals'),
+                'active' => 'directory',
+                'content' => $content,
+                'pros' => SiteRepository::listPros($initialFilters),
+                'filterOptions' => SiteRepository::proFilterOptions(),
+                'initialFilters' => $initialFilters,
+                'directoryTitle' => $aliasData['title'],
+                'directorySubtitle' => $aliasData['subtitle'],
+            ]);
+            exit;
+        }
+
+        $initialFilters = array_filter([
+            'role' => $_GET['role'] ?? null,
+            'city' => $_GET['city'] ?? null,
+            'work_type' => $_GET['work_type'] ?? null,
+            'work_area' => $_GET['work_area'] ?? null,
+            'budget_min' => $_GET['budget_min'] ?? null,
+            'budget_max' => $_GET['budget_max'] ?? null,
+            'experience_min' => $_GET['experience_min'] ?? null,
+            'projects_min' => $_GET['projects_min'] ?? null,
+            'rating_min' => $_GET['rating_min'] ?? null,
+            'sort_by' => $_GET['sort_by'] ?? null,
+        ], static fn(mixed $value): bool => $value !== null && $value !== '');
         render('public/professionals', [
             'title' => (string)SiteRepository::content('seo.directory.title', 'Find Professionals'),
             'active' => 'directory',
             'content' => $content,
-            'pros' => SiteRepository::listPros([]),
+            'pros' => SiteRepository::listPros($initialFilters),
             'filterOptions' => SiteRepository::proFilterOptions(),
-        ]);
-        exit;
-    }
-
-    if (preg_match('#^/professionals/([a-z0-9-]+)$#i', $path, $match)) {
-        $pro = SiteRepository::getProBySlug((string)$match[1]);
-        if (!$pro) {
-            http_response_code(404);
-            echo 'Professional not found';
-            exit;
-        }
-        $profileData = SiteRepository::proProfileData((int)$pro['id']);
-        render('public/professional-profile', [
-            'title' => $pro['full_name'] . ' | ' . (string)SiteRepository::content('seo.profile.title_suffix', 'HomeInteriors360'),
-            'active' => 'directory',
-            'content' => $content,
-            'pro' => $pro,
-            'projects' => $profileData['projects'],
-            'reviews' => $profileData['reviews'],
+            'initialFilters' => $initialFilters,
         ]);
         exit;
     }

@@ -45,6 +45,83 @@ final class SiteRepository
         return $all[$key] ?? $fallback;
     }
 
+    private static function slugToLabel(string $slug): string
+    {
+        $slug = trim($slug, '-');
+        if ($slug === '') {
+            return '';
+        }
+        $slug = str_replace(['-and-', '-or-'], ' / ', $slug);
+        $slug = str_replace('-', ' ', $slug);
+        $slug = preg_replace('/\s+/', ' ', $slug) ?? $slug;
+        return ucwords(trim($slug));
+    }
+
+    public static function resolveDirectoryAlias(string $alias): ?array
+    {
+        $slug = strtolower(trim($alias, '/'));
+        $slug = preg_replace('/-+/', '-', $slug) ?? $slug;
+        if ($slug === '') {
+            return null;
+        }
+
+        $filters = [];
+        $title = '';
+        $subtitle = 'Browse matching professionals and shortlist the right expert.';
+
+        if (preg_match('/-in-([a-z0-9-]+)$/', $slug, $match)) {
+            $filters['city'] = self::slugToLabel((string)$match[1]);
+            $slug = substr($slug, 0, -strlen($match[0]));
+        }
+
+        $workMap = [
+            'full-home' => 'Full Home',
+            'kitchen' => 'Kitchen',
+            'wardrobe' => 'Wardrobe',
+            'renovation' => 'Renovation',
+        ];
+        foreach ($workMap as $needle => $label) {
+            if (str_contains($slug, $needle)) {
+                $filters['work_type'] = $label;
+                break;
+            }
+        }
+
+        if (str_contains($slug, 'architect-interior-designer') || str_contains($slug, 'architect-and-interior-designer')) {
+            $title = 'Architect / Interior Designer';
+        } elseif (str_contains($slug, 'architect')) {
+            $title = 'Architect';
+            $filters['role'] = 'Architect';
+        } elseif (str_contains($slug, 'interior-designer') || str_contains($slug, 'designer')) {
+            $title = 'Interior Designer';
+            $filters['role'] = 'Designer';
+        }
+
+        if ($title === '' && isset($filters['work_type'])) {
+            $title = $filters['work_type'] . ' Interior Designer';
+        }
+        if ($title === 'Interior Designer' && isset($filters['work_type'])) {
+            $title = $filters['work_type'] . ' Interior Designer';
+        }
+        if ($title === '') {
+            return null;
+        }
+
+        if (!empty($filters['city'])) {
+            $title .= ' in ' . $filters['city'];
+            $subtitle = 'See verified ' . strtolower((string)($filters['work_type'] ?? 'interior')) . ' professionals in ' . $filters['city'] . '.';
+        } elseif (!empty($filters['work_type'])) {
+            $subtitle = 'See professionals focused on ' . $filters['work_type'] . '.';
+        }
+
+        return [
+            'slug' => $slug,
+            'title' => $title,
+            'subtitle' => $subtitle,
+            'filters' => $filters,
+        ];
+    }
+
     public static function homepagePayload(): array
     {
         return [
@@ -55,11 +132,11 @@ final class SiteRepository
             'trust_points' => self::content('home.trust.items', []),
             'usp_points' => self::content('home.usp.items', []),
             'top_pros' => Database::query(
-                "SELECT id, full_name, slug, role, specialization, profile_pic, rating, verification_status, years_experience, city, primary_work_type, primary_work_area,
+                "SELECT id, full_name, slug, role, specialization, profile_pic, rating, verification_status, is_premium, years_experience, city, primary_work_type, primary_work_area,
                         COALESCE(NULLIF(projects_delivered,0), (SELECT COUNT(*) FROM projects px WHERE px.pro_id=pros.id)) AS projects_delivered
                  FROM pros
                  WHERE is_active = 1
-                 ORDER BY verification_status DESC, rating DESC, updated_at DESC
+                 ORDER BY is_premium DESC, verification_status DESC, rating DESC, updated_at DESC
                  LIMIT 12"
             ),
             'city_options' => self::cityOptions(),
@@ -179,7 +256,7 @@ final class SiteRepository
         $orderBy = $sortMap[$sortBy] ?? 'pros.verification_status DESC, pros.rating DESC, pros.updated_at DESC';
 
         $sql = "SELECT pros.id, pros.full_name, pros.slug, pros.role, pros.profile_description, pros.specialization, pros.profile_pic, pros.cover_photo,
-                       pros.verification_status, pros.rating, pros.years_experience, pros.starting_price, pros.min_project_value, pros.max_project_value,
+                       pros.verification_status, pros.is_premium, pros.rating, pros.years_experience, pros.starting_price, pros.min_project_value, pros.max_project_value,
                        pros.city, pros.primary_work_type, pros.primary_work_area,
                        COALESCE(NULLIF(pros.projects_delivered,0), prj.project_count, 0) AS projects_delivered
                 FROM pros
@@ -187,7 +264,7 @@ final class SiteRepository
                   SELECT pro_id, COUNT(*) AS project_count FROM projects GROUP BY pro_id
                 ) prj ON prj.pro_id = pros.id
                 WHERE " . implode(' AND ', $where) . "
-                ORDER BY {$orderBy}";
+                ORDER BY pros.is_premium DESC, {$orderBy}";
 
         return self::attachPortfolioPreviews(Database::query($sql, $params));
     }
@@ -288,7 +365,7 @@ final class SiteRepository
             'SELECT pros.*, COALESCE(NULLIF(pros.projects_delivered,0), prj.project_count, 0) AS projects_delivered_computed
              FROM pros
              LEFT JOIN (SELECT pro_id, COUNT(*) AS project_count FROM projects GROUP BY pro_id) prj ON prj.pro_id = pros.id
-             ORDER BY pros.created_at DESC'
+             ORDER BY pros.is_premium DESC, pros.created_at DESC'
         );
     }
 
@@ -297,10 +374,10 @@ final class SiteRepository
         return Database::exec(
             'INSERT INTO pros (
                 full_name, slug, profile_pic, cover_photo, role, profile_description, specialization, primary_work_type, primary_work_area,
-                verification_status, rating, years_experience, projects_delivered, starting_price, min_project_value, max_project_value,
+                verification_status, is_premium, rating, years_experience, projects_delivered, starting_price, min_project_value, max_project_value,
                 consultation_fee, city, service_areas, materials_json, design_styles_json, languages_json, certifications_json,
                 response_time_hours, bio, why_work_with_me, offerings_json, is_active
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             [
                 $data['full_name'],
                 $data['slug'],
@@ -312,6 +389,7 @@ final class SiteRepository
                 $data['primary_work_type'] ?? null,
                 $data['primary_work_area'] ?? null,
                 !empty($data['verification_status']) ? 1 : 0,
+                !empty($data['is_premium']) ? 1 : 0,
                 isset($data['rating']) ? (float)$data['rating'] : 0,
                 isset($data['years_experience']) ? (int)$data['years_experience'] : 0,
                 isset($data['projects_delivered']) ? (int)$data['projects_delivered'] : 0,
@@ -339,7 +417,7 @@ final class SiteRepository
         Database::exec(
             'UPDATE pros SET
                 full_name=?, slug=?, profile_pic=?, cover_photo=?, role=?, profile_description=?, specialization=?, primary_work_type=?, primary_work_area=?,
-                verification_status=?, rating=?, years_experience=?, projects_delivered=?, starting_price=?, min_project_value=?, max_project_value=?, consultation_fee=?, city=?,
+                verification_status=?, is_premium=?, rating=?, years_experience=?, projects_delivered=?, starting_price=?, min_project_value=?, max_project_value=?, consultation_fee=?, city=?,
                 service_areas=?, materials_json=?, design_styles_json=?, languages_json=?, certifications_json=?, response_time_hours=?,
                 bio=?, why_work_with_me=?, offerings_json=?, is_active=?, updated_at=NOW()
              WHERE id=?',
@@ -354,6 +432,7 @@ final class SiteRepository
                 $data['primary_work_type'] ?? null,
                 $data['primary_work_area'] ?? null,
                 !empty($data['verification_status']) ? 1 : 0,
+                !empty($data['is_premium']) ? 1 : 0,
                 isset($data['rating']) ? (float)$data['rating'] : 0,
                 isset($data['years_experience']) ? (int)$data['years_experience'] : 0,
                 isset($data['projects_delivered']) ? (int)$data['projects_delivered'] : 0,

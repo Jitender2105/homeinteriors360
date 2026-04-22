@@ -4,53 +4,76 @@ $roles = $filterOptions['roles'] ?? [];
 $cities = $filterOptions['cities'] ?? [];
 $workTypes = $filterOptions['work_types'] ?? [];
 $workAreas = $filterOptions['work_areas'] ?? [];
+$initialFilters = $initialFilters ?? [];
+$directoryTitle = $directoryTitle ?? (string)($content['directory.title'] ?? '');
+$directorySubtitle = $directorySubtitle ?? (string)($content['directory.subtitle'] ?? '');
 ?>
 <section class="section">
   <div class="container directory-layout" data-reveal>
     <aside class="filter-card">
-      <h3><?= htmlspecialchars((string)($content['directory.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
-      <p><?= htmlspecialchars((string)($content['directory.subtitle'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+      <h3><?= htmlspecialchars((string)$directoryTitle, ENT_QUOTES, 'UTF-8') ?></h3>
+      <p><?= htmlspecialchars((string)$directorySubtitle, ENT_QUOTES, 'UTF-8') ?></p>
 
       <label><?= htmlspecialchars((string)($content['directory.filter.role'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
-      <select id="fRole"><option value=""></option><?php foreach ($roles as $role): ?><option value="<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
+      <select id="fRole">
+        <option value="" <?= empty($initialFilters['role']) ? 'selected' : '' ?>></option>
+        <?php foreach ($roles as $role): ?>
+          <option value="<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?>" <?= (($initialFilters['role'] ?? '') === $role) ? 'selected' : '' ?>><?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?></option>
+        <?php endforeach; ?>
+      </select>
 
       <label><?= htmlspecialchars((string)($content['directory.filter.city'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
-      <select id="fCity"><option value=""></option><?php foreach ($cities as $city): ?><option value="<?= htmlspecialchars($city, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($city, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
+      <select id="fCity">
+        <option value="" <?= empty($initialFilters['city']) ? 'selected' : '' ?>></option>
+        <?php foreach ($cities as $city): ?>
+          <option value="<?= htmlspecialchars($city, ENT_QUOTES, 'UTF-8') ?>" <?= (($initialFilters['city'] ?? '') === $city) ? 'selected' : '' ?>><?= htmlspecialchars($city, ENT_QUOTES, 'UTF-8') ?></option>
+        <?php endforeach; ?>
+      </select>
 
       <label><?= htmlspecialchars((string)($content['directory.filter.work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
-      <select id="fWorkType"><option value=""></option><?php foreach ($workTypes as $workType): ?><option value="<?= htmlspecialchars($workType, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($workType, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
+      <select id="fWorkType">
+        <option value="" <?= empty($initialFilters['work_type']) ? 'selected' : '' ?>></option>
+        <?php foreach ($workTypes as $workType): ?>
+          <option value="<?= htmlspecialchars($workType, ENT_QUOTES, 'UTF-8') ?>" <?= (($initialFilters['work_type'] ?? '') === $workType) ? 'selected' : '' ?>><?= htmlspecialchars($workType, ENT_QUOTES, 'UTF-8') ?></option>
+        <?php endforeach; ?>
+      </select>
 
       <label><?= htmlspecialchars((string)($content['directory.filter.work_area'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
-      <select id="fWorkArea"><option value=""></option><?php foreach ($workAreas as $workArea): ?><option value="<?= htmlspecialchars($workArea, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($workArea, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
+      <select id="fWorkArea">
+        <option value="" <?= empty($initialFilters['work_area']) ? 'selected' : '' ?>></option>
+        <?php foreach ($workAreas as $workArea): ?>
+          <option value="<?= htmlspecialchars($workArea, ENT_QUOTES, 'UTF-8') ?>" <?= (($initialFilters['work_area'] ?? '') === $workArea) ? 'selected' : '' ?>><?= htmlspecialchars($workArea, ENT_QUOTES, 'UTF-8') ?></option>
+        <?php endforeach; ?>
+      </select>
 
       <label><?= htmlspecialchars((string)($content['directory.filter.budget'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
       <div class="budget-grid">
-        <input id="fBudgetMin" type="number" placeholder="Min" />
-        <input id="fBudgetMax" type="number" placeholder="Max" />
+        <input id="fBudgetMin" type="number" placeholder="Min" value="<?= htmlspecialchars((string)($initialFilters['budget_min'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+        <input id="fBudgetMax" type="number" placeholder="Max" value="<?= htmlspecialchars((string)($initialFilters['budget_max'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
       </div>
 
       <label>Experience (min years)</label>
-      <input id="fExperienceMin" type="number" placeholder="e.g. 5" />
+      <input id="fExperienceMin" type="number" placeholder="e.g. 5" value="<?= htmlspecialchars((string)($initialFilters['experience_min'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
 
       <label>Projects Delivered (min)</label>
-      <input id="fProjectsMin" type="number" placeholder="e.g. 20" />
+      <input id="fProjectsMin" type="number" placeholder="e.g. 20" value="<?= htmlspecialchars((string)($initialFilters['projects_min'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
 
       <label>Rating (min)</label>
-      <input id="fRatingMin" type="number" step="0.1" min="0" max="5" placeholder="e.g. 4.2" />
+      <input id="fRatingMin" type="number" step="0.1" min="0" max="5" placeholder="e.g. 4.2" value="<?= htmlspecialchars((string)($initialFilters['rating_min'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
 
       <label>Sort By</label>
       <select id="fSortBy">
-        <option value="rating_desc">Rating: High to Low</option>
-        <option value="experience_desc">Experience: High to Low</option>
-        <option value="projects_desc">Projects: High to Low</option>
-        <option value="price_asc">Price: Low to High</option>
-        <option value="price_desc">Price: High to Low</option>
-        <option value="newest">Newest Added</option>
+        <option value="rating_desc" <?= (($initialFilters['sort_by'] ?? 'rating_desc') === 'rating_desc') ? 'selected' : '' ?>>Rating: High to Low</option>
+        <option value="experience_desc" <?= (($initialFilters['sort_by'] ?? '') === 'experience_desc') ? 'selected' : '' ?>>Experience: High to Low</option>
+        <option value="projects_desc" <?= (($initialFilters['sort_by'] ?? '') === 'projects_desc') ? 'selected' : '' ?>>Projects: High to Low</option>
+        <option value="price_asc" <?= (($initialFilters['sort_by'] ?? '') === 'price_asc') ? 'selected' : '' ?>>Price: Low to High</option>
+        <option value="price_desc" <?= (($initialFilters['sort_by'] ?? '') === 'price_desc') ? 'selected' : '' ?>>Price: High to Low</option>
+        <option value="newest" <?= (($initialFilters['sort_by'] ?? '') === 'newest') ? 'selected' : '' ?>>Newest Added</option>
       </select>
     </aside>
 
     <div>
-      <div class="cards-grid" id="proResults">
+      <div class="listing-list" id="proResults">
         <?php foreach ($pros as $pro): ?>
           <?php
             $slides = [];
@@ -77,11 +100,13 @@ $workAreas = $filterOptions['work_areas'] ?? [];
                 ];
             }
             $slidesJson = htmlspecialchars(json_encode($slides, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+            $isPremium = !empty($pro['is_premium']);
           ?>
-          <article class="listing-card" data-carousel-slides="<?= $slidesJson ?>">
+          <article class="listing-card <?= $isPremium ? 'premium' : '' ?>" data-carousel-slides="<?= $slidesJson ?>">
             <div class="listing-carousel">
               <img class="listing-carousel-image" src="<?= htmlspecialchars((string)($slides[0]['image'] ?? ($pro['profile_pic'] ?? '')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
               <div class="listing-carousel-caption">
+                <?php if ($isPremium): ?><span class="premium-badge">Premium</span><?php endif; ?>
                 <strong><?= htmlspecialchars((string)($slides[0]['title'] ?? $pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
                 <span><?= htmlspecialchars((string)($slides[0]['location'] ?? $pro['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
                 <small><?= htmlspecialchars((string)($slides[0]['work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?><?= !empty($slides[0]['area_of_work']) ? ' · ' . htmlspecialchars((string)$slides[0]['area_of_work'], ENT_QUOTES, 'UTF-8') : '' ?></small>
@@ -156,11 +181,13 @@ $workAreas = $filterOptions['work_areas'] ?? [];
         area_of_work: preview.area_of_work || '',
       });
     });
+    const premium = Number(pro.is_premium) === 1;
     return `
-      <article class="listing-card" data-carousel-slides="${esc(JSON.stringify(slides))}">
+      <article class="listing-card ${premium ? 'premium' : ''}" data-carousel-slides="${esc(JSON.stringify(slides))}">
         <div class="listing-carousel">
           <img class="listing-carousel-image" src="${esc((slides[0] && slides[0].image) || pro.profile_pic || '')}" alt="${esc(pro.full_name || '')}">
           <div class="listing-carousel-caption">
+            ${premium ? '<span class="premium-badge">Premium</span>' : ''}
             <strong>${esc((slides[0] && slides[0].title) || pro.full_name || '')}</strong>
             <span>${esc((slides[0] && slides[0].location) || pro.city || '')}</span>
             <small>${esc((slides[0] && slides[0].work_type) || '')}${(slides[0] && slides[0].area_of_work) ? ' · ' + esc(slides[0].area_of_work) : ''}</small>

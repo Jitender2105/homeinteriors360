@@ -62,6 +62,7 @@
       <input name="certifications_json" placeholder="Certifications (comma separated)" />
       <div class="budget-grid">
         <label><input type="checkbox" name="verification_status" /> Verified</label>
+        <label><input type="checkbox" name="is_premium" /> Premium</label>
         <label><input type="checkbox" name="is_active" checked /> Active</label>
       </div>
       <div class="admin-links">
@@ -75,7 +76,7 @@
       <table>
         <thead>
           <tr>
-            <th>Name</th><th>Role</th><th>City</th><th>Work Type</th><th>Work Area</th><th>Experience</th><th>Projects</th><th>Rating</th><th>Actions</th>
+            <th>Name</th><th>Role</th><th>City</th><th>Work Type</th><th>Work Area</th><th>Experience</th><th>Projects</th><th>Rating</th><th>Premium</th><th>Actions</th>
           </tr>
         </thead>
         <tbody id="professionalRows">
@@ -89,6 +90,7 @@
               <td><?= (int)($pro['years_experience'] ?? 0) ?></td>
               <td><?= (int)($pro['projects_delivered_computed'] ?? 0) ?></td>
               <td><?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?></td>
+              <td><?= !empty($pro['is_premium']) ? 'Yes' : 'No' ?></td>
               <td>
                 <button type="button" class="btn-link edit-prof">Edit</button>
                 <button type="button" class="btn-link del-prof" data-id="<?= (int)$pro['id'] ?>">Delete</button>
@@ -168,6 +170,7 @@
     const fd = new FormData(form);
     const id = fd.get('id');
     fd.set('verification_status', form.elements.verification_status.checked ? '1' : '0');
+    fd.set('is_premium', form.elements.is_premium.checked ? '1' : '0');
     fd.set('is_active', form.elements.is_active.checked ? '1' : '0');
     fd.set('service_areas', parseCsv(fd.get('service_areas')).join(', '));
     fd.set('materials_json', parseCsv(fd.get('materials_json')).join(', '));
