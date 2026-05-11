@@ -121,6 +121,7 @@ try {
             'society_area' => (string)($body['society_area'] ?? ''),
             'budget' => (string)($body['budget'] ?? ''),
             'requirement' => (string)$body['requirement'],
+            'plan_type' => (string)($body['plan_type'] ?? ''),
             'source' => (string)($body['source'] ?? 'homepage'),
             'pro_id' => isset($body['pro_id']) ? (int)$body['pro_id'] : null,
             'floor_plan' => $body['floor_plan'] ?? null,
@@ -372,6 +373,16 @@ try {
             'title' => (string)SiteRepository::content('seo.calculator.title', 'Design Cost Calculator'),
             'active' => 'calculator',
             'content' => $content,
+        ]);
+        exit;
+    }
+
+    if ($path === '/pricing') {
+        render('public/pricing', [
+            'title' => (string)SiteRepository::content('seo.pricing.title', 'Pricing for Architects & Interior Designers'),
+            'active' => 'pricing',
+            'content' => $content,
+            'reviews' => SiteRepository::pricingReviews(),
         ]);
         exit;
     }

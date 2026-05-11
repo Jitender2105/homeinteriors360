@@ -12,6 +12,7 @@
             <th>Society / Area</th>
             <th>Budget</th>
             <th>Requirement</th>
+            <th>Plan</th>
             <th>Source</th>
             <th>Pro</th>
             <th>Status</th>
@@ -28,6 +29,7 @@
               <td><?= htmlspecialchars((string)($lead['society_area'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars((string)($lead['budget'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars((string)$lead['requirement'], ENT_QUOTES, 'UTF-8') ?></td>
+              <td><?= htmlspecialchars((string)($lead['plan_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars((string)$lead['source'], ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars((string)($lead['pro_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
               <td>

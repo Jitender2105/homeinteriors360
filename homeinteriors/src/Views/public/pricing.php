@@ -1,0 +1,233 @@
+<?php
+require __DIR__ . '/../partials/header.php';
+
+$plans = [
+    [
+        'id' => 'lead_purchase',
+        'title' => 'Lead Purchase Mode',
+        'price' => 'Pay per lead',
+        'description' => 'Buy qualified homeowner leads charged by location, locality, and budget bands.',
+        'items' => [
+            'Targeted lead routing by city, locality, and budget',
+            'Pay only for the leads you want to activate',
+            'Fast access to high-intent homeowners',
+            'Ideal for architects and designers who want flexible scale',
+        ],
+    ],
+    [
+        'id' => 'managed_account',
+        'title' => 'Managed Growth Account',
+        'price' => 'Custom retainer',
+        'description' => 'We manage your full interior design presence end-to-end, including leads and brand growth.',
+        'items' => [
+            'Lead generation, nurturing, and follow-up support',
+            'Social media and Google Business Profile management',
+            'Profile, portfolio, and testimonial management',
+            'A good fit for teams that want a hands-off growth engine',
+        ],
+    ],
+];
+
+$whyBuyPoints = [
+    'Verified demand from homeowners actively looking for architects and interior designers',
+    'Sales team support for onboarding, plan selection, and account setup',
+    'A platform built to convert traffic into qualified design conversations',
+    'Flexible growth paths for solo consultants, studios, and turnkey firms',
+];
+
+$offerings = [
+    'Lead purchase pricing by locality, city, and budget',
+    'Managed profile and portfolio publishing',
+    'Social media and Google Business Page support',
+    'Customer testimonial collection and reputation building',
+    'Priority visibility for premium plans',
+    'Dedicated sales and onboarding assistance',
+];
+
+$registrationSuccess = (string)($content['pricing.form.success'] ?? 'Thanks. Our sales team will contact you shortly.');
+?>
+
+<section class="pricing-hero section" data-reveal>
+  <div class="container pricing-shell">
+    <div class="pricing-copy">
+      <p class="eyebrow"><?= htmlspecialchars((string)($content['pricing.hero.eyebrow'] ?? 'CHOOSE YOUR GROWTH MODEL'), ENT_QUOTES, 'UTF-8') ?></p>
+      <h1><?= htmlspecialchars((string)($content['pricing.hero.title'] ?? 'A pricing page built for architects and interior designers.'), ENT_QUOTES, 'UTF-8') ?></h1>
+      <p class="hero-subtitle"><?= htmlspecialchars((string)($content['pricing.hero.subtitle'] ?? 'Pick the lead purchase mode or let our team manage your entire account end-to-end.'), ENT_QUOTES, 'UTF-8') ?></p>
+      <div class="pricing-hero-points">
+        <span class="chip">Lead purchase by budget band</span>
+        <span class="chip">Managed account service</span>
+        <span class="chip">Sales team registration</span>
+      </div>
+    </div>
+
+    <aside class="lead-card pricing-form-shell">
+      <h2><?= htmlspecialchars((string)($content['pricing.form.title'] ?? 'Register interest'), ENT_QUOTES, 'UTF-8') ?></h2>
+      <p class="muted-line"><?= htmlspecialchars((string)($content['pricing.form.subtitle'] ?? 'Our sales team will connect with you and tailor the right plan.'), ENT_QUOTES, 'UTF-8') ?></p>
+      <form id="pricingLeadForm" class="stack-form">
+        <input type="hidden" name="source" value="pricing" />
+        <label>
+          <span><?= htmlspecialchars((string)($content['ui.name'] ?? 'Name'), ENT_QUOTES, 'UTF-8') ?></span>
+          <input name="name" required placeholder="<?= htmlspecialchars((string)($content['ui.name'] ?? 'Name'), ENT_QUOTES, 'UTF-8') ?>" />
+        </label>
+        <label>
+          <span><?= htmlspecialchars((string)($content['ui.phone'] ?? 'Phone'), ENT_QUOTES, 'UTF-8') ?></span>
+          <input name="phone" required placeholder="<?= htmlspecialchars((string)($content['ui.phone'] ?? 'Phone'), ENT_QUOTES, 'UTF-8') ?>" />
+        </label>
+        <label>
+          <span><?= htmlspecialchars((string)($content['ui.city'] ?? 'City'), ENT_QUOTES, 'UTF-8') ?></span>
+          <input name="city" required placeholder="<?= htmlspecialchars((string)($content['ui.city'] ?? 'City'), ENT_QUOTES, 'UTF-8') ?>" />
+        </label>
+        <label>
+          <span>Society / Area</span>
+          <input name="society_area" placeholder="Society / Area" />
+        </label>
+        <label>
+          <span>Budget</span>
+          <input name="budget" placeholder="Budget" />
+        </label>
+        <label>
+          <span>Plan Type</span>
+          <select name="plan_type" required>
+            <option value="">Select plan</option>
+            <option value="Lead Purchase Mode">Lead Purchase Mode</option>
+            <option value="Managed Growth Account">Managed Growth Account</option>
+          </select>
+        </label>
+        <label>
+          <span>Requirement</span>
+          <textarea name="requirement" required placeholder="Tell us what you want to buy or manage"></textarea>
+        </label>
+        <button type="submit" class="btn-primary"><?= htmlspecialchars((string)($content['pricing.form.submit'] ?? 'Connect with Sales'), ENT_QUOTES, 'UTF-8') ?></button>
+        <p class="form-message" id="pricingLeadMessage"></p>
+      </form>
+    </aside>
+  </div>
+</section>
+
+<section class="section" data-reveal>
+  <div class="container">
+    <div class="section-head">
+      <h2><?= htmlspecialchars((string)($content['pricing.plans.title'] ?? 'Two ways to grow'), ENT_QUOTES, 'UTF-8') ?></h2>
+      <p><?= htmlspecialchars((string)($content['pricing.plans.subtitle'] ?? 'Start with lead buying or hand over the full growth engine to our team.'), ENT_QUOTES, 'UTF-8') ?></p>
+    </div>
+    <div class="pricing-grid">
+      <?php foreach ($plans as $index => $plan): ?>
+        <article class="pricing-card <?= $index === 1 ? 'featured' : '' ?>">
+          <?php if ($index === 1): ?><span class="pricing-badge">Most Comprehensive</span><?php endif; ?>
+          <div class="pricing-card-head">
+            <h3><?= htmlspecialchars($plan['title'], ENT_QUOTES, 'UTF-8') ?></h3>
+            <strong><?= htmlspecialchars($plan['price'], ENT_QUOTES, 'UTF-8') ?></strong>
+          </div>
+          <p><?= htmlspecialchars($plan['description'], ENT_QUOTES, 'UTF-8') ?></p>
+          <ul class="benefit-list">
+            <?php foreach ($plan['items'] as $item): ?>
+              <li><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8') ?></li>
+            <?php endforeach; ?>
+          </ul>
+          <button class="btn-link pricing-select" type="button" data-plan="<?= htmlspecialchars($plan['title'], ENT_QUOTES, 'UTF-8') ?>">Register interest</button>
+        </article>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
+<section class="section" data-reveal>
+  <div class="container twin-grid">
+    <div>
+      <h2><?= htmlspecialchars((string)($content['pricing.why.title'] ?? 'Why buy from us'), ENT_QUOTES, 'UTF-8') ?></h2>
+      <div class="h-scroll mini-scroll">
+        <?php foreach ($whyBuyPoints as $point): ?>
+          <article class="mini-card"><?= htmlspecialchars($point, ENT_QUOTES, 'UTF-8') ?></article>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <div>
+      <h2><?= htmlspecialchars((string)($content['pricing.offerings.title'] ?? 'What we offer'), ENT_QUOTES, 'UTF-8') ?></h2>
+      <div class="h-scroll mini-scroll">
+        <?php foreach ($offerings as $point): ?>
+          <article class="mini-card"><?= htmlspecialchars($point, ENT_QUOTES, 'UTF-8') ?></article>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" data-reveal>
+  <div class="container">
+    <div class="section-head">
+      <h2><?= htmlspecialchars((string)($content['pricing.reviews.title'] ?? 'Best architect reviews'), ENT_QUOTES, 'UTF-8') ?></h2>
+      <p>Feedback from verified professionals already building with us.</p>
+    </div>
+    <div class="cards-grid pricing-reviews">
+      <?php if ($reviews === []): ?>
+        <article class="review-card pricing-review-card">
+          <p>No reviews available yet. New professional testimonials will appear here as the network grows.</p>
+        </article>
+      <?php else: ?>
+        <?php foreach ($reviews as $review): ?>
+          <article class="review-card pricing-review-card">
+            <div class="review-topline">
+              <?php if (!empty($review['pro_profile_pic'])): ?>
+                <img class="quote-avatar" src="<?= htmlspecialchars((string)$review['pro_profile_pic'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($review['pro_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+              <?php endif; ?>
+              <div>
+                <h4><?= htmlspecialchars((string)($review['pro_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h4>
+                <span><?= htmlspecialchars((string)($review['pro_role'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($review['pro_city'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+              </div>
+            </div>
+            <p>★ <?= (int)($review['rating'] ?? 0) ?>/5</p>
+            <p>“<?= htmlspecialchars((string)($review['review_text'] ?? ''), ENT_QUOTES, 'UTF-8') ?>”</p>
+            <p><strong><?= htmlspecialchars((string)($review['client_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong></p>
+            <?php if ((int)($review['verified_purchase'] ?? 0) === 1): ?>
+              <span class="verify-badge">Verified Purchase</span>
+            <?php endif; ?>
+          </article>
+        <?php endforeach; ?>
+      <?php endif; ?>
+    </div>
+  </div>
+</section>
+
+<script>
+(() => {
+  const form = document.getElementById('pricingLeadForm');
+  const message = document.getElementById('pricingLeadMessage');
+  const buttons = document.querySelectorAll('.pricing-select');
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const plan = form.querySelector('[name="plan_type"]');
+      if (plan) {
+        plan.value = button.dataset.plan || '';
+        plan.focus();
+      }
+      window.scrollTo({ top: form.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' });
+    });
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(form).entries());
+    payload.source = 'pricing';
+
+    const response = await fetch('/api/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+
+    if (response.ok) {
+      message.className = 'form-message ok';
+      message.textContent = <?= json_encode($registrationSuccess, JSON_UNESCAPED_UNICODE) ?>;
+      form.reset();
+      return;
+    }
+
+    message.className = 'form-message error';
+    message.textContent = data.error || 'Failed';
+  });
+})();
+</script>
+
+<?php require __DIR__ . '/../partials/footer.php'; ?>

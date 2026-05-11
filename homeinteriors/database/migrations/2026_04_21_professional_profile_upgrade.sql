@@ -51,7 +51,11 @@ ALTER TABLE reviews
 
 ALTER TABLE leads
   ADD COLUMN IF NOT EXISTS society_area VARCHAR(255) DEFAULT NULL,
-  ADD COLUMN IF NOT EXISTS budget VARCHAR(120) DEFAULT NULL;
+  ADD COLUMN IF NOT EXISTS budget VARCHAR(120) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS plan_type VARCHAR(80) DEFAULT NULL;
+
+ALTER TABLE leads
+  MODIFY COLUMN source ENUM('homepage','profile','calculator','pricing') NOT NULL DEFAULT 'homepage';
 
 UPDATE pros
 SET
@@ -93,6 +97,20 @@ VALUES
   ('home.trust.items', '["Verified professionals and transparent pricing","Dedicated project support","Quality checks at every stage","On-time milestone tracking"]', 'json'),
   ('home.usp.title', 'Our USP', 'text'),
   ('home.usp.items', '["Centralized discovery + lead management","Data-driven cost estimator","Verified expert network","Content-managed growth architecture"]', 'json'),
+  ('seo.pricing.title', 'Pricing for Architects & Interior Designers | HomeInteriors360', 'text'),
+  ('nav.pricing', 'Pricing', 'text'),
+  ('pricing.hero.eyebrow', 'CHOOSE YOUR GROWTH MODEL', 'text'),
+  ('pricing.hero.title', 'A pricing page built for architects and interior designers.', 'text'),
+  ('pricing.hero.subtitle', 'Pick the lead purchase mode or let our team manage your entire account end-to-end.', 'text'),
+  ('pricing.plans.title', 'Two ways to grow', 'text'),
+  ('pricing.plans.subtitle', 'Start with lead buying or hand over the full growth engine to our team.', 'text'),
+  ('pricing.why.title', 'Why buy from us', 'text'),
+  ('pricing.offerings.title', 'What we offer', 'text'),
+  ('pricing.reviews.title', 'Best architect reviews', 'text'),
+  ('pricing.form.title', 'Register interest', 'text'),
+  ('pricing.form.subtitle', 'Our sales team will connect with you and tailor the right plan.', 'text'),
+  ('pricing.form.submit', 'Connect with Sales', 'text'),
+  ('pricing.form.success', 'Thanks. Our sales team will contact you shortly.', 'text'),
   ('seo.portfolio.title_suffix', 'Portfolio | HomeInteriors360', 'text'),
   ('directory.filter.work_type', 'Type of Work', 'text'),
   ('directory.filter.work_area', 'Area of Work', 'text'),

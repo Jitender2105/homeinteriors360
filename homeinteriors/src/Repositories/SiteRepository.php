@@ -319,6 +319,27 @@ final class SiteRepository
         ];
     }
 
+    public static function pricingReviews(int $limit = 4): array
+    {
+        $limit = max(1, (int)$limit);
+        $rows = Database::query(
+            'SELECT r.id, r.client_name, r.rating, r.review_text, r.verified_purchase, r.work_type, r.area_of_work, r.materials_highlight, r.photos_json, r.created_at,
+                    pr.full_name AS pro_name, pr.slug AS pro_slug, pr.city AS pro_city, pr.role AS pro_role, pr.profile_pic AS pro_profile_pic, pr.rating AS pro_rating
+             FROM reviews r
+             JOIN pros pr ON pr.id = r.pro_id
+             WHERE pr.is_active = 1 AND pr.role IN ("Architect","Designer")
+             ORDER BY pr.is_premium DESC, r.verified_purchase DESC, r.rating DESC, r.created_at DESC
+             LIMIT ' . $limit
+        );
+
+        foreach ($rows as &$row) {
+            $row['photos_json'] = self::parseJsonArray($row['photos_json'] ?? '[]');
+        }
+        unset($row);
+
+        return $rows;
+    }
+
     public static function getProjectBySlug(string $slug): ?array
     {
         $row = Database::one(
@@ -592,8 +613,8 @@ final class SiteRepository
     public static function createLead(array $data): int
     {
         return Database::exec(
-            'INSERT INTO leads (name, phone, city, society_area, budget, requirement, pro_id, source, status, floor_plan, package_tier, rooms_json, estimate)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO leads (name, phone, city, society_area, budget, requirement, pro_id, plan_type, source, status, floor_plan, package_tier, rooms_json, estimate)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $data['name'],
                 $data['phone'],
@@ -602,6 +623,7 @@ final class SiteRepository
                 $data['budget'] ?? null,
                 $data['requirement'],
                 isset($data['pro_id']) ? (int)$data['pro_id'] : null,
+                $data['plan_type'] ?? null,
                 $data['source'] ?? 'homepage',
                 $data['status'] ?? 'new',
                 $data['floor_plan'] ?? null,

@@ -277,6 +277,108 @@ button, .btn-primary, .btn-muted, .btn-link {
 .service-card h3 { margin: 0 0 8px; }
 .service-card p { margin: 0; color: var(--muted); }
 
+.pricing-hero {
+  padding-top: clamp(56px, 8vw, 110px);
+}
+.pricing-shell {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 24px;
+  align-items: start;
+}
+.pricing-copy {
+  padding-right: 14px;
+}
+.pricing-hero-points {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pricing-form-shell {
+  background: linear-gradient(180deg, #ffffff 0%, #fcfaf4 100%);
+}
+.pricing-form-shell label {
+  display: grid;
+  gap: 6px;
+}
+.pricing-form-shell span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.pricing-card {
+  position: relative;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+}
+.pricing-card.featured {
+  border-color: #d7b26f;
+  background: linear-gradient(180deg, #fff8ea 0%, #fffdf8 100%);
+}
+.pricing-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.pricing-card-head h3,
+.pricing-card-head strong {
+  margin: 0;
+}
+.pricing-card-head strong {
+  font-size: 14px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.pricing-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-self: start;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #f4d79d;
+  color: #5b3b13;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.benefit-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  display: grid;
+  gap: 8px;
+}
+.benefit-list li { padding-left: 4px; }
+.pricing-review-card {
+  display: grid;
+  gap: 10px;
+}
+.review-topline {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.review-topline h4,
+.review-topline span {
+  margin: 0;
+}
+.review-topline span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .quote-card { padding: 20px; display: grid; gap: 10px; }
 .quote-avatar { width: 68px; height: 68px; border-radius: 18px; object-fit: cover; }
 .quote-card p, .quote-card h4, .quote-card span { margin: 0 0 8px; }
@@ -652,6 +754,7 @@ textarea {
 @media (max-width: 1100px) {
   .hero-grid,
   .directory-layout,
+  .pricing-shell,
   .twin-grid,
   .service-grid,
   .cards-grid,
@@ -667,6 +770,12 @@ textarea {
   .hero-grid {
     grid-template-columns: 1fr;
     align-items: end;
+  }
+  .pricing-shell {
+    grid-template-columns: 1fr;
+  }
+  .pricing-copy {
+    padding-right: 0;
   }
 
   .filter-card {
@@ -708,6 +817,7 @@ textarea {
   .cards-grid,
   .stats-grid,
   .directory-layout,
+  .pricing-shell,
   .twin-grid,
   .profile-top-lead,
   .profile-meta-grid,
@@ -769,5 +879,8 @@ textarea {
   }
   .video-frame iframe {
     height: 250px;
+  }
+  .pricing-grid {
+    grid-template-columns: 1fr;
   }
 }
