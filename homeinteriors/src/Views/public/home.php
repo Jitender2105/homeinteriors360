@@ -24,40 +24,50 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
 
     <div class="lead-card" data-reveal>
       <h2><?= htmlspecialchars((string)($content['home.lead.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
-      <form id="heroLeadForm" class="multi-step">
-        <div class="step active" data-step="1">
-          <label><?= htmlspecialchars((string)($content['home.lead.step1_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
-          <select name="city" required>
-            <option value=""><?= htmlspecialchars((string)($content['home.lead.step1_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></option>
-            <?php foreach ($cities as $city): ?>
-              <option value="<?= htmlspecialchars((string)$city, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$city, ENT_QUOTES, 'UTF-8') ?></option>
-            <?php endforeach; ?>
-          </select>
+      <form id="heroLeadForm" class="stack-form hero-lead-form">
+        <div class="hero-lead-grid">
+          <label>
+            <span><?= htmlspecialchars((string)($content['home.lead.step1_label'] ?? 'City'), ENT_QUOTES, 'UTF-8') ?></span>
+            <select name="city" required>
+              <option value=""><?= htmlspecialchars((string)($content['home.lead.step1_label'] ?? 'City'), ENT_QUOTES, 'UTF-8') ?></option>
+              <?php foreach ($cities as $city): ?>
+                <option value="<?= htmlspecialchars((string)$city, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$city, ENT_QUOTES, 'UTF-8') ?></option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+
+          <label>
+            <span><?= htmlspecialchars((string)($content['home.lead.step2_label'] ?? 'Requirement'), ENT_QUOTES, 'UTF-8') ?></span>
+            <select name="requirement" required>
+              <option value=""><?= htmlspecialchars((string)($content['home.lead.step2_label'] ?? 'Requirement'), ENT_QUOTES, 'UTF-8') ?></option>
+              <?php foreach ($requirements as $req): ?>
+                <option value="<?= htmlspecialchars((string)$req, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$req, ENT_QUOTES, 'UTF-8') ?></option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+
+          <label>
+            <span><?= htmlspecialchars((string)($content['ui.name'] ?? 'Name'), ENT_QUOTES, 'UTF-8') ?></span>
+            <input type="text" name="name" required placeholder="<?= htmlspecialchars((string)($content['ui.name'] ?? 'Name'), ENT_QUOTES, 'UTF-8') ?>" />
+          </label>
+
+          <label>
+            <span><?= htmlspecialchars((string)($content['ui.phone'] ?? 'Phone'), ENT_QUOTES, 'UTF-8') ?></span>
+            <input type="tel" name="phone" required placeholder="<?= htmlspecialchars((string)($content['ui.phone'] ?? 'Phone'), ENT_QUOTES, 'UTF-8') ?>" />
+          </label>
+
+          <label>
+            <span><?= htmlspecialchars((string)($content['ui.society_area'] ?? 'Society / Area'), ENT_QUOTES, 'UTF-8') ?></span>
+            <input type="text" name="society_area" placeholder="<?= htmlspecialchars((string)($content['ui.society_area'] ?? 'Society / Area'), ENT_QUOTES, 'UTF-8') ?>" />
+          </label>
+
+          <label>
+            <span><?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?></span>
+            <input type="text" name="budget" placeholder="<?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?>" />
+          </label>
         </div>
 
-        <div class="step" data-step="2">
-          <label><?= htmlspecialchars((string)($content['home.lead.step2_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
-          <select name="requirement" required>
-            <option value=""><?= htmlspecialchars((string)($content['home.lead.step2_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></option>
-            <?php foreach ($requirements as $req): ?>
-              <option value="<?= htmlspecialchars((string)$req, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$req, ENT_QUOTES, 'UTF-8') ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-
-        <div class="step" data-step="3">
-          <label><?= htmlspecialchars((string)($content['home.lead.step3_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></label>
-          <input type="text" name="name" required placeholder="<?= htmlspecialchars((string)($content['ui.name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-          <input type="tel" name="phone" required placeholder="<?= htmlspecialchars((string)($content['ui.phone'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-          <input type="text" name="society_area" placeholder="<?= htmlspecialchars((string)($content['ui.society_area'] ?? 'Society / Area'), ENT_QUOTES, 'UTF-8') ?>" />
-          <input type="text" name="budget" placeholder="<?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?>" />
-        </div>
-
-        <div class="step-actions">
-          <button type="button" class="btn-muted" id="heroPrev"><?= htmlspecialchars((string)($content['home.lead.step_prev'] ?? ''), ENT_QUOTES, 'UTF-8') ?></button>
-          <button type="button" class="btn-primary" id="heroNext"><?= htmlspecialchars((string)($content['home.lead.step_next'] ?? ''), ENT_QUOTES, 'UTF-8') ?></button>
-          <button type="submit" class="btn-primary" id="heroSubmit"><?= htmlspecialchars((string)($content['home.lead.submit'] ?? ''), ENT_QUOTES, 'UTF-8') ?></button>
-        </div>
+        <button type="submit" class="btn-primary hero-lead-submit"><?= htmlspecialchars((string)($content['home.lead.submit'] ?? ''), ENT_QUOTES, 'UTF-8') ?></button>
         <p class="form-message" id="heroLeadMessage"></p>
       </form>
     </div>
@@ -170,39 +180,11 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
   const form = document.getElementById('heroLeadForm');
   if (!form) return;
 
-  const steps = Array.from(form.querySelectorAll('.step'));
-  const prevBtn = document.getElementById('heroPrev');
-  const nextBtn = document.getElementById('heroNext');
-  const submitBtn = document.getElementById('heroSubmit');
   const msg = document.getElementById('heroLeadMessage');
-  let current = 0;
-
-  function renderStep() {
-    steps.forEach((step, idx) => step.classList.toggle('active', idx === current));
-    prevBtn.style.display = current === 0 ? 'none' : 'inline-flex';
-    nextBtn.style.display = current === steps.length - 1 ? 'none' : 'inline-flex';
-    submitBtn.style.display = current === steps.length - 1 ? 'inline-flex' : 'none';
-  }
-
-  function validateCurrent() {
-    const fields = steps[current].querySelectorAll('input, select');
-    return Array.from(fields).every((field) => field.reportValidity());
-  }
-
-  nextBtn.addEventListener('click', () => {
-    if (!validateCurrent()) return;
-    current = Math.min(current + 1, steps.length - 1);
-    renderStep();
-  });
-
-  prevBtn.addEventListener('click', () => {
-    current = Math.max(current - 1, 0);
-    renderStep();
-  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!validateCurrent()) return;
+    if (!form.reportValidity()) return;
     const payload = Object.fromEntries(new FormData(form).entries());
     payload.source = 'homepage';
 
@@ -217,16 +199,12 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
       msg.className = 'form-message ok';
       msg.textContent = <?= json_encode((string)($content['home.lead.success'] ?? 'Thank you. Our team will call you shortly.'), JSON_UNESCAPED_UNICODE) ?>;
       form.reset();
-      current = 0;
-      renderStep();
       return;
     }
 
     msg.className = 'form-message error';
     msg.textContent = data.error || 'Failed';
   });
-
-  renderStep();
 })();
 </script>
 
