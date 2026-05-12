@@ -36,12 +36,27 @@ $whyBuyPoints = [
 ];
 
 $offerings = [
-    'Lead purchase pricing by locality, city, and budget',
-    'Managed profile and portfolio publishing',
-    'Social media and Google Business Page support',
-    'Customer testimonial collection and reputation building',
-    'Priority visibility for premium plans',
-    'Dedicated sales and onboarding assistance',
+  'Lead purchase pricing by locality, city, and budget',
+  'Managed profile and portfolio publishing',
+  'Social media and Google Business Page support',
+  'Customer testimonial collection and reputation building',
+  'Priority visibility for premium plans',
+  'Dedicated sales and onboarding assistance',
+];
+
+$whyImages = [
+  'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1200&q=80',
+];
+$offerImages = [
+  'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1552664688-cf412ec27db2?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1556155092-490a1ba16284?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80',
 ];
 
 $registrationSuccess = (string)($content['pricing.form.success'] ?? 'Thanks. Our sales team will contact you shortly.');
@@ -180,17 +195,29 @@ $leadPurchaseSteps = [
   <div class="container twin-grid">
     <div>
       <h2><?= htmlspecialchars((string)($content['pricing.why.title'] ?? 'Why buy from us'), ENT_QUOTES, 'UTF-8') ?></h2>
-      <div class="h-scroll mini-scroll">
-        <?php foreach ($whyBuyPoints as $point): ?>
-          <article class="mini-card"><?= htmlspecialchars($point, ENT_QUOTES, 'UTF-8') ?></article>
+      <div class="media-collection-grid">
+        <?php foreach ($whyBuyPoints as $index => $point): ?>
+          <article class="media-block">
+            <img src="<?= htmlspecialchars($whyImages[$index % count($whyImages)], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($point, ENT_QUOTES, 'UTF-8') ?>" />
+            <div class="media-block-copy">
+              <h3><?= htmlspecialchars($point, ENT_QUOTES, 'UTF-8') ?></h3>
+              <p>Built for architects and interior designers who want sharper demand, cleaner lead flow, and more predictable growth.</p>
+            </div>
+          </article>
         <?php endforeach; ?>
       </div>
     </div>
     <div>
       <h2><?= htmlspecialchars((string)($content['pricing.offerings.title'] ?? 'What we offer'), ENT_QUOTES, 'UTF-8') ?></h2>
-      <div class="h-scroll mini-scroll">
-        <?php foreach ($offerings as $point): ?>
-          <article class="mini-card"><?= htmlspecialchars($point, ENT_QUOTES, 'UTF-8') ?></article>
+      <div class="media-collection-grid">
+        <?php foreach ($offerings as $index => $point): ?>
+          <article class="media-block">
+            <img src="<?= htmlspecialchars($offerImages[$index % count($offerImages)], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($point, ENT_QUOTES, 'UTF-8') ?>" />
+            <div class="media-block-copy">
+              <h3><?= htmlspecialchars($point, ENT_QUOTES, 'UTF-8') ?></h3>
+              <p>Modern support blocks that keep your account, visibility, and lead generation moving in one direction.</p>
+            </div>
+          </article>
         <?php endforeach; ?>
       </div>
     </div>

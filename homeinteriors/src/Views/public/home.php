@@ -10,6 +10,18 @@ $testimonials = is_array($payload['testimonials'] ?? null) ? $payload['testimoni
 $brands = is_array($payload['brands'] ?? null) ? $payload['brands'] : [];
 $trustPoints = is_array($payload['trust_points'] ?? null) ? $payload['trust_points'] : [];
 $uspPoints = is_array($payload['usp_points'] ?? null) ? $payload['usp_points'] : [];
+$trustVisuals = [
+  ['title' => 'Verified Professionals', 'image' => 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80'],
+  ['title' => 'Transparent Pricing', 'image' => 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80'],
+  ['title' => 'Quality Checks', 'image' => 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80'],
+  ['title' => 'On-Time Delivery', 'image' => 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80'],
+];
+$uspVisuals = [
+  ['title' => 'Centralized Discovery', 'image' => 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80'],
+  ['title' => 'Lead Management Engine', 'image' => 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80'],
+  ['title' => 'Verified Network', 'image' => 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1200&q=80'],
+  ['title' => 'Growth Content System', 'image' => 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=1200&q=80'],
+];
 $cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : [];
 $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['requirement_options'] : [];
 ?>
@@ -101,14 +113,19 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
     <div class="section-head">
       <h2><?= htmlspecialchars((string)($content['home.services.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
     </div>
-    <div class="service-grid">
+    <div class="service-grid modern-media-grid">
       <?php foreach ($services as $service): ?>
-        <article class="service-card">
-          <?php if (!empty($service['image'])): ?>
-            <img class="card-image" src="<?= htmlspecialchars((string)$service['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-          <?php endif; ?>
+        <article class="service-card media-card">
+          <div class="media-card-image-wrap">
+            <?php if (!empty($service['image'])): ?>
+              <img class="media-card-image" src="<?= htmlspecialchars((string)$service['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+            <?php endif; ?>
+            <div class="media-card-overlay">
+              <p class="media-card-kicker"><?= htmlspecialchars((string)($content['home.services.title'] ?? 'Services'), ENT_QUOTES, 'UTF-8') ?></p>
+              <h3><?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
+            </div>
+          </div>
           <div class="service-copy">
-            <span class="service-icon"><?= htmlspecialchars((string)($service['icon'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
             <h3><?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
             <p><?= htmlspecialchars((string)($service['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
           </div>
@@ -121,15 +138,19 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
 <section class="section" data-reveal>
   <div class="container">
     <h2><?= htmlspecialchars((string)($content['home.testimonials.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
-    <div class="h-scroll">
+    <div class="testimonials-grid">
       <?php foreach ($testimonials as $testimonial): ?>
-        <article class="quote-card">
-          <?php if (!empty($testimonial['image'])): ?>
-            <img class="quote-avatar" src="<?= htmlspecialchars((string)$testimonial['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-          <?php endif; ?>
+        <article class="quote-card quote-card-modern">
+          <div class="quote-visual">
+            <?php if (!empty($testimonial['image'])): ?>
+              <img class="quote-cover" src="<?= htmlspecialchars((string)$testimonial['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+            <?php endif; ?>
+            <div class="quote-overlay">
+              <h4><?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h4>
+              <span><?= htmlspecialchars((string)($testimonial['location'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+          </div>
           <p>“<?= htmlspecialchars((string)($testimonial['text'] ?? ''), ENT_QUOTES, 'UTF-8') ?>”</p>
-          <h4><?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h4>
-          <span><?= htmlspecialchars((string)($testimonial['location'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
         </article>
       <?php endforeach; ?>
     </div>
@@ -139,17 +160,15 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
 <section class="section" data-reveal>
   <div class="container">
     <h2><?= htmlspecialchars((string)($content['home.brands.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
-    <div class="marquee">
-      <div class="marquee-track">
-        <?php for ($i = 0; $i < 2; $i++): foreach ($brands as $brand): ?>
-          <span class="brand-pill">
-            <?php $brandLogo = $brand['logo'] ?? $brand['url'] ?? ''; if (!empty($brandLogo)): ?>
-              <img src="<?= htmlspecialchars((string)$brandLogo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-            <?php endif; ?>
-            <span><?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-          </span>
-        <?php endforeach; endfor; ?>
-      </div>
+    <div class="brand-grid">
+      <?php foreach ($brands as $brand): ?>
+        <article class="brand-card">
+          <?php $brandLogo = $brand['logo'] ?? $brand['url'] ?? ''; if (!empty($brandLogo)): ?>
+            <img src="<?= htmlspecialchars((string)$brandLogo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+          <?php endif; ?>
+          <strong><?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+        </article>
+      <?php endforeach; ?>
     </div>
   </div>
 </section>
@@ -158,17 +177,29 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
   <div class="container twin-grid">
     <div>
       <h2><?= htmlspecialchars((string)($content['home.trust.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
-      <div class="h-scroll mini-scroll">
-        <?php foreach ($trustPoints as $point): ?>
-          <article class="mini-card"><?= htmlspecialchars((string)$point, ENT_QUOTES, 'UTF-8') ?></article>
+      <div class="media-collection-grid">
+        <?php foreach ($trustVisuals as $index => $item): ?>
+          <article class="media-block">
+            <img src="<?= htmlspecialchars($item['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>" />
+            <div class="media-block-copy">
+              <h3><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?></h3>
+              <p><?= htmlspecialchars((string)($trustPoints[$index] ?? $item['title']), ENT_QUOTES, 'UTF-8') ?></p>
+            </div>
+          </article>
         <?php endforeach; ?>
       </div>
     </div>
     <div>
       <h2><?= htmlspecialchars((string)($content['home.usp.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
-      <div class="h-scroll mini-scroll">
-        <?php foreach ($uspPoints as $point): ?>
-          <article class="mini-card"><?= htmlspecialchars((string)$point, ENT_QUOTES, 'UTF-8') ?></article>
+      <div class="media-collection-grid">
+        <?php foreach ($uspVisuals as $index => $item): ?>
+          <article class="media-block">
+            <img src="<?= htmlspecialchars($item['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>" />
+            <div class="media-block-copy">
+              <h3><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?></h3>
+              <p><?= htmlspecialchars((string)($uspPoints[$index] ?? $item['title']), ENT_QUOTES, 'UTF-8') ?></p>
+            </div>
+          </article>
         <?php endforeach; ?>
       </div>
     </div>
