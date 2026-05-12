@@ -10,27 +10,43 @@ $testimonials = is_array($payload['testimonials'] ?? null) ? $payload['testimoni
 $brands = is_array($payload['brands'] ?? null) ? $payload['brands'] : [];
 $trustPoints = is_array($payload['trust_points'] ?? null) ? $payload['trust_points'] : [];
 $uspPoints = is_array($payload['usp_points'] ?? null) ? $payload['usp_points'] : [];
+$safeImage = static function (string $url, string $fallback): string {
+  $url = trim($url);
+  if ($url === '' || !preg_match('~^https?://~i', $url)) {
+    return $fallback;
+  }
+  if (str_contains($url, '1616594039964-3dbbb0bd2e8f')) {
+    return $fallback;
+  }
+  return $url;
+};
 $trustVisuals = [
-  ['title' => 'Verified Professionals', 'image' => 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80'],
-  ['title' => 'Transparent Pricing', 'image' => 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80'],
-  ['title' => 'Quality Checks', 'image' => 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80'],
-  ['title' => 'On-Time Delivery', 'image' => 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80'],
+  ['title' => 'Verified Professionals', 'image' => 'https://images.pexels.com/photos/8403087/pexels-photo-8403087.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Transparent Pricing', 'image' => 'https://images.pexels.com/photos/6585750/pexels-photo-6585750.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Quality Checks', 'image' => 'https://images.pexels.com/photos/9011226/pexels-photo-9011226.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'On-Time Delivery', 'image' => 'https://images.pexels.com/photos/3615613/pexels-photo-3615613.jpeg?auto=compress&cs=tinysrgb&w=1200'],
 ];
 $uspVisuals = [
-  ['title' => 'Centralized Discovery', 'image' => 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80'],
-  ['title' => 'Lead Management Engine', 'image' => 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80'],
-  ['title' => 'Verified Network', 'image' => 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1200&q=80'],
-  ['title' => 'Growth Content System', 'image' => 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=1200&q=80'],
+  ['title' => 'Centralized Discovery', 'image' => 'https://images.pexels.com/photos/6283979/pexels-photo-6283979.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Lead Management Engine', 'image' => 'https://images.pexels.com/photos/8867439/pexels-photo-8867439.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Verified Network', 'image' => 'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Growth Content System', 'image' => 'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=1200'],
 ];
 $serviceFallbacks = [
   'kitchen' => 'https://images.unsplash.com/photo-1556912167-f556f1f39fdf?auto=format&fit=crop&w=1200&q=80',
-  'wardrobe' => 'https://images.unsplash.com/photo-1616594039964-3dbbb0bd2e8f?auto=format&fit=crop&w=1200&q=80',
+  'wardrobe' => 'https://images.pexels.com/photos/6585750/pexels-photo-6585750.jpeg?auto=compress&cs=tinysrgb&w=1200',
   'full_home' => 'https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=1200&q=80',
 ];
 $testimonialFallbacks = [
   'Priya S' => 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=900',
   'Vikas A' => 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=900',
   'Karan M' => 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=900',
+];
+$brandFallbacks = [
+  'Hafele' => 'https://upload.wikimedia.org/wikipedia/commons/2/2a/Haefele_Logo.png',
+  'Hettich' => 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Logo_of_Hettich_%28company%29.svg/960px-Logo_of_Hettich_%28company%29.svg.png',
+  'Asian Paints' => 'https://upload.wikimedia.org/wikipedia/commons/0/09/Asian_paints_logo.jpg',
+  'Kajaria' => 'https://companieslogo.com/img/orig/KAJARIACER.NS_BIG-300b5e39.png?download=true&t=1720244492',
 ];
 $cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : [];
 $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['requirement_options'] : [];
@@ -129,9 +145,9 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
           <div class="media-card-image-wrap">
             <?php
               $serviceKey = strtolower((string)($service['key'] ?? $service['title'] ?? ''));
-              $serviceImage = (string)($service['image'] ?? $serviceFallbacks[$serviceKey] ?? reset($serviceFallbacks));
+              $serviceImage = $safeImage((string)($service['image'] ?? ''), (string)($serviceFallbacks[$serviceKey] ?? reset($serviceFallbacks)));
             ?>
-            <img class="media-card-image" src="<?= htmlspecialchars($serviceImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" />
+            <img class="media-card-image" src="<?= htmlspecialchars($serviceImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= htmlspecialchars((string)($serviceFallbacks[$serviceKey] ?? reset($serviceFallbacks)), ENT_QUOTES, 'UTF-8') ?>';" />
             <div class="media-card-overlay">
               <p class="media-card-kicker"><?= htmlspecialchars((string)($content['home.services.title'] ?? 'Services'), ENT_QUOTES, 'UTF-8') ?></p>
               <h3><?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
@@ -154,10 +170,14 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
       <?php foreach ($testimonials as $testimonial): ?>
         <article class="quote-card quote-card-modern">
           <div class="quote-visual">
-            <?php $testimonialImage = (string)($testimonial['image'] ?? $testimonialFallbacks[$testimonial['name'] ?? ''] ?? reset($testimonialFallbacks)); ?>
-            <img class="quote-cover" src="<?= htmlspecialchars($testimonialImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" />
+            <?php
+              $testimonialName = (string)($testimonial['name'] ?? '');
+              $testimonialFallback = (string)($testimonialFallbacks[$testimonialName] ?? reset($testimonialFallbacks));
+              $testimonialImage = $safeImage((string)($testimonial['image'] ?? ''), $testimonialFallback);
+            ?>
+            <img class="quote-cover" src="<?= htmlspecialchars($testimonialImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($testimonialName, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= htmlspecialchars($testimonialFallback, ENT_QUOTES, 'UTF-8') ?>';" />
             <div class="quote-overlay">
-              <h4><?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h4>
+              <h4><?= htmlspecialchars($testimonialName, ENT_QUOTES, 'UTF-8') ?></h4>
               <span><?= htmlspecialchars((string)($testimonial['location'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
             </div>
           </div>
@@ -174,9 +194,12 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
     <div class="brand-grid">
       <?php foreach ($brands as $brand): ?>
         <article class="brand-card">
-          <?php $brandLogo = $brand['logo'] ?? $brand['url'] ?? ''; if (!empty($brandLogo)): ?>
-            <div class="brand-logo-wrap"><img src="<?= htmlspecialchars((string)$brandLogo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" /></div>
-          <?php endif; ?>
+          <?php
+            $brandName = (string)($brand['name'] ?? '');
+            $brandFallback = (string)($brandFallbacks[$brandName] ?? reset($brandFallbacks));
+            $brandLogo = $safeImage((string)($brand['logo'] ?? $brand['url'] ?? ''), $brandFallback);
+          ?>
+          <div class="brand-logo-wrap"><img src="<?= htmlspecialchars($brandLogo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($brandName, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= htmlspecialchars($brandFallback, ENT_QUOTES, 'UTF-8') ?>';" /></div>
           <strong><?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
         </article>
       <?php endforeach; ?>

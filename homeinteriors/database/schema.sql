@@ -276,7 +276,7 @@ VALUES
   JSON_ARRAY('BWP Plywood', 'Acrylic Shutters', 'Hafele Fittings', 'Quartz Countertop'),
   JSON_ARRAY(
     'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1616594039964-3dbbb0bd2e8f?auto=format&fit=crop&w=1500&q=80',
+    'https://images.pexels.com/photos/6585750/pexels-photo-6585750.jpeg?auto=compress&cs=tinysrgb&w=1500',
     'https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=1500&q=80',
     'https://images.unsplash.com/photo-1616046229478-9901c5536a45?auto=format&fit=crop&w=1500&q=80',
     'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1500&q=80'
@@ -419,13 +419,13 @@ VALUES
   ('home.aggregators.subtitle', 'Compare verified professionals and choose what fits your vision.', 'text'),
 
   ('home.services.title', 'Services', 'text'),
-  ('home.services.items', '[{"key":"kitchen","title":"Kitchen","description":"Smart layouts, premium finishes, durable modules.","icon":"🍽️","image":"https://images.unsplash.com/photo-1556912167-f556f1f39fdf?auto=format&fit=crop&w=1200&q=80"},{"key":"wardrobe","title":"Wardrobe","description":"Tailored storage for every room.","icon":"🗄️","image":"https://images.unsplash.com/photo-1616594039964-3dbbb0bd2e8f?auto=format&fit=crop&w=1200&q=80"},{"key":"full_home","title":"Full Home","description":"End-to-end interiors with single-point accountability.","icon":"🏠","image":"https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=1200&q=80"}]', 'json'),
+  ('home.services.items', '[{"key":"kitchen","title":"Kitchen","description":"Smart layouts, premium finishes, durable modules.","icon":"🍽️","image":"https://images.unsplash.com/photo-1556912167-f556f1f39fdf?auto=format&fit=crop&w=1200&q=80"},{"key":"wardrobe","title":"Wardrobe","description":"Tailored storage for every room.","icon":"🗄️","image":"https://images.pexels.com/photos/6585750/pexels-photo-6585750.jpeg?auto=compress&cs=tinysrgb&w=1200"},{"key":"full_home","title":"Full Home","description":"End-to-end interiors with single-point accountability.","icon":"🏠","image":"https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=1200&q=80"}]', 'json'),
 
   ('home.testimonials.title', 'Client Testimonials', 'text'),
-  ('home.testimonials.items', '[{"name":"Priya S","text":"Excellent planning and execution. The handover quality was premium.","location":"Gurgaon","image":"https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=600"},{"name":"Vikas A","text":"Great design team and responsive project updates.","location":"Noida","image":"https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=600"},{"name":"Karan M","text":"We loved the modular kitchen and wardrobe detailing.","location":"Delhi","image":"https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=600"}]', 'json'),
+  ('home.testimonials.items', '[{"name":"Priya S","text":"Excellent planning and execution. The handover quality was premium.","location":"Gurgaon","image":"https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=900"},{"name":"Vikas A","text":"Great design team and responsive project updates.","location":"Noida","image":"https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=900"},{"name":"Karan M","text":"We loved the modular kitchen and wardrobe detailing.","location":"Delhi","image":"https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=900"}]', 'json'),
 
   ('home.brands.title', 'Brands We Use', 'text'),
-  ('home.brands.logos', '[{"name":"Hafele","url":"https://upload.wikimedia.org/wikipedia/commons/8/80/H%C3%A4fele_Logo.svg"},{"name":"Hettich","url":"https://upload.wikimedia.org/wikipedia/commons/6/66/Hettich_logo.svg"},{"name":"Asian Paints","url":"https://upload.wikimedia.org/wikipedia/commons/b/ba/Asian_Paints_Logo.svg"},{"name":"Kajaria","url":"https://upload.wikimedia.org/wikipedia/commons/3/31/Kajaria_Logo.svg"}]', 'json'),
+  ('home.brands.logos', '[{"name":"Hafele","logo":"https://upload.wikimedia.org/wikipedia/commons/2/2a/Haefele_Logo.png"},{"name":"Hettich","logo":"https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Logo_of_Hettich_%28company%29.svg/960px-Logo_of_Hettich_%28company%29.svg.png"},{"name":"Asian Paints","logo":"https://upload.wikimedia.org/wikipedia/commons/0/09/Asian_paints_logo.jpg"},{"name":"Kajaria","logo":"https://companieslogo.com/img/orig/KAJARIACER.NS_BIG-300b5e39.png?download=true&t=1720244492"}]', 'json'),
 
   ('home.trust.title', 'Why Trust Us', 'text'),
   ('home.trust.items', '["Verified professionals and transparent pricing","Dedicated project support","Quality checks at every stage","On-time milestone tracking"]', 'json'),

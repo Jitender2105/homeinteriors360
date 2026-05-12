@@ -269,6 +269,7 @@ button, .btn-primary, .btn-muted, .btn-link {
   border-radius: 16px 16px 0 0;
   background: #e9edf0;
 }
+.pro-card { overflow: hidden; }
 .pro-meta { padding: 14px; display: grid; gap: 8px; }
 .pro-meta h3, .pro-meta p { margin: 0; }
 
@@ -298,6 +299,7 @@ button, .btn-primary, .btn-muted, .btn-link {
 .media-card-image-wrap {
   position: relative;
   overflow: hidden;
+  aspect-ratio: 4 / 3;
   min-height: 260px;
 }
 .media-card-image {
@@ -332,6 +334,7 @@ button, .btn-primary, .btn-muted, .btn-link {
 }
 .quote-visual {
   position: relative;
+  overflow: hidden;
 }
 .quote-cover {
   width: 100%;
@@ -379,6 +382,7 @@ button, .btn-primary, .btn-muted, .btn-link {
   border: 1px solid var(--line);
   background: linear-gradient(180deg, #ffffff 0%, #f8f6f1 100%);
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
 .brand-card img {
   max-height: 48px;
@@ -420,6 +424,7 @@ button, .btn-primary, .btn-muted, .btn-link {
   border-radius: 18px;
   background: var(--surface);
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
 .media-block img {
   width: 100%;
