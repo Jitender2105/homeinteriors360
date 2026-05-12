@@ -282,20 +282,74 @@ button, .btn-primary, .btn-muted, .btn-link {
 }
 .pricing-shell {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
   gap: 24px;
   align-items: start;
 }
+.pricing-copy-stack {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
 .pricing-copy {
   padding-right: 14px;
+  max-width: 760px;
+}
+.pricing-intro-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid rgba(13, 36, 56, 0.08);
+  border-radius: calc(var(--radius) + 4px);
+  background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(248,245,236,0.92) 100%);
+  box-shadow: var(--shadow);
 }
 .pricing-hero-points {
-  margin-top: 20px;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
+.pricing-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.stat-mini {
+  padding: 14px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  min-height: 118px;
+  display: grid;
+  align-content: space-between;
+}
+.stat-mini strong {
+  font-size: 32px;
+  font-family: "Fraunces", Georgia, serif;
+  color: var(--primary);
+}
+.stat-mini span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.pricing-story {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(13, 36, 56, 0.08);
+}
+.pricing-story h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+.pricing-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
 .pricing-form-shell {
+  position: sticky;
+  top: 96px;
   background: linear-gradient(180deg, #ffffff 0%, #fcfaf4 100%);
 }
 .pricing-form-shell label {
@@ -777,6 +831,12 @@ textarea {
   .pricing-copy {
     padding-right: 0;
   }
+  .pricing-form-shell {
+    position: static;
+  }
+  .pricing-stats {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
 
   .filter-card {
     position: static;
@@ -881,6 +941,9 @@ textarea {
     height: 250px;
   }
   .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+  .pricing-stats {
     grid-template-columns: 1fr;
   }
 }

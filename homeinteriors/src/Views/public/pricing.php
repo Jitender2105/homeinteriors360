@@ -45,18 +45,53 @@ $offerings = [
 ];
 
 $registrationSuccess = (string)($content['pricing.form.success'] ?? 'Thanks. Our sales team will contact you shortly.');
+$leadPurchaseSteps = [
+    'Tell us your target city, locality, and budget band.',
+    'We route the request to the right interior professional segment.',
+    'Your purchase request is stored in the backend and handed to sales.',
+];
 ?>
 
 <section class="pricing-hero section" data-reveal>
   <div class="container pricing-shell">
-    <div class="pricing-copy">
-      <p class="eyebrow"><?= htmlspecialchars((string)($content['pricing.hero.eyebrow'] ?? 'CHOOSE YOUR GROWTH MODEL'), ENT_QUOTES, 'UTF-8') ?></p>
-      <h1><?= htmlspecialchars((string)($content['pricing.hero.title'] ?? 'A pricing page built for architects and interior designers.'), ENT_QUOTES, 'UTF-8') ?></h1>
-      <p class="hero-subtitle"><?= htmlspecialchars((string)($content['pricing.hero.subtitle'] ?? 'Pick the lead purchase mode or let our team manage your entire account end-to-end.'), ENT_QUOTES, 'UTF-8') ?></p>
-      <div class="pricing-hero-points">
-        <span class="chip">Lead purchase by budget band</span>
-        <span class="chip">Managed account service</span>
-        <span class="chip">Sales team registration</span>
+    <div class="pricing-copy-stack">
+      <div class="pricing-copy">
+        <p class="eyebrow"><?= htmlspecialchars((string)($content['pricing.hero.eyebrow'] ?? 'CHOOSE YOUR GROWTH MODEL'), ENT_QUOTES, 'UTF-8') ?></p>
+        <h1><?= htmlspecialchars((string)($content['pricing.hero.title'] ?? 'A pricing page built for architects and interior designers.'), ENT_QUOTES, 'UTF-8') ?></h1>
+        <p class="hero-subtitle"><?= htmlspecialchars((string)($content['pricing.hero.subtitle'] ?? 'Pick the lead purchase mode or let our team manage your entire account end-to-end.'), ENT_QUOTES, 'UTF-8') ?></p>
+      </div>
+
+      <div class="pricing-intro-panel">
+        <div class="pricing-hero-points">
+          <span class="chip">Lead purchase by budget band</span>
+          <span class="chip">Managed account service</span>
+          <span class="chip">Sales team registration</span>
+        </div>
+
+        <div class="pricing-stats">
+          <article class="stat-mini">
+            <strong>01</strong>
+            <span>Lead capture with backend storage</span>
+          </article>
+          <article class="stat-mini">
+            <strong>02</strong>
+            <span>Filtered by city, locality, and budget</span>
+          </article>
+          <article class="stat-mini">
+            <strong>03</strong>
+            <span>Managed growth for full account ownership</span>
+          </article>
+        </div>
+
+        <div class="pricing-story">
+          <h3>How lead purchase works</h3>
+          <ul class="benefit-list">
+            <?php foreach ($leadPurchaseSteps as $step): ?>
+              <li><?= htmlspecialchars($step, ENT_QUOTES, 'UTF-8') ?></li>
+            <?php endforeach; ?>
+          </ul>
+          <p class="pricing-note">Every purchase request submitted here is saved in the backend for follow-up by our sales team.</p>
+        </div>
       </div>
     </div>
 
@@ -84,6 +119,16 @@ $registrationSuccess = (string)($content['pricing.form.success'] ?? 'Thanks. Our
         <label>
           <span>Budget</span>
           <input name="budget" placeholder="Budget" />
+        </label>
+        <label>
+          <span>Lead Purchase Focus</span>
+          <select name="lead_focus">
+            <option value="">Select your focus</option>
+            <option value="city">City</option>
+            <option value="locality">Locality</option>
+            <option value="budget">Budget</option>
+            <option value="combined">Combined targeting</option>
+          </select>
         </label>
         <label>
           <span>Plan Type</span>
@@ -208,6 +253,12 @@ $registrationSuccess = (string)($content['pricing.form.success'] ?? 'Thanks. Our
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(form).entries());
+    const leadFocus = String(payload.lead_focus || '').trim();
+    if (leadFocus) {
+      const requirementBase = String(payload.requirement || '').trim();
+      payload.requirement = requirementBase ? `${requirementBase} | Lead purchase focus: ${leadFocus}` : `Lead purchase focus: ${leadFocus}`;
+    }
+    delete payload.lead_focus;
     payload.source = 'pricing';
 
     const response = await fetch('/api/leads', {
