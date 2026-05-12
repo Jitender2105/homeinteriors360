@@ -335,7 +335,7 @@ button, .btn-primary, .btn-muted, .btn-link {
 }
 .quote-cover {
   width: 100%;
-  height: 260px;
+  height: 290px;
   object-fit: cover;
   display: block;
 }
@@ -355,6 +355,9 @@ button, .btn-primary, .btn-muted, .btn-link {
 }
 .quote-card-modern p {
   padding: 0 16px 16px;
+}
+.quote-card-modern p:last-child {
+  margin-bottom: 0;
 }
 .testimonials-grid {
   display: grid;
@@ -380,6 +383,22 @@ button, .btn-primary, .btn-muted, .btn-link {
 .brand-card img {
   max-height: 48px;
   width: auto;
+  object-fit: contain;
+}
+.brand-logo-wrap {
+  width: 100%;
+  min-height: 84px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(13, 36, 56, 0.06);
+}
+.brand-logo-wrap img {
+  max-width: 82%;
+  max-height: 52px;
+  width: auto;
+  height: auto;
   object-fit: contain;
 }
 .brand-card strong {
@@ -1112,5 +1131,8 @@ textarea {
   .quote-cover,
   .media-block img {
     min-height: 220px;
+  }
+  .brand-logo-wrap {
+    min-height: 72px;
   }
 }

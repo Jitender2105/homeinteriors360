@@ -22,6 +22,16 @@ $uspVisuals = [
   ['title' => 'Verified Network', 'image' => 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1200&q=80'],
   ['title' => 'Growth Content System', 'image' => 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=1200&q=80'],
 ];
+$serviceFallbacks = [
+  'kitchen' => 'https://images.unsplash.com/photo-1556912167-f556f1f39fdf?auto=format&fit=crop&w=1200&q=80',
+  'wardrobe' => 'https://images.unsplash.com/photo-1616594039964-3dbbb0bd2e8f?auto=format&fit=crop&w=1200&q=80',
+  'full_home' => 'https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=1200&q=80',
+];
+$testimonialFallbacks = [
+  'Priya S' => 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'Vikas A' => 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'Karan M' => 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=900',
+];
 $cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : [];
 $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['requirement_options'] : [];
 ?>
@@ -117,9 +127,11 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
       <?php foreach ($services as $service): ?>
         <article class="service-card media-card">
           <div class="media-card-image-wrap">
-            <?php if (!empty($service['image'])): ?>
-              <img class="media-card-image" src="<?= htmlspecialchars((string)$service['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-            <?php endif; ?>
+            <?php
+              $serviceKey = strtolower((string)($service['key'] ?? $service['title'] ?? ''));
+              $serviceImage = (string)($service['image'] ?? $serviceFallbacks[$serviceKey] ?? reset($serviceFallbacks));
+            ?>
+            <img class="media-card-image" src="<?= htmlspecialchars($serviceImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" />
             <div class="media-card-overlay">
               <p class="media-card-kicker"><?= htmlspecialchars((string)($content['home.services.title'] ?? 'Services'), ENT_QUOTES, 'UTF-8') ?></p>
               <h3><?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
@@ -142,9 +154,8 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
       <?php foreach ($testimonials as $testimonial): ?>
         <article class="quote-card quote-card-modern">
           <div class="quote-visual">
-            <?php if (!empty($testimonial['image'])): ?>
-              <img class="quote-cover" src="<?= htmlspecialchars((string)$testimonial['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-            <?php endif; ?>
+            <?php $testimonialImage = (string)($testimonial['image'] ?? $testimonialFallbacks[$testimonial['name'] ?? ''] ?? reset($testimonialFallbacks)); ?>
+            <img class="quote-cover" src="<?= htmlspecialchars($testimonialImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" />
             <div class="quote-overlay">
               <h4><?= htmlspecialchars((string)($testimonial['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h4>
               <span><?= htmlspecialchars((string)($testimonial['location'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
@@ -164,7 +175,7 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
       <?php foreach ($brands as $brand): ?>
         <article class="brand-card">
           <?php $brandLogo = $brand['logo'] ?? $brand['url'] ?? ''; if (!empty($brandLogo)): ?>
-            <img src="<?= htmlspecialchars((string)$brandLogo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+            <div class="brand-logo-wrap"><img src="<?= htmlspecialchars((string)$brandLogo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" /></div>
           <?php endif; ?>
           <strong><?= htmlspecialchars((string)($brand['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
         </article>
