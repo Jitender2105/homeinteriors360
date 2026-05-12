@@ -428,9 +428,9 @@ VALUES
   ('home.brands.logos', '[{"name":"Hafele","logo":"https://upload.wikimedia.org/wikipedia/commons/2/2a/Haefele_Logo.png"},{"name":"Hettich","logo":"https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Logo_of_Hettich_%28company%29.svg/960px-Logo_of_Hettich_%28company%29.svg.png"},{"name":"Asian Paints","logo":"https://upload.wikimedia.org/wikipedia/commons/0/09/Asian_paints_logo.jpg"},{"name":"Kajaria","logo":"https://companieslogo.com/img/orig/KAJARIACER.NS_BIG-300b5e39.png?download=true&t=1720244492"}]', 'json'),
 
   ('home.trust.title', 'Why Trust Us', 'text'),
-  ('home.trust.items', '["Verified professionals and transparent pricing","Dedicated project support","Quality checks at every stage","On-time milestone tracking"]', 'json'),
+  ('home.trust.items', '["Verified professionals reviewed for quality and accountability","Dedicated design review and project support","Site supervision at every major milestone","Smooth handover and closure tracking"]', 'json'),
   ('home.usp.title', 'Our USP', 'text'),
-  ('home.usp.items', '["Centralized discovery + lead management","Data-driven cost estimator","Verified expert network","Content-managed growth architecture"]', 'json'),
+  ('home.usp.items', '["Lead generation and qualification workflow","Portfolio and profile management for pros","Brand visibility across all listing pages","Sales-assisted account growth support"]', 'json'),
 
   ('directory.title', 'Find Professionals', 'text'),
   ('directory.subtitle', 'Filter by profession, budget, work type, and area to shortlist instantly.', 'text'),

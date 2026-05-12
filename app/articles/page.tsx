@@ -6,6 +6,8 @@ import { query } from '@/lib/db';
 import { getPageContent } from '@/lib/db';
 import { PageContent } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata(): Promise<Metadata> {
   const content = await getPageContent('articles') as PageContent;
   

@@ -22,15 +22,15 @@ $safeImage = static function (string $url, string $fallback): string {
 };
 $trustVisuals = [
   ['title' => 'Verified Professionals', 'image' => 'https://images.pexels.com/photos/8403087/pexels-photo-8403087.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Transparent Pricing', 'image' => 'https://images.pexels.com/photos/6585750/pexels-photo-6585750.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Quality Checks', 'image' => 'https://images.pexels.com/photos/9011226/pexels-photo-9011226.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'On-Time Delivery', 'image' => 'https://images.pexels.com/photos/3615613/pexels-photo-3615613.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Design Review', 'image' => 'https://images.pexels.com/photos/6283979/pexels-photo-6283979.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Site Supervision', 'image' => 'https://images.pexels.com/photos/9011226/pexels-photo-9011226.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Smooth Handover', 'image' => 'https://images.pexels.com/photos/3615613/pexels-photo-3615613.jpeg?auto=compress&cs=tinysrgb&w=1200'],
 ];
 $uspVisuals = [
-  ['title' => 'Centralized Discovery', 'image' => 'https://images.pexels.com/photos/6283979/pexels-photo-6283979.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Lead Management Engine', 'image' => 'https://images.pexels.com/photos/8867439/pexels-photo-8867439.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Verified Network', 'image' => 'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Growth Content System', 'image' => 'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Lead Generation', 'image' => 'https://images.pexels.com/photos/8867439/pexels-photo-8867439.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Portfolio Management', 'image' => 'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Brand Visibility', 'image' => 'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Account Growth Support', 'image' => 'https://images.pexels.com/photos/6283979/pexels-photo-6283979.jpeg?auto=compress&cs=tinysrgb&w=1200'],
 ];
 $serviceFallbacks = [
   'kitchen' => 'https://images.unsplash.com/photo-1556912167-f556f1f39fdf?auto=format&fit=crop&w=1200&q=80',

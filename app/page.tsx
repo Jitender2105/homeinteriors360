@@ -5,6 +5,8 @@ import PublicNavbar from '@/components/PublicNavbar';
 import { getPageContent } from '@/lib/db';
 import { PageContent } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 // Fetch SEO metadata from database
 export async function generateMetadata(): Promise<Metadata> {
   const content = await getPageContent('home') as PageContent;
