@@ -162,7 +162,7 @@ VALUES
 (
   'Ananya Sharma Interiors',
   'ananya-sharma-interiors',
-  'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=800',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'https://images.unsplash.com/photo-1616137466211-f939a420be84?auto=format&fit=crop&w=1600&q=80',
   'Designer',
   'Premium turnkey interiors with deep focus on Indian family lifestyles and practical luxury.',
@@ -193,8 +193,8 @@ VALUES
 (
   'Raghav Menon Architects',
   'raghav-menon-architects',
-  'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1493666438817-866a91353ca9?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Architect',
   'Architecture-led interiors for villas and large format residences.',
   'Architecture + Interior Integration',
@@ -224,7 +224,7 @@ VALUES
 (
   'Vikas Bedi Contracting',
   'vikas-bedi-contracting',
-  'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=800',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'https://images.unsplash.com/photo-1600121848594-d8644e57abab?auto=format&fit=crop&w=1600&q=80',
   'Contractor',
   'Execution-first contractor with strong civil, MEP, and modular coordination.',
@@ -255,8 +255,8 @@ VALUES
 (
   'Neev Interiors',
   'neev-interiors-gurgaon',
-  'https://images.pexels.com/photos/6981705/pexels-photo-6981705.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1616046229478-9901c5536a45?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'Luxury home interiors with practical space planning for Gurgaon apartments and villas.',
   'Luxury Residential Interiors',
@@ -286,8 +286,8 @@ VALUES
 (
   'Tribuz Interiors',
   'tribuz-interiors-gurgaon',
-  'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1493666438817-866a91353ca9?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'Thoughtfully curated spaces that balance modern sophistication with functional planning.',
   'Luxury Home & Office Design',
@@ -317,8 +317,8 @@ VALUES
 (
   'Silqe Design Studio',
   'silqe-design-studio-gurgaon',
-  'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Architect',
   'High-end turnkey homes across Gurgaon’s premium neighborhoods.',
   'Turnkey Luxury Interiors',
@@ -348,8 +348,8 @@ VALUES
 (
   'ClassyGaze Interiors',
   'classygaze-interiors-gurgaon',
-  'https://images.pexels.com/photos/10969133/pexels-photo-10969133.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'Residential and workplace interiors focused on comfort, usability, and a premium finish.',
   'Home & Workplace Design',
@@ -379,8 +379,8 @@ VALUES
 (
   'SS Interior Solution',
   'ss-interior-solution-gurgaon',
-  'https://images.pexels.com/photos/6585750/pexels-photo-6585750.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1556912167-f556f1f39fdf?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Contractor',
   'Turnkey residential execution with modular and civil coordination in Gurgaon.',
   'Modular + Turnkey Execution',
@@ -410,8 +410,8 @@ VALUES
 (
   'Pahal Design Studio',
   'pahal-design-studio-gurgaon',
-  'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'A design-first studio making compact Gurgaon homes feel larger and more composed.',
   'Space Efficient Interiors',
@@ -441,8 +441,8 @@ VALUES
 (
   'Archone Studio',
   'archone-studio-gurgaon',
-  'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Architect',
   'Custom luxury interiors with architecture-led planning for modern Gurgaon homes.',
   'Custom Luxury Interiors',
@@ -472,8 +472,8 @@ VALUES
 (
   'Melange by Sangeeta Kapoor',
   'melange-by-sangeeta-kapoor-gurgaon',
-  'https://images.pexels.com/photos/8867439/pexels-photo-8867439.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'Luxury interiors for contemporary Gurgaon residences with bespoke styling and polished execution.',
   'Luxury Interior Design Studio',
@@ -581,10 +581,10 @@ VALUES
   JSON_ARRAY('Natural Veneer', 'Imported Marble', 'Solid Wood Doors'),
   JSON_ARRAY(
     'https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1616627459589-8f74289e2f79?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1500&q=80'
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s'
   ),
   NULL,
   'Neo-classical',
@@ -609,10 +609,10 @@ VALUES
   'Commercial',
   JSON_ARRAY('Gypsum Board', 'Modular Workstations', 'Commercial Grade Laminate'),
   JSON_ARRAY(
-    'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1500&q=80'
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s'
   ),
   NULL,
   'Industrial',
@@ -625,7 +625,7 @@ VALUES
 
 INSERT INTO reviews (pro_id, client_name, rating, review_text, verified_purchase, work_type, area_of_work, materials_highlight, photos_json)
 VALUES
-  (1, 'Rohit Mehra', 5, 'Excellent design clarity and very disciplined execution management.', 1, 'Full Home', 'Apartments', 'Acrylic + Quartz', JSON_ARRAY('https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?auto=format&fit=crop&w=800&q=80')),
+  (1, 'Rohit Mehra', 5, 'Excellent design clarity and very disciplined execution management.', 1, 'Full Home', 'Apartments', 'Acrylic + Quartz', JSON_ARRAY('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s')),
   (1, 'Neha Bansal', 5, 'Great balance between aesthetics and storage practicality.', 1, 'Kitchen', 'Apartments', 'Hafele + Marine Ply', JSON_ARRAY()),
   (2, 'Sanjana Arora', 4, 'Strong architecture-led planning and better site sequencing.', 0, 'Renovation', 'Villa', 'Natural Veneer', JSON_ARRAY()),
   (3, 'Akash Verma', 5, 'Very dependable contractor team and transparent milestone billing.', 1, 'Execution', 'Commercial', 'CenturyPly + Kajaria', JSON_ARRAY());
@@ -816,9 +816,9 @@ VALUES
   'Villa',
   JSON_ARRAY('Natural Veneer', 'Quartzite', 'Microtopping', 'Solid Surface'),
   JSON_ARRAY(
-    'https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=1500&q=80',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
     'https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1500&q=80',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
     'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=1500'
   ),
   NULL,
@@ -844,9 +844,9 @@ VALUES
   'Commercial',
   JSON_ARRAY('BWP Plywood', 'PU Paint', 'Quartz', 'Glass Partition'),
   JSON_ARRAY(
-    'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1500&q=80',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
     'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1500&q=80',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
     'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1500&q=80'
   ),
   NULL,
@@ -903,7 +903,7 @@ VALUES
     'https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1500&q=80',
     'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1500&q=80',
     'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=1500',
-    'https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=1500&q=80'
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s'
   ),
   NULL,
   'Minimal',

@@ -27,8 +27,8 @@ VALUES
 (
   'Neev Interiors',
   'neev-interiors-gurgaon',
-  'https://images.pexels.com/photos/6981705/pexels-photo-6981705.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1616046229478-9901c5536a45?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'Luxury home interiors with practical space planning for Gurgaon apartments and villas.',
   'Luxury Residential Interiors',
@@ -58,8 +58,8 @@ VALUES
 (
   'Tribuz Interiors',
   'tribuz-interiors-gurgaon',
-  'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1493666438817-866a91353ca9?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'Thoughtfully curated spaces that balance modern sophistication with functional planning.',
   'Luxury Home & Office Design',
@@ -89,8 +89,8 @@ VALUES
 (
   'Silqe Design Studio',
   'silqe-design-studio-gurgaon',
-  'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Architect',
   'High-end turnkey homes across Gurgaon’s premium neighborhoods.',
   'Turnkey Luxury Interiors',
@@ -120,8 +120,8 @@ VALUES
 (
   'ClassyGaze Interiors',
   'classygaze-interiors-gurgaon',
-  'https://images.pexels.com/photos/10969133/pexels-photo-10969133.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'Residential and workplace interiors focused on comfort, usability, and a premium finish.',
   'Home & Workplace Design',
@@ -151,8 +151,8 @@ VALUES
 (
   'SS Interior Solution',
   'ss-interior-solution-gurgaon',
-  'https://images.pexels.com/photos/6585750/pexels-photo-6585750.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1556912167-f556f1f39fdf?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Contractor',
   'Turnkey residential execution with modular and civil coordination in Gurgaon.',
   'Modular + Turnkey Execution',
@@ -182,8 +182,8 @@ VALUES
 (
   'Pahal Design Studio',
   'pahal-design-studio-gurgaon',
-  'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'A design-first studio making compact Gurgaon homes feel larger and more composed.',
   'Space Efficient Interiors',
@@ -213,8 +213,8 @@ VALUES
 (
   'Archone Studio',
   'archone-studio-gurgaon',
-  'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Architect',
   'Custom luxury interiors with architecture-led planning for modern Gurgaon homes.',
   'Custom Luxury Interiors',
@@ -244,8 +244,8 @@ VALUES
 (
   'Melange by Sangeeta Kapoor',
   'melange-by-sangeeta-kapoor-gurgaon',
-  'https://images.pexels.com/photos/8867439/pexels-photo-8867439.jpeg?auto=compress&cs=tinysrgb&w=800',
-  'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1600&q=80',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
   'Designer',
   'Luxury interiors for contemporary Gurgaon residences with bespoke styling and polished execution.',
   'Luxury Interior Design Studio',
@@ -365,9 +365,9 @@ SELECT p.id, 'silqe-design-studio-sohna-road-villa', 'Sohna Road Villa Renovatio
   6100000, 'Villa', 2025, 9, '9 months', 'Sohna Road, Gurgaon', 'Renovation', 'Villa',
   JSON_ARRAY('Natural Veneer', 'Quartzite', 'Microtopping', 'Solid Surface'),
   JSON_ARRAY(
-    'https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=1500&q=80',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
     'https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1500&q=80',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
     'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=1500'
   ), NULL, 'Modern Luxe', 18, 12, 'Nisha Mehta', 'The villa feels refined and much more functional than before.', 5
 FROM pros p WHERE p.slug = 'silqe-design-studio-gurgaon'
@@ -391,9 +391,9 @@ SELECT p.id, 'classygaze-sector48-workplace-residence', 'Sector 48 Workspace + R
   1450000, 'Commercial', 2024, 4, '4 months', 'Sector 48, Gurgaon', 'Commercial', 'Commercial',
   JSON_ARRAY('BWP Plywood', 'PU Paint', 'Quartz', 'Glass Partition'),
   JSON_ARRAY(
-    'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1500&q=80',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
     'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1500&q=80',
-    'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1500&q=80',
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s',
     'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1500&q=80'
   ), NULL, 'Modern Functional', 8, 5, 'Aditya Khanna', 'Very practical space planning and a clean finishing standard.', 4
 FROM pros p WHERE p.slug = 'classygaze-interiors-gurgaon'
@@ -446,7 +446,7 @@ SELECT p.id, 'pahal-design-studio-sector67-2bhk', 'Sector 67 Space-Smart 2BHK',
     'https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1500&q=80',
     'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1500&q=80',
     'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=1500',
-    'https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=1500&q=80'
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s'
   ), NULL, 'Minimal', 6, 3, 'Sakshi Jain', 'The compact apartment feels much better organized now.', 4
 FROM pros p WHERE p.slug = 'pahal-design-studio-gurgaon'
 ON DUPLICATE KEY UPDATE

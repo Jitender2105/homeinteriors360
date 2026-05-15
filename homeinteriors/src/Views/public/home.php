@@ -10,6 +10,7 @@ $testimonials = is_array($payload['testimonials'] ?? null) ? $payload['testimoni
 $brands = is_array($payload['brands'] ?? null) ? $payload['brands'] : [];
 $trustPoints = is_array($payload['trust_points'] ?? null) ? $payload['trust_points'] : [];
 $uspPoints = is_array($payload['usp_points'] ?? null) ? $payload['usp_points'] : [];
+$defaultImage = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s';
 $safeImage = static function (string $url, string $fallback): string {
   $url = trim($url);
   if ($url === '' || !preg_match('~^https?://~i', $url)) {
@@ -21,32 +22,32 @@ $safeImage = static function (string $url, string $fallback): string {
   return $url;
 };
 $trustVisuals = [
-  ['title' => 'Verified Professionals', 'image' => 'https://images.pexels.com/photos/8403087/pexels-photo-8403087.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Design Review', 'image' => 'https://images.pexels.com/photos/6283979/pexels-photo-6283979.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Site Supervision', 'image' => 'https://images.pexels.com/photos/9011226/pexels-photo-9011226.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Smooth Handover', 'image' => 'https://images.pexels.com/photos/3615613/pexels-photo-3615613.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Verified Professionals', 'image' => $defaultImage],
+  ['title' => 'Design Review', 'image' => $defaultImage],
+  ['title' => 'Site Supervision', 'image' => $defaultImage],
+  ['title' => 'Smooth Handover', 'image' => $defaultImage],
 ];
 $uspVisuals = [
-  ['title' => 'Lead Generation', 'image' => 'https://images.pexels.com/photos/8867439/pexels-photo-8867439.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Portfolio Management', 'image' => 'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Brand Visibility', 'image' => 'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=1200'],
-  ['title' => 'Account Growth Support', 'image' => 'https://images.pexels.com/photos/6283979/pexels-photo-6283979.jpeg?auto=compress&cs=tinysrgb&w=1200'],
+  ['title' => 'Lead Generation', 'image' => $defaultImage],
+  ['title' => 'Portfolio Management', 'image' => $defaultImage],
+  ['title' => 'Brand Visibility', 'image' => $defaultImage],
+  ['title' => 'Account Growth Support', 'image' => $defaultImage],
 ];
 $serviceFallbacks = [
-  'kitchen' => 'https://images.unsplash.com/photo-1556912167-f556f1f39fdf?auto=format&fit=crop&w=1200&q=80',
-  'wardrobe' => 'https://images.pexels.com/photos/6585750/pexels-photo-6585750.jpeg?auto=compress&cs=tinysrgb&w=1200',
-  'full_home' => 'https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=1200&q=80',
+  'kitchen' => $defaultImage,
+  'wardrobe' => $defaultImage,
+  'full_home' => $defaultImage,
 ];
 $testimonialFallbacks = [
-  'Priya S' => 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=900',
-  'Vikas A' => 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=900',
-  'Karan M' => 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'Priya S' => $defaultImage,
+  'Vikas A' => $defaultImage,
+  'Karan M' => $defaultImage,
 ];
 $brandFallbacks = [
-  'Hafele' => 'https://upload.wikimedia.org/wikipedia/commons/2/2a/Haefele_Logo.png',
-  'Hettich' => 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Logo_of_Hettich_%28company%29.svg/960px-Logo_of_Hettich_%28company%29.svg.png',
-  'Asian Paints' => 'https://upload.wikimedia.org/wikipedia/commons/0/09/Asian_paints_logo.jpg',
-  'Kajaria' => 'https://companieslogo.com/img/orig/KAJARIACER.NS_BIG-300b5e39.png?download=true&t=1720244492',
+  'Hafele' => $defaultImage,
+  'Hettich' => $defaultImage,
+  'Asian Paints' => $defaultImage,
+  'Kajaria' => $defaultImage,
 ];
 $cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : [];
 $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['requirement_options'] : [];
