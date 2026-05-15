@@ -306,13 +306,13 @@ try {
                 $profileData = SiteRepository::proProfileData((int)$pro['id']);
                 render('public/professional-profile', [
                     'title' => $pro['full_name'] . ' | ' . (string)SiteRepository::content('seo.profile.title_suffix', 'HomeInteriors360'),
-                    'metaDescription' => sprintf(
-                        '%s in %s with %d years of experience and %d delivered projects. Explore profile, portfolio, materials, and lead form.',
+                    'metaDescription' => trim(sprintf(
+                        '%s in %s with %d years of experience, %d delivered projects, and detailed business profile data including office contact, service summary, portfolio, and lead form.',
                         (string)$pro['full_name'],
                         (string)($pro['city'] ?? 'your city'),
                         (int)($pro['years_experience'] ?? 0),
                         (int)($pro['projects_delivered'] ?? 0)
-                    ),
+                    )),
                     'active' => 'directory',
                     'content' => $content,
                     'pro' => $pro,

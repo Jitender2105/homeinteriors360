@@ -512,3 +512,112 @@ ON DUPLICATE KEY UPDATE
 
 DELETE FROM pros
 WHERE slug IN ('ananya-sharma-interiors', 'raghav-menon-architects', 'vikas-bedi-contracting');
+
+UPDATE pros
+SET
+  office_address = '31, Espace, Nirvana Country, Sector 50, Gurgaon – 122018',
+  phone = '+91 8860922220, +91 8860922202',
+  email = 'Info@neevinteriors.com',
+  website_url = 'https://neevinteriors.com/',
+  founded_year = 2009,
+  office_hours = 'Mon-Sat 10:00 AM - 7:00 PM',
+  client_count = 200,
+  service_summary = 'Full-service interior design company offering luxury interior design, home decor, architecture, landscape, and fit-outs for residential and commercial spaces.',
+  process_steps_json = JSON_ARRAY('Discovery | Understand the client brief, site context, and lifestyle needs.', 'Design | Turn the brief into layouts, material suggestions, and detailed planning.', 'Execution | Coordinate site work, installation, and finish control.', 'Handover | Final checks, handover, and maintenance guidance.'),
+  awards_json = JSON_ARRAY('10-year warranty', '1 year free maintenance', 'Residential and commercial expertise'),
+  faq_json = JSON_ARRAY('What do you design? | Residential interiors, commercial interiors, architecture, landscape, and fit-outs.', 'Do you support after-handover service? | Yes, the public site highlights a 1 year free maintenance promise.', 'Do you offer warranty? | The public site highlights an exclusive 10 year warranty.'),
+  google_business_url = 'https://www.google.com/search?q=Neev+Interiors+Gurgaon'
+WHERE slug = 'neev-interiors-gurgaon';
+
+UPDATE pros
+SET
+  office_address = 'GF, 394 Block F Sushant Lok-2 Ext, Sec 57, Golf Course Ext Rd, Gurugram, Haryana 122011',
+  phone = '+91 88008 06748',
+  email = 'hello@tribuz.in',
+  website_url = 'https://tribuz.in/',
+  founded_year = 2013,
+  office_hours = 'Mon-Sat 10:00 AM - 7:00 PM',
+  client_count = 700,
+  service_summary = 'Premier interior design company in Gurgaon creating curated spaces that balance creativity, functionality, and modern sophistication.',
+  process_steps_json = JSON_ARRAY('Consultation | Understand the brief, budget, and timeline.', 'Concept | Translate needs into curated design direction.', 'Execution | Manage construction and interior execution with accountability.', 'Handover | Complete finishing, styling, and hand-over support.'),
+  awards_json = JSON_ARRAY('700+ completed projects', 'Design + construction capability', 'Transparent BOQ based planning'),
+  faq_json = JSON_ARRAY('What services do you offer? | Interior design, construction, turnkey execution, and project management.', 'Do you work on luxury projects? | Yes, the public site positions Tribuz for luxury homes and offices.', 'What makes the process clear? | They highlight BOQ-based transparency and client-centric execution.'),
+  google_business_url = 'https://www.google.com/search?q=Tribuz+Interiors+Gurgaon'
+WHERE slug = 'tribuz-interiors-gurgaon';
+
+UPDATE pros
+SET
+  office_address = 'UG-45, M3M Prive-73, Sector 73, Gurgaon, Haryana 122004',
+  website_url = 'https://silqedesign.in/',
+  founded_year = 2024,
+  service_summary = 'Founded by Aakanksha with 8+ years of interior design and turnkey execution experience, focusing on Gurgaon homes and premium neighborhoods.',
+  process_steps_json = JSON_ARRAY('Consultation | Understand the lifestyle and project scope.', 'Design | Create refined layouts and design direction.', 'Execution | Manage turnkey implementation end to end.', 'Handover | Deliver the finished home with detail checks.'),
+  awards_json = JSON_ARRAY('8+ years of experience', 'Turnkey execution focus', 'Premium Gurgaon home specialist'),
+  faq_json = JSON_ARRAY('Who founded the studio? | Silqe Design Studio was founded by Aakanksha.', 'How much experience do they have? | The public site highlights 8+ years of interior design and turnkey execution experience.', 'Where do they work? | Their public footprint focuses on Gurgaon and surrounding premium neighborhoods.'),
+  google_business_url = 'https://www.google.com/search?q=Silqe+Design+Studio+Gurgaon'
+WHERE slug = 'silqe-design-studio-gurgaon';
+
+UPDATE pros
+SET
+  office_address = 'Sector 39, Gurugram, Haryana',
+  phone = '+91 9315868727',
+  website_url = 'https://classygaze.com/',
+  founded_year = 2000,
+  team_size = 40,
+  client_count = 5000,
+  office_hours = 'Mon-Sat 10:00 AM - 7:00 PM',
+  service_summary = 'Architectural and interior design firm serving homes and workplaces with modern luxury interiors, construction support, and strong quality control.',
+  process_steps_json = JSON_ARRAY('Understand | In-depth consultation to understand lifestyle, budget, and design preferences.', 'Concept | Custom layouts, 3D designs, and material selection.', 'Plan & Execute | Finalize material, schedule, and quality execution.', 'Quality Check | Thorough checks and ready-to-move-in handover.'),
+  awards_json = JSON_ARRAY('Since 2000', '45-day delivery', '15-year warranty', '40+ in-house designers and project managers'),
+  faq_json = JSON_ARRAY('What do you specialize in? | Residential, commercial, villa, apartment, and renovation work.', 'How big is the team? | The public site highlights a 40+ in-house team.', 'What is the delivery promise? | The public site highlights 45-day delivery and a 15-year warranty.'),
+  google_business_url = 'https://www.google.com/search?q=ClassyGaze+Interiors+Gurgaon'
+WHERE slug = 'classygaze-interiors-gurgaon';
+
+UPDATE pros
+SET
+  office_address = 'Shop No. 4, Rajender Market, 2nd Floor, Sikanderpur, Gurugram, Haryana',
+  phone = '+91 9811998747',
+  email = 'ssinterior11@gmail.com',
+  website_url = 'https://ssinterior.org/',
+  service_summary = 'Turnkey interior design firm with over 20 years of experience across residential, commercial, and hospitality interiors.',
+  process_steps_json = JSON_ARRAY('Plan | Understand the client requirement and site scope.', 'Execute | Coordinate carpentry, painting, electrical, plumbing, and masonry.', 'Inspect | Check finishing and site quality before closure.', 'Handover | Deliver the project with turnkey accountability.'),
+  awards_json = JSON_ARRAY('20+ years experience', 'Complete turnkey solutions', 'In-house execution team'),
+  faq_json = JSON_ARRAY('What do you handle in-house? | Carpentry, painting, electrical, plumbing, and masonry work.', 'What kind of projects do you do? | Residential, commercial, and hospitality interiors.', 'Where are you located? | Sikanderpur, Gurgaon.'),
+  google_business_url = 'https://www.google.com/search?q=SS+Interior+Gurgaon'
+WHERE slug = 'ss-interior-solution-gurgaon';
+
+UPDATE pros
+SET
+  office_address = 'H.No. 67, Pocket A-2, Sector 17 Dwarka, New Delhi - 78',
+  phone = '8221850815',
+  email = 'pahaldesignstudio@gmail.com',
+  website_url = 'https://pahaldesignstudio.com/',
+  service_summary = 'Design-first studio creating compact and practical spaces that balance style, functionality, and execution quality.',
+  process_steps_json = JSON_ARRAY('Meet | Understand vision, lifestyle, and budget.', 'Idea | Develop concept, colour schemes, and material direction.', 'Design | Finalize plans and drawings.', 'Build | Execute installation and handover.'),
+  awards_json = JSON_ARRAY('Architecture Design & Construction', 'Interior Design & Renovation', 'Build Consultancy & Execution'),
+  faq_json = JSON_ARRAY('What do you focus on? | Compact homes, functional planning, and beautiful finish quality.', 'Do you take residential and commercial projects? | Yes, their public site references residential, commercial, and walkthrough projects.', 'Who is the founder? | The site mentions Mr. Praveen Pahal.'),
+  google_business_url = 'https://www.google.com/search?q=Pahal+Design+Studio+Gurgaon'
+WHERE slug = 'pahal-design-studio-gurgaon';
+
+UPDATE pros
+SET
+  office_address = 'Gurugram, Haryana',
+  website_url = 'https://www.archone.in/',
+  service_summary = 'Architecture-led interior design company focused on Gurugram homes with strong process discipline and premium execution control.',
+  process_steps_json = JSON_ARRAY('Brief | Capture requirements, PIN code, and budget.', 'Design | Produce 3D and VR enabled design plans.', 'Monitor | Track live progress on the mobile dashboard.', 'Deliver | Execute 146+ quality checks before handover.'),
+  awards_json = JSON_ARRAY('On-time delivery guarantee', 'Zero budget overrun guarantee', '3D & virtual reality tours included', '146+ quality checks'),
+  faq_json = JSON_ARRAY('What sets Archone apart? | Strong quality control and live progress monitoring.', 'Do they provide VR tours? | Yes, the public site highlights 3D and virtual reality tours.', 'How many quality checks are mentioned? | The public site highlights 146+ quality checks.'),
+  google_business_url = 'https://www.google.com/search?q=Archone+Studio+Gurgaon'
+WHERE slug = 'archone-studio-gurgaon';
+
+UPDATE pros
+SET
+  office_address = 'H-11/3, DLF City Phase-1, Gurgaon, Haryana 122002, India',
+  website_url = 'https://xclusiveatmelange.com/',
+  founded_year = 1997,
+  service_summary = 'Luxury interior design studio built on craftsmanship, bespoke furniture, and elegant full-home transformations for contemporary residences.',
+  process_steps_json = JSON_ARRAY('Visit | Understand lifestyle, preferences, and budget in studio.', 'Envision | Shape the concept with layouts, mood boards, and palettes.', 'Create | Bring the design to life with craftsmen and vendors.', 'Install | Complete installation and furnishing in the home.'),
+  awards_json = JSON_ARRAY('Legacy since 1997', 'Bespoke furniture and build control', 'Serving discerning clients across India and the UK'),
+  faq_json = JSON_ARRAY('What is the studio philosophy? | A home should feel as beautiful as it looks.', 'How long has the studio been active? | The public site references craftsmanship since 1997.', 'Do they offer complete interior solutions? | Yes, the public site covers design, blueprint, procurement, build, install, and furnish.'),
+  google_business_url = 'https://www.google.com/search?q=Melange+by+Sangeeta+Kapoor+Gurgaon'
+WHERE slug = 'melange-by-sangeeta-kapoor-gurgaon';

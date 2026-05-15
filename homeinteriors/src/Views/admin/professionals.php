@@ -50,7 +50,25 @@
         <input name="min_project_value" type="number" placeholder="Min Project Value" />
         <input name="max_project_value" type="number" placeholder="Max Project Value" />
       </div>
+      <div class="budget-grid">
+        <input name="founded_year" type="number" placeholder="Founded Year" />
+        <input name="team_size" type="number" placeholder="Team Size" />
+      </div>
+      <div class="budget-grid">
+        <input name="client_count" type="number" placeholder="Client / Project Count" />
+        <input name="office_hours" placeholder="Office Hours" />
+      </div>
+      <input name="office_address" placeholder="Office Address" />
+      <div class="budget-grid">
+        <input name="phone" placeholder="Office Phone" />
+        <input name="email" placeholder="Office Email" />
+      </div>
+      <div class="budget-grid">
+        <input name="website_url" placeholder="Website URL" />
+        <input name="google_business_url" placeholder="Google Business URL" />
+      </div>
       <input name="specialization" placeholder="Specialization" />
+      <textarea name="service_summary" rows="2" placeholder="Service Summary"></textarea>
       <textarea name="profile_description" rows="2" placeholder="Profile Description"></textarea>
       <textarea name="bio" rows="2" placeholder="Bio"></textarea>
       <textarea name="why_work_with_me" rows="2" placeholder="Why Work With Me"></textarea>
@@ -60,6 +78,9 @@
       <input name="design_styles_json" placeholder="Design Styles (comma separated)" />
       <input name="languages_json" placeholder="Languages (comma separated)" />
       <input name="certifications_json" placeholder="Certifications (comma separated)" />
+      <textarea name="process_steps_json" rows="3" placeholder="Process Steps (one per line, optional details after |)"></textarea>
+      <textarea name="awards_json" rows="3" placeholder="Awards / Highlights (one per line)"></textarea>
+      <textarea name="faq_json" rows="3" placeholder="FAQs (Question | Answer per line)"></textarea>
       <div class="budget-grid">
         <label><input type="checkbox" name="verification_status" /> Verified</label>
         <label><input type="checkbox" name="is_premium" /> Premium</label>
@@ -117,6 +138,12 @@
       return Array.isArray(arr) ? arr.join(', ') : '';
     } catch { return ''; }
   };
+  const stringifyLines = (v) => {
+    try {
+      const arr = Array.isArray(v) ? v : JSON.parse(v || '[]');
+      return Array.isArray(arr) ? arr.join('\n') : '';
+    } catch { return ''; }
+  };
 
   function fillForm(pro) {
     for (const [k, val] of Object.entries(pro)) {
@@ -134,6 +161,9 @@
     form.elements.design_styles_json.value = stringifyCsv(pro.design_styles_json);
     form.elements.languages_json.value = stringifyCsv(pro.languages_json);
     form.elements.certifications_json.value = stringifyCsv(pro.certifications_json);
+    form.elements.process_steps_json.value = stringifyLines(pro.process_steps_json);
+    form.elements.awards_json.value = stringifyLines(pro.awards_json);
+    form.elements.faq_json.value = stringifyLines(pro.faq_json);
     form.elements.current_profile_pic.value = pro.profile_pic || '';
     form.elements.current_cover_photo.value = pro.cover_photo || '';
     profilePreview.src = pro.profile_pic || '';

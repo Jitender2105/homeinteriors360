@@ -11,11 +11,38 @@ final class SiteRepository
         if (is_array($value)) {
             return array_values(array_filter(array_map('strval', $value), static fn(string $v): bool => trim($v) !== ''));
         }
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return [];
+            }
+            if (str_contains($trimmed, "\n")) {
+                return array_values(array_filter(array_map('trim', preg_split('/\R+/', $trimmed) ?: []), static fn(string $v): bool => $v !== ''));
+            }
+            if (str_contains($trimmed, ',')) {
+                return array_values(array_filter(array_map('trim', explode(',', $trimmed)), static fn(string $v): bool => $v !== ''));
+            }
+        }
         $decoded = json_decode((string)$value, true);
         if (is_array($decoded)) {
             return array_values(array_filter(array_map('strval', $decoded), static fn(string $v): bool => trim($v) !== ''));
         }
         return [];
+    }
+
+    private static function parseTextLines(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('strval', $value), static fn(string $v): bool => trim($v) !== ''));
+        }
+        $text = trim((string)$value);
+        if ($text === '') {
+            return [];
+        }
+        if (str_contains($text, "\n")) {
+            return array_values(array_filter(array_map('trim', preg_split('/\R+/', $text) ?: []), static fn(string $v): bool => $v !== ''));
+        }
+        return array_values(array_filter(array_map('trim', explode('|', $text)), static fn(string $v): bool => $v !== ''));
     }
 
     public static function allContent(): array
@@ -282,6 +309,9 @@ final class SiteRepository
         $pro['design_styles_json'] = self::parseJsonArray($pro['design_styles_json'] ?? '[]');
         $pro['languages_json'] = self::parseJsonArray($pro['languages_json'] ?? '[]');
         $pro['certifications_json'] = self::parseJsonArray($pro['certifications_json'] ?? '[]');
+        $pro['process_steps_json'] = self::parseTextLines($pro['process_steps_json'] ?? '[]');
+        $pro['awards_json'] = self::parseTextLines($pro['awards_json'] ?? '[]');
+        $pro['faq_json'] = self::parseTextLines($pro['faq_json'] ?? '[]');
 
         return $pro;
     }
@@ -396,9 +426,10 @@ final class SiteRepository
             'INSERT INTO pros (
                 full_name, slug, profile_pic, cover_photo, role, profile_description, specialization, primary_work_type, primary_work_area,
                 verification_status, is_premium, rating, years_experience, projects_delivered, starting_price, min_project_value, max_project_value,
-                consultation_fee, city, service_areas, materials_json, design_styles_json, languages_json, certifications_json,
-                response_time_hours, bio, why_work_with_me, offerings_json, is_active
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                consultation_fee, city, office_address, phone, email, website_url, founded_year, team_size, office_hours, client_count,
+                service_summary, service_areas, materials_json, design_styles_json, languages_json, certifications_json, process_steps_json,
+                awards_json, faq_json, response_time_hours, bio, why_work_with_me, offerings_json, google_business_url, is_active
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             [
                 $data['full_name'],
                 $data['slug'],
@@ -419,15 +450,28 @@ final class SiteRepository
                 isset($data['max_project_value']) ? (float)$data['max_project_value'] : null,
                 isset($data['consultation_fee']) ? (float)$data['consultation_fee'] : null,
                 $data['city'] ?? null,
+                $data['office_address'] ?? null,
+                $data['phone'] ?? null,
+                $data['email'] ?? null,
+                $data['website_url'] ?? null,
+                isset($data['founded_year']) && $data['founded_year'] !== '' ? (int)$data['founded_year'] : null,
+                isset($data['team_size']) && $data['team_size'] !== '' ? (int)$data['team_size'] : null,
+                $data['office_hours'] ?? null,
+                isset($data['client_count']) && $data['client_count'] !== '' ? (int)$data['client_count'] : null,
+                $data['service_summary'] ?? null,
                 json_encode(self::parseJsonArray($data['service_areas'] ?? []), JSON_UNESCAPED_UNICODE),
                 json_encode(self::parseJsonArray($data['materials_json'] ?? []), JSON_UNESCAPED_UNICODE),
                 json_encode(self::parseJsonArray($data['design_styles_json'] ?? []), JSON_UNESCAPED_UNICODE),
                 json_encode(self::parseJsonArray($data['languages_json'] ?? []), JSON_UNESCAPED_UNICODE),
                 json_encode(self::parseJsonArray($data['certifications_json'] ?? []), JSON_UNESCAPED_UNICODE),
+                json_encode(self::parseTextLines($data['process_steps_json'] ?? []), JSON_UNESCAPED_UNICODE),
+                json_encode(self::parseTextLines($data['awards_json'] ?? []), JSON_UNESCAPED_UNICODE),
+                json_encode(self::parseTextLines($data['faq_json'] ?? []), JSON_UNESCAPED_UNICODE),
                 isset($data['response_time_hours']) ? (int)$data['response_time_hours'] : null,
                 $data['bio'] ?? null,
                 $data['why_work_with_me'] ?? null,
                 json_encode(self::parseJsonArray($data['offerings_json'] ?? []), JSON_UNESCAPED_UNICODE),
+                $data['google_business_url'] ?? null,
                 isset($data['is_active']) ? (int)(bool)$data['is_active'] : 1,
             ]
         );
@@ -439,8 +483,9 @@ final class SiteRepository
             'UPDATE pros SET
                 full_name=?, slug=?, profile_pic=?, cover_photo=?, role=?, profile_description=?, specialization=?, primary_work_type=?, primary_work_area=?,
                 verification_status=?, is_premium=?, rating=?, years_experience=?, projects_delivered=?, starting_price=?, min_project_value=?, max_project_value=?, consultation_fee=?, city=?,
-                service_areas=?, materials_json=?, design_styles_json=?, languages_json=?, certifications_json=?, response_time_hours=?,
-                bio=?, why_work_with_me=?, offerings_json=?, is_active=?, updated_at=NOW()
+                office_address=?, phone=?, email=?, website_url=?, founded_year=?, team_size=?, office_hours=?, client_count=?, service_summary=?,
+                service_areas=?, materials_json=?, design_styles_json=?, languages_json=?, certifications_json=?, process_steps_json=?, awards_json=?, faq_json=?, response_time_hours=?,
+                bio=?, why_work_with_me=?, offerings_json=?, google_business_url=?, is_active=?, updated_at=NOW()
              WHERE id=?',
             [
                 $data['full_name'],
@@ -462,15 +507,28 @@ final class SiteRepository
                 isset($data['max_project_value']) ? (float)$data['max_project_value'] : null,
                 isset($data['consultation_fee']) ? (float)$data['consultation_fee'] : null,
                 $data['city'] ?? null,
+                $data['office_address'] ?? null,
+                $data['phone'] ?? null,
+                $data['email'] ?? null,
+                $data['website_url'] ?? null,
+                isset($data['founded_year']) && $data['founded_year'] !== '' ? (int)$data['founded_year'] : null,
+                isset($data['team_size']) && $data['team_size'] !== '' ? (int)$data['team_size'] : null,
+                $data['office_hours'] ?? null,
+                isset($data['client_count']) && $data['client_count'] !== '' ? (int)$data['client_count'] : null,
+                $data['service_summary'] ?? null,
                 json_encode(self::parseJsonArray($data['service_areas'] ?? []), JSON_UNESCAPED_UNICODE),
                 json_encode(self::parseJsonArray($data['materials_json'] ?? []), JSON_UNESCAPED_UNICODE),
                 json_encode(self::parseJsonArray($data['design_styles_json'] ?? []), JSON_UNESCAPED_UNICODE),
                 json_encode(self::parseJsonArray($data['languages_json'] ?? []), JSON_UNESCAPED_UNICODE),
                 json_encode(self::parseJsonArray($data['certifications_json'] ?? []), JSON_UNESCAPED_UNICODE),
+                json_encode(self::parseTextLines($data['process_steps_json'] ?? []), JSON_UNESCAPED_UNICODE),
+                json_encode(self::parseTextLines($data['awards_json'] ?? []), JSON_UNESCAPED_UNICODE),
+                json_encode(self::parseTextLines($data['faq_json'] ?? []), JSON_UNESCAPED_UNICODE),
                 isset($data['response_time_hours']) ? (int)$data['response_time_hours'] : null,
                 $data['bio'] ?? null,
                 $data['why_work_with_me'] ?? null,
                 json_encode(self::parseJsonArray($data['offerings_json'] ?? []), JSON_UNESCAPED_UNICODE),
+                $data['google_business_url'] ?? null,
                 isset($data['is_active']) ? (int)(bool)$data['is_active'] : 1,
                 $id,
             ]
