@@ -290,6 +290,7 @@ try {
     if ($path === '/') {
         render('public/home', [
             'title' => (string)SiteRepository::content('seo.home.title', 'HomeInteriors360'),
+            'metaDescription' => (string)SiteRepository::content('seo.home.description', 'Find verified architects, interior designers, and contractors for your home project.'),
             'active' => 'home',
             'content' => $content,
             'payload' => SiteRepository::homepagePayload(),
@@ -305,6 +306,13 @@ try {
                 $profileData = SiteRepository::proProfileData((int)$pro['id']);
                 render('public/professional-profile', [
                     'title' => $pro['full_name'] . ' | ' . (string)SiteRepository::content('seo.profile.title_suffix', 'HomeInteriors360'),
+                    'metaDescription' => sprintf(
+                        '%s in %s with %d years of experience and %d delivered projects. Explore profile, portfolio, materials, and lead form.',
+                        (string)$pro['full_name'],
+                        (string)($pro['city'] ?? 'your city'),
+                        (int)($pro['years_experience'] ?? 0),
+                        (int)($pro['projects_delivered'] ?? 0)
+                    ),
                     'active' => 'directory',
                     'content' => $content,
                     'pro' => $pro,
@@ -334,6 +342,7 @@ try {
             ]), static fn(mixed $value): bool => $value !== null && $value !== '');
             render('public/professionals', [
                 'title' => $aliasData['title'] . ' | ' . (string)SiteRepository::content('seo.directory.title', 'Find Professionals'),
+                'metaDescription' => $aliasData['subtitle'],
                 'active' => 'directory',
                 'content' => $content,
                 'pros' => SiteRepository::listPros($initialFilters),
@@ -359,6 +368,7 @@ try {
         ], static fn(mixed $value): bool => $value !== null && $value !== '');
         render('public/professionals', [
             'title' => (string)SiteRepository::content('seo.directory.title', 'Find Professionals'),
+            'metaDescription' => (string)SiteRepository::content('seo.directory.description', 'Browse verified architects, designers, and contractors with filters for city, work type, budget, experience, and rating.'),
             'active' => 'directory',
             'content' => $content,
             'pros' => SiteRepository::listPros($initialFilters),
@@ -371,6 +381,7 @@ try {
     if ($path === '/cost-calculator') {
         render('public/calculator', [
             'title' => (string)SiteRepository::content('seo.calculator.title', 'Design Cost Calculator'),
+            'metaDescription' => (string)SiteRepository::content('seo.calculator.description', 'Estimate your interior design cost in a few steps and save your lead request with HomeInteriors360.'),
             'active' => 'calculator',
             'content' => $content,
         ]);
@@ -380,6 +391,7 @@ try {
     if ($path === '/pricing') {
         render('public/pricing', [
             'title' => (string)SiteRepository::content('seo.pricing.title', 'Pricing for Architects & Interior Designers'),
+            'metaDescription' => (string)SiteRepository::content('seo.pricing.description', 'Choose lead purchase or managed account plans for architects and interior designers, with sales registration and growth support.'),
             'active' => 'pricing',
             'content' => $content,
             'reviews' => SiteRepository::pricingReviews(),
@@ -396,6 +408,12 @@ try {
         }
         render('public/portfolio-detail', [
             'title' => $project['project_name'] . ' | ' . (string)SiteRepository::content('seo.portfolio.title_suffix', 'HomeInteriors360'),
+            'metaDescription' => sprintf(
+                '%s by %s in %s. See project cost, timeline, materials, images, and testimonial details.',
+                (string)$project['project_name'],
+                (string)($project['pro_name'] ?? 'this professional'),
+                (string)($project['location'] ?? 'Gurgaon')
+            ),
             'active' => 'directory',
             'content' => $content,
             'project' => $project,
@@ -408,6 +426,7 @@ try {
     if ($path === '/admin/login') {
         render('admin/login', [
             'title' => (string)SiteRepository::content('admin.login.title', 'Admin Login'),
+            'metaDescription' => 'Secure admin login for managing professionals, portfolios, leads, and site content.',
             'content' => $content,
         ]);
         exit;
@@ -417,6 +436,7 @@ try {
         Auth::requireAuth();
         render('admin/dashboard', [
             'title' => (string)SiteRepository::content('admin.title', 'Admin Dashboard'),
+            'metaDescription' => 'Admin dashboard for HomeInteriors360 site management, leads, professionals, and content.',
             'active' => 'admin',
             'content' => $content,
             'counts' => SiteRepository::adminCounts(),
@@ -428,6 +448,7 @@ try {
         Auth::requireAuth();
         render('admin/content', [
             'title' => (string)SiteRepository::content('admin.content.title', 'Content Manager'),
+            'metaDescription' => 'Update homepage content, logos, SEO fields, and reusable site copy from the admin panel.',
             'active' => 'admin',
             'content' => $content,
             'items' => SiteRepository::contentList(),
@@ -439,6 +460,7 @@ try {
         Auth::requireAuth();
         render('admin/leads', [
             'title' => (string)SiteRepository::content('admin.leads.title', 'Lead Tracker'),
+            'metaDescription' => 'Review and update incoming leads with status tracking for the HomeInteriors360 sales team.',
             'active' => 'admin',
             'content' => $content,
             'leads' => SiteRepository::listLeads(),
@@ -450,6 +472,7 @@ try {
         Auth::requireAuth();
         render('admin/pros', [
             'title' => (string)SiteRepository::content('admin.pros.title', 'Pro Verification'),
+            'metaDescription' => 'Verify professionals, manage premium status, and control public listing visibility.',
             'active' => 'admin',
             'content' => $content,
             'pros' => SiteRepository::listPros([]),
@@ -461,6 +484,7 @@ try {
         Auth::requireAuth();
         render('admin/professionals', [
             'title' => 'Professionals Manager',
+            'metaDescription' => 'Create and manage professional profiles with images, filters, pricing, and portfolio linkage.',
             'active' => 'admin',
             'content' => $content,
             'professionals' => SiteRepository::listProfessionalsForAdmin(),
@@ -472,6 +496,7 @@ try {
         Auth::requireAuth();
         render('admin/portfolios', [
             'title' => 'Portfolio Manager',
+            'metaDescription' => 'Create and manage portfolio projects, images, testimonials, and project metadata.',
             'active' => 'admin',
             'content' => $content,
             'portfolios' => SiteRepository::listPortfolioForAdmin(),

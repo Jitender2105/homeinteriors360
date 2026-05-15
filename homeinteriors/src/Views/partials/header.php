@@ -2,6 +2,7 @@
 $title = $title ?? 'HomeInteriors360';
 $active = $active ?? '';
 $content = $content ?? [];
+$metaDescription = $metaDescription ?? (string)($content['seo.home.description'] ?? 'HomeInteriors360 helps you find verified architects, interior designers, and contractors for your home project.');
 
 $navHome = (string)($content['nav.home'] ?? 'Home');
 $navDirectory = (string)($content['nav.directory'] ?? 'Find Professionals');
@@ -15,6 +16,12 @@ $navAdmin = (string)($content['nav.admin'] ?? 'Admin');
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></title>
+  <meta name="description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8') ?>" />
+  <meta property="og:title" content="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>" />
+  <meta property="og:description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8') ?>" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="/logo.png" />
+  <link rel="apple-touch-icon" href="/logo.png" />
   <link rel="stylesheet" href="/assets/style.css" />
 </head>
 <body>
