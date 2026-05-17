@@ -24,15 +24,15 @@ $safeImage = static function (string $url, string $fallback): string {
 };
 $trustVisuals = [
   ['title' => 'Verified Professionals', 'image' => $defaultImage],
-  ['title' => 'Design Review', 'image' => $defaultImage],
-  ['title' => 'Site Supervision', 'image' => $defaultImage],
-  ['title' => 'Smooth Handover', 'image' => $defaultImage],
+  ['title' => 'Transparent Pricing', 'image' => $defaultImage],
+  ['title' => 'Project Oversight', 'image' => $defaultImage],
+  ['title' => 'Reliable Handover', 'image' => $defaultImage],
 ];
 $uspVisuals = [
-  ['title' => 'Lead Generation', 'image' => $defaultImage],
-  ['title' => 'Portfolio Management', 'image' => $defaultImage],
+  ['title' => 'Lead Marketplace', 'image' => $defaultImage],
+  ['title' => 'Profile Management', 'image' => $defaultImage],
   ['title' => 'Brand Visibility', 'image' => $defaultImage],
-  ['title' => 'Account Growth Support', 'image' => $defaultImage],
+  ['title' => 'Growth Support', 'image' => $defaultImage],
 ];
 $serviceFallbacks = [
   'kitchen' => $defaultImage,
@@ -58,6 +58,31 @@ $processSteps = [
   ['title' => 'Build', 'text' => 'Execution stays under one roof with detailed site coordination, vendor alignment, and quality control.'],
   ['title' => 'Handover', 'text' => 'The final reveal is clean, styled, and ready to live in with the finishing details already solved.'],
 ];
+$trustCopy = [
+  'Every profile is reviewed before it appears in the network.',
+  'Clear scopes and expectations from the first conversation.',
+  'Dedicated coordination across design, execution, and handover.',
+  'The final delivery stays clean, documented, and ready to live in.',
+];
+$uspCopy = [
+  'Qualified homeowner leads routed by city, locality, and budget.',
+  'Professional profiles and portfolios kept current from one backend.',
+  'Strong placement for premium and active professionals.',
+  'A managed system for reputation, content, and sales readiness.',
+];
+$normalizeCopy = static function (string $value, string $fallback, array $blocked): string {
+  $candidate = trim($value);
+  if ($candidate === '') {
+    return $fallback;
+  }
+  $normalized = strtolower(preg_replace('/\s+/', ' ', $candidate));
+  foreach ($blocked as $phrase) {
+    if (str_contains($normalized, strtolower($phrase))) {
+      return $fallback;
+    }
+  }
+  return $candidate;
+};
 ?>
 
 <section class="hero" style="--hero-bg:url('<?= htmlspecialchars($heroBg, ENT_QUOTES, 'UTF-8') ?>');--hero-bg2:url('<?= htmlspecialchars($heroBg2, ENT_QUOTES, 'UTF-8') ?>');">
@@ -297,7 +322,7 @@ $processSteps = [
             <img src="<?= htmlspecialchars($item['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>" />
             <div class="media-block-copy">
               <h3><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?></h3>
-              <p><?= htmlspecialchars((string)($trustPoints[$index] ?? $item['title']), ENT_QUOTES, 'UTF-8') ?></p>
+              <p><?= htmlspecialchars($normalizeCopy((string)($trustPoints[$index] ?? ''), $trustCopy[$index] ?? $item['title'], ['centralized discovery', 'quality checks', 'on-time delivery', 'verified professionals', 'transparent pricing', 'project oversight', 'reliable handover']), ENT_QUOTES, 'UTF-8') ?></p>
             </div>
           </article>
         <?php endforeach; ?>
@@ -311,7 +336,7 @@ $processSteps = [
             <img src="<?= htmlspecialchars($item['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>" />
             <div class="media-block-copy">
               <h3><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?></h3>
-              <p><?= htmlspecialchars((string)($uspPoints[$index] ?? $item['title']), ENT_QUOTES, 'UTF-8') ?></p>
+              <p><?= htmlspecialchars($normalizeCopy((string)($uspPoints[$index] ?? ''), $uspCopy[$index] ?? $item['title'], ['centralized discovery', 'lead management engine', 'verified network', 'growth content system', 'lead marketplace', 'profile management', 'brand visibility', 'growth support']), ENT_QUOTES, 'UTF-8') ?></p>
             </div>
           </article>
         <?php endforeach; ?>
