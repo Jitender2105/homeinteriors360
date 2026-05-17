@@ -41,14 +41,25 @@ img { max-width: 100%; display: block; }
 }
 
 .nav-shell {
-  min-height: 78px;
+  min-height: 108px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 22px;
 }
 
-.brand img { height: 44px; width: auto; }
+.brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 88px;
+}
+.brand img {
+  height: 72px;
+  width: auto;
+  max-width: min(520px, 42vw);
+  object-fit: contain;
+}
 .nav-toggle {
   display: none;
   border: 1px solid var(--line);
@@ -1081,7 +1092,7 @@ textarea {
   resize: vertical;
 }
 .footer-shell { text-align: center; }
-.footer-logo { height: 42px; width: auto; margin-inline: auto; }
+.footer-logo { height: 56px; width: auto; margin-inline: auto; }
 .footer-tagline { margin: 12px 0 6px; opacity: 0.9; }
 .footer-copy { margin: 0; font-size: 12px; opacity: 0.66; }
 
@@ -1154,11 +1165,21 @@ textarea {
 
 @media (max-width: 760px) {
   .nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  .nav-shell {
+    min-height: 88px;
+  }
+  .brand {
+    min-height: 64px;
+  }
+  .brand img {
+    height: 54px;
+    max-width: 72vw;
+  }
   .nav-links {
     position: fixed;
     left: 0;
     right: 0;
-    top: 79px;
+    top: 88px;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
     display: none;
