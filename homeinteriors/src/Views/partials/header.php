@@ -9,6 +9,8 @@ $navDirectory = (string)($content['nav.directory'] ?? 'Find Professionals');
 $navPricing = (string)($content['nav.pricing'] ?? 'Pricing');
 $navCalculator = (string)($content['nav.calculator'] ?? 'Cost Calculator');
 $navAdmin = (string)($content['nav.admin'] ?? 'Admin');
+$stylePath = dirname(__DIR__, 3) . '/public/assets/style.css';
+$styleVersion = is_file($stylePath) ? (string) filemtime($stylePath) : '1';
 ?>
 <!doctype html>
 <html lang="en">
@@ -22,7 +24,7 @@ $navAdmin = (string)($content['nav.admin'] ?? 'Admin');
   <meta property="og:type" content="website" />
   <link rel="icon" href="/favicon.png" />
   <link rel="apple-touch-icon" href="/favicon.png" />
-  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="stylesheet" href="/assets/style.css?v=<?= htmlspecialchars($styleVersion, ENT_QUOTES, 'UTF-8') ?>" />
 </head>
 <body>
   <header class="site-header">
