@@ -50,13 +50,22 @@ $brandFallbacks = [
   'Asian Paints' => $defaultImage,
   'Kajaria' => $defaultImage,
 ];
+$editorialImages = [
+  'story' => 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1400&q=85',
+  'detail' => 'https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=1200&q=85',
+  'studio' => 'https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=1400&q=85',
+  'materials' => 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=85',
+  'render_1' => 'https://images.unsplash.com/photo-1600210492493-0946911123ea?auto=format&fit=crop&w=1200&q=85',
+  'render_2' => 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=85',
+  'render_3' => 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1200&q=85',
+];
 $cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : [];
 $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['requirement_options'] : [];
 $processSteps = [
-  ['title' => 'Briefing', 'text' => 'We start with the way you live, what your home needs, and the feeling you want the finished space to carry.'],
-  ['title' => 'Design', 'text' => 'Layouts, materials, and proportion studies are shaped into a calm, precise design direction.'],
-  ['title' => 'Build', 'text' => 'Execution stays under one roof with detailed site coordination, vendor alignment, and quality control.'],
-  ['title' => 'Handover', 'text' => 'The final reveal is clean, styled, and ready to live in with the finishing details already solved.'],
+  ['title' => 'DISCOVER', 'text' => 'We understand the city, budget, scope, and locality so the right professionals can be shortlisted with context.'],
+  ['title' => 'COMPARE', 'text' => 'Verified architects, designers, and contractors are compared by portfolio, rating, work type, and service area.'],
+  ['title' => 'CONNECT', 'text' => 'Your requirement is shared with the selected aggregator or professional team for a focused first conversation.'],
+  ['title' => 'MANAGE', 'text' => 'Premium partners can use our backend for profile, portfolio, testimonials, and lead growth management.'],
 ];
 $trustCopy = [
   'Every profile is reviewed before it appears in the network.',
@@ -85,16 +94,22 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
 };
 ?>
 
-<section class="hero" style="--hero-bg:url('<?= htmlspecialchars($heroBg, ENT_QUOTES, 'UTF-8') ?>');--hero-bg2:url('<?= htmlspecialchars($heroBg2, ENT_QUOTES, 'UTF-8') ?>');">
-  <div class="container hero-grid">
-    <div class="hero-copy" data-reveal>
-      <p class="eyebrow"><?= htmlspecialchars((string)($content['home.hero.eyebrow'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-      <h1><?= htmlspecialchars((string)($content['home.hero.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h1>
-      <p class="hero-subtitle"><?= htmlspecialchars((string)($content['home.hero.subtitle'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-    </div>
+<section class="studio-hero" style="--hero-bg:url('<?= htmlspecialchars($safeImage($heroBg, $editorialImages['story']), ENT_QUOTES, 'UTF-8') ?>');">
+  <div class="container studio-hero-inner" data-reveal>
+    <p class="eyebrow">Curated aggregators. Quiet luxury.</p>
+    <h1>Home interiors, discovered with taste and verified with discipline.</h1>
+    <p class="hero-subtitle">HomeInteriors360 brings homeowners, architects, interior designers, contractors, and premium aggregators into one calm discovery platform across Delhi NCR.</p>
+  </div>
+</section>
 
-    <div class="lead-card" data-reveal>
-      <h2><?= htmlspecialchars((string)($content['home.lead.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
+<section class="section lead-band" data-reveal>
+  <div class="container lead-band-grid">
+    <div>
+      <p class="eyebrow eyebrow-dark">Start Your Project</p>
+      <h2><?= htmlspecialchars((string)($content['home.lead.title'] ?? 'Get Free Design Consultation'), ENT_QUOTES, 'UTF-8') ?></h2>
+      <p>Share your city, scope, locality, and budget. We will route the enquiry to the right verified professional or aggregator.</p>
+    </div>
+    <div class="lead-card lead-card-flat">
       <form id="heroLeadForm" class="stack-form hero-lead-form">
         <div class="hero-lead-grid">
           <label>
@@ -145,30 +160,56 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
   </div>
 </section>
 
-<section class="section section-tight" data-reveal>
+<section class="section section-tight studio-story" data-reveal>
   <div class="container story-layout">
     <article class="story-panel story-essay">
       <p class="eyebrow">Our Story</p>
-      <h2>Quiet luxury, executed with discipline.</h2>
-      <p><?= htmlspecialchars((string)($content['home.hero.subtitle'] ?? 'From modular kitchens to complete home interiors, compare top-rated professionals and start with confidence.'), ENT_QUOTES, 'UTF-8') ?></p>
-      <p>HomeInteriors360 connects homeowners with verified architects, interior designers, and contractors, while keeping the process calm, premium, and transparent from first brief to handover.</p>
+      <h2>A curated marketplace for homes that should feel personal, not random.</h2>
+      <p>HomeInteriors360 was built for homeowners who want refined choices without chasing ten vendors, screenshots, and half-trusted recommendations.</p>
+      <p>We bring aggregator discovery, professional profiles, project portfolios, reviews, pricing signals, and lead routing into one experience, so the journey from search to shortlist feels considered.</p>
       <div class="story-badges">
-        <span class="chip">Premium interiors</span>
-        <span class="chip">Verified pros</span>
-        <span class="chip">Managed execution</span>
+        <span class="chip">Verified aggregators</span>
+        <span class="chip">Portfolio-led discovery</span>
+        <span class="chip">Lead-backed matching</span>
       </div>
     </article>
     <div class="story-visual-grid">
       <div class="story-visual story-visual-large">
-        <img src="<?= htmlspecialchars($heroBg ?: 'https://images.unsplash.com/photo-1616594039964-3dbbb0bd2e8f?auto=format&fit=crop&w=1200&q=80', ENT_QUOTES, 'UTF-8') ?>" alt="Interior inspiration" />
+        <img src="<?= htmlspecialchars($editorialImages['detail'], ENT_QUOTES, 'UTF-8') ?>" alt="Interior inspiration" />
       </div>
       <div class="story-visual story-visual-small">
-        <img src="<?= htmlspecialchars($heroBg2 ?: 'https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=1200&q=80', ENT_QUOTES, 'UTF-8') ?>" alt="Interior detail" />
+        <img src="<?= htmlspecialchars($editorialImages['materials'], ENT_QUOTES, 'UTF-8') ?>" alt="Interior material palette" />
       </div>
       <div class="story-metric">
         <strong><?= count($topPros) ?></strong>
-        <span>featured professionals in the network</span>
+        <span>featured aggregators and professionals in the network</span>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="section studio-why" data-reveal>
+  <div class="container">
+    <div class="section-head section-head-wide">
+      <p class="eyebrow eyebrow-dark">Why HomeInteriors360?</p>
+      <h2>Luxury discovery should feel calm, but the backend must stay sharp.</h2>
+    </div>
+    <div class="why-studio-grid">
+      <article>
+        <span>01</span>
+        <h3>Bespoke, not anonymous</h3>
+        <p>Professionals are shown with real work type, service area, portfolio detail, ratings, and project history.</p>
+      </article>
+      <article>
+        <span>02</span>
+        <h3>Aggregator-led choice</h3>
+        <p>Homeowners can compare premium studios, architects, contractors, and full-service aggregators in one place.</p>
+      </article>
+      <article>
+        <span>03</span>
+        <h3>Lead flow with context</h3>
+        <p>Each enquiry carries city, locality, budget, source, and professional ID so sales conversations start cleaner.</p>
+      </article>
     </div>
   </div>
 </section>
@@ -177,7 +218,7 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
   <div class="container">
     <div class="section-head">
       <h2>Our Process</h2>
-      <p>A refined journey from first conversation to final handover.</p>
+      <p>A refined journey from search intent to the right professional conversation.</p>
     </div>
     <div class="process-grid process-grid-home">
       <?php foreach ($processSteps as $index => $step): ?>
@@ -192,6 +233,29 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
 </section>
 
 <section class="section" data-reveal>
+  <div class="container">
+    <div class="section-head">
+      <h2>Featured Aggregators</h2>
+      <p>Verified professionals and studios, presented through the work they have delivered.</p>
+    </div>
+    <div class="aggregator-showcase">
+      <?php foreach ($topPros as $pro): ?>
+        <article class="aggregator-card">
+          <img src="<?= htmlspecialchars((string)($pro['profile_pic'] ?? $defaultImage), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+          <div>
+            <p class="eyebrow eyebrow-dark"><?= htmlspecialchars((string)($pro['city'] ?? 'Delhi NCR'), ENT_QUOTES, 'UTF-8') ?></p>
+            <h3><?= htmlspecialchars((string)($pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
+            <p><?= htmlspecialchars((string)($pro['specialization'] ?? $pro['role'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+            <p>Rating <?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?> / 5</p>
+            <a class="btn-link" href="/professionals/<?= htmlspecialchars((string)($pro['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($content['directory.cta'] ?? 'View Profile'), ENT_QUOTES, 'UTF-8') ?></a>
+          </div>
+        </article>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
+<section class="section project-gallery-section" data-reveal>
   <div class="container">
     <div class="section-head">
       <h2>Executed Projects</h2>
@@ -217,24 +281,16 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
   </div>
 </section>
 
-<section class="section" data-reveal>
+<section class="section renders-section" data-reveal>
   <div class="container">
     <div class="section-head">
-      <h2><?= htmlspecialchars((string)($content['home.aggregators.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
-      <p><?= htmlspecialchars((string)($content['home.aggregators.subtitle'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+      <h2>Concept Direction</h2>
+      <p>Material mood, light, and planning cues that help homeowners choose with confidence.</p>
     </div>
-    <div class="h-scroll">
-      <?php foreach ($topPros as $pro): ?>
-        <article class="pro-card">
-          <img src="<?= htmlspecialchars((string)($pro['profile_pic'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-          <div class="pro-meta">
-            <h3><?= htmlspecialchars((string)($pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
-            <p><?= htmlspecialchars((string)($pro['specialization'] ?? $pro['role'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-            <p>★ <?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?></p>
-            <a class="btn-link" href="/professionals/<?= htmlspecialchars((string)($pro['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($content['directory.cta'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
-          </div>
-        </article>
-      <?php endforeach; ?>
+    <div class="studio-image-strip">
+      <img src="<?= htmlspecialchars($editorialImages['render_1'], ENT_QUOTES, 'UTF-8') ?>" alt="Interior concept render" />
+      <img src="<?= htmlspecialchars($editorialImages['render_2'], ENT_QUOTES, 'UTF-8') ?>" alt="Interior concept detail" />
+      <img src="<?= htmlspecialchars($editorialImages['render_3'], ENT_QUOTES, 'UTF-8') ?>" alt="Interior material direction" />
     </div>
   </div>
 </section>
