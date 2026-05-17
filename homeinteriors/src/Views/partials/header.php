@@ -9,8 +9,18 @@ $navDirectory = (string)($content['nav.directory'] ?? 'Find Professionals');
 $navPricing = (string)($content['nav.pricing'] ?? 'Pricing');
 $navCalculator = (string)($content['nav.calculator'] ?? 'Cost Calculator');
 $navAdmin = (string)($content['nav.admin'] ?? 'Admin');
-$stylePath = dirname(__DIR__, 3) . '/public/assets/style.css';
-$styleVersion = is_file($stylePath) ? (string) filemtime($stylePath) : '1';
+$rootPath = dirname(__DIR__, 3);
+$styleCandidates = [
+  $rootPath . '/public/assets/style.css',
+  $rootPath . '/assets/style.css',
+];
+$styleVersion = '1';
+foreach ($styleCandidates as $stylePath) {
+  if (is_file($stylePath)) {
+    $styleVersion = (string) filemtime($stylePath);
+    break;
+  }
+}
 ?>
 <!doctype html>
 <html lang="en">
