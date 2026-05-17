@@ -20,8 +20,8 @@ $navAdmin = (string)($content['nav.admin'] ?? 'Admin');
   <meta property="og:title" content="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>" />
   <meta property="og:description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8') ?>" />
   <meta property="og:type" content="website" />
-  <link rel="icon" href="/logo.png" />
-  <link rel="apple-touch-icon" href="/logo.png" />
+  <link rel="icon" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/favicon.png" />
   <link rel="stylesheet" href="/assets/style.css" />
 </head>
 <body>
