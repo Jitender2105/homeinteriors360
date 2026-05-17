@@ -67,6 +67,33 @@ $leadPurchaseSteps = [
 ];
 ?>
 
+<section class="section pricing-plans-first" data-reveal>
+  <div class="container">
+    <div class="section-head">
+      <h2><?= htmlspecialchars((string)($content['pricing.plans.title'] ?? 'Two ways to grow'), ENT_QUOTES, 'UTF-8') ?></h2>
+      <p><?= htmlspecialchars((string)($content['pricing.plans.subtitle'] ?? 'Start with lead buying or hand over the full growth engine to our team.'), ENT_QUOTES, 'UTF-8') ?></p>
+    </div>
+    <div class="pricing-grid">
+      <?php foreach ($plans as $index => $plan): ?>
+        <article class="pricing-card <?= $index === 1 ? 'featured' : '' ?>">
+          <?php if ($index === 1): ?><span class="pricing-badge">Most Comprehensive</span><?php endif; ?>
+          <div class="pricing-card-head">
+            <h3><?= htmlspecialchars($plan['title'], ENT_QUOTES, 'UTF-8') ?></h3>
+            <strong><?= htmlspecialchars($plan['price'], ENT_QUOTES, 'UTF-8') ?></strong>
+          </div>
+          <p><?= htmlspecialchars($plan['description'], ENT_QUOTES, 'UTF-8') ?></p>
+          <ul class="benefit-list">
+            <?php foreach ($plan['items'] as $item): ?>
+              <li><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8') ?></li>
+            <?php endforeach; ?>
+          </ul>
+          <button class="btn-link pricing-select" type="button" data-plan="<?= htmlspecialchars($plan['title'], ENT_QUOTES, 'UTF-8') ?>">Register interest</button>
+        </article>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
 <section class="pricing-hero section" data-reveal>
   <div class="container pricing-shell">
     <div class="pricing-copy-stack">
@@ -161,33 +188,6 @@ $leadPurchaseSteps = [
         <p class="form-message" id="pricingLeadMessage"></p>
       </form>
     </aside>
-  </div>
-</section>
-
-<section class="section" data-reveal>
-  <div class="container">
-    <div class="section-head">
-      <h2><?= htmlspecialchars((string)($content['pricing.plans.title'] ?? 'Two ways to grow'), ENT_QUOTES, 'UTF-8') ?></h2>
-      <p><?= htmlspecialchars((string)($content['pricing.plans.subtitle'] ?? 'Start with lead buying or hand over the full growth engine to our team.'), ENT_QUOTES, 'UTF-8') ?></p>
-    </div>
-    <div class="pricing-grid">
-      <?php foreach ($plans as $index => $plan): ?>
-        <article class="pricing-card <?= $index === 1 ? 'featured' : '' ?>">
-          <?php if ($index === 1): ?><span class="pricing-badge">Most Comprehensive</span><?php endif; ?>
-          <div class="pricing-card-head">
-            <h3><?= htmlspecialchars($plan['title'], ENT_QUOTES, 'UTF-8') ?></h3>
-            <strong><?= htmlspecialchars($plan['price'], ENT_QUOTES, 'UTF-8') ?></strong>
-          </div>
-          <p><?= htmlspecialchars($plan['description'], ENT_QUOTES, 'UTF-8') ?></p>
-          <ul class="benefit-list">
-            <?php foreach ($plan['items'] as $item): ?>
-              <li><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8') ?></li>
-            <?php endforeach; ?>
-          </ul>
-          <button class="btn-link pricing-select" type="button" data-plan="<?= htmlspecialchars($plan['title'], ENT_QUOTES, 'UTF-8') ?>">Register interest</button>
-        </article>
-      <?php endforeach; ?>
-    </div>
   </div>
 </section>
 
