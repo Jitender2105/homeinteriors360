@@ -166,6 +166,15 @@ final class SiteRepository
                  ORDER BY is_premium DESC, verification_status DESC, rating DESC, updated_at DESC
                  LIMIT 12"
             ),
+            'featured_projects' => Database::query(
+                "SELECT p.id, p.slug, p.project_name, p.project_description, p.total_cost, p.location, p.work_type, p.area_of_work, p.media_json,
+                        pr.full_name AS pro_name, pr.slug AS pro_slug, pr.profile_pic AS pro_profile_pic, pr.city AS pro_city
+                 FROM projects p
+                 JOIN pros pr ON pr.id = p.pro_id
+                 WHERE pr.is_active = 1
+                 ORDER BY pr.is_premium DESC, p.year_completed DESC, p.created_at DESC
+                 LIMIT 8"
+            ),
             'city_options' => self::cityOptions(),
             'requirement_options' => self::requirementOptions(),
         ];

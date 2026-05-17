@@ -5,6 +5,7 @@ $heroAssets = is_array($payload['hero_assets'] ?? null) ? $payload['hero_assets'
 $heroBg = $heroAssets[0] ?? '';
 $heroBg2 = $heroAssets[1] ?? $heroBg;
 $topPros = is_array($payload['top_pros'] ?? null) ? $payload['top_pros'] : [];
+$featuredProjects = is_array($payload['featured_projects'] ?? null) ? $payload['featured_projects'] : [];
 $services = is_array($payload['services'] ?? null) ? $payload['services'] : [];
 $testimonials = is_array($payload['testimonials'] ?? null) ? $payload['testimonials'] : [];
 $brands = is_array($payload['brands'] ?? null) ? $payload['brands'] : [];
@@ -51,6 +52,12 @@ $brandFallbacks = [
 ];
 $cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : [];
 $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['requirement_options'] : [];
+$processSteps = [
+  ['title' => 'Briefing', 'text' => 'We start with the way you live, what your home needs, and the feeling you want the finished space to carry.'],
+  ['title' => 'Design', 'text' => 'Layouts, materials, and proportion studies are shaped into a calm, precise design direction.'],
+  ['title' => 'Build', 'text' => 'Execution stays under one roof with detailed site coordination, vendor alignment, and quality control.'],
+  ['title' => 'Handover', 'text' => 'The final reveal is clean, styled, and ready to live in with the finishing details already solved.'],
+];
 ?>
 
 <section class="hero" style="--hero-bg:url('<?= htmlspecialchars($heroBg, ENT_QUOTES, 'UTF-8') ?>');--hero-bg2:url('<?= htmlspecialchars($heroBg2, ENT_QUOTES, 'UTF-8') ?>');">
@@ -109,6 +116,78 @@ $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['re
         <button type="submit" class="btn-primary hero-lead-submit"><?= htmlspecialchars((string)($content['home.lead.submit'] ?? ''), ENT_QUOTES, 'UTF-8') ?></button>
         <p class="form-message" id="heroLeadMessage"></p>
       </form>
+    </div>
+  </div>
+</section>
+
+<section class="section section-tight" data-reveal>
+  <div class="container story-layout">
+    <article class="story-panel story-essay">
+      <p class="eyebrow">Our Story</p>
+      <h2>Quiet luxury, executed with discipline.</h2>
+      <p><?= htmlspecialchars((string)($content['home.hero.subtitle'] ?? 'From modular kitchens to complete home interiors, compare top-rated professionals and start with confidence.'), ENT_QUOTES, 'UTF-8') ?></p>
+      <p>HomeInteriors360 connects homeowners with verified architects, interior designers, and contractors, while keeping the process calm, premium, and transparent from first brief to handover.</p>
+      <div class="story-badges">
+        <span class="chip">Premium interiors</span>
+        <span class="chip">Verified pros</span>
+        <span class="chip">Managed execution</span>
+      </div>
+    </article>
+    <div class="story-visual-grid">
+      <div class="story-visual story-visual-large">
+        <img src="<?= htmlspecialchars($heroBg ?: 'https://images.unsplash.com/photo-1616594039964-3dbbb0bd2e8f?auto=format&fit=crop&w=1200&q=80', ENT_QUOTES, 'UTF-8') ?>" alt="Interior inspiration" />
+      </div>
+      <div class="story-visual story-visual-small">
+        <img src="<?= htmlspecialchars($heroBg2 ?: 'https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=1200&q=80', ENT_QUOTES, 'UTF-8') ?>" alt="Interior detail" />
+      </div>
+      <div class="story-metric">
+        <strong><?= count($topPros) ?></strong>
+        <span>featured professionals in the network</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-tight" data-reveal>
+  <div class="container">
+    <div class="section-head">
+      <h2>Our Process</h2>
+      <p>A refined journey from first conversation to final handover.</p>
+    </div>
+    <div class="process-grid process-grid-home">
+      <?php foreach ($processSteps as $index => $step): ?>
+        <article class="process-card process-card-large">
+          <strong>0<?= $index + 1 ?></strong>
+          <h3><?= htmlspecialchars($step['title'], ENT_QUOTES, 'UTF-8') ?></h3>
+          <p><?= htmlspecialchars($step['text'], ENT_QUOTES, 'UTF-8') ?></p>
+        </article>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
+<section class="section" data-reveal>
+  <div class="container">
+    <div class="section-head">
+      <h2>Executed Projects</h2>
+      <p>Recent handovers that show how the work feels when the details are done right.</p>
+    </div>
+    <div class="cards-grid featured-project-grid">
+      <?php foreach ($featuredProjects as $project): ?>
+        <?php $projectImage = $project['media_json'][0] ?? ''; ?>
+        <article class="portfolio-card project-card">
+          <?php if ($projectImage): ?>
+            <img src="<?= htmlspecialchars((string)$projectImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($project['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+          <?php endif; ?>
+          <div>
+            <p class="eyebrow eyebrow-dark"><?= htmlspecialchars((string)($project['pro_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+            <h3><?= htmlspecialchars((string)($project['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
+            <p><?= htmlspecialchars((string)($project['location'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($project['work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+            <p>₹<?= number_format((float)($project['total_cost'] ?? 0), 0) ?></p>
+            <a class="btn-link" href="/portfolio/<?= htmlspecialchars((string)$project['slug'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($content['profile.project_details'] ?? 'View Project Details'), ENT_QUOTES, 'UTF-8') ?></a>
+          </div>
+        </article>
+      <?php endforeach; ?>
     </div>
   </div>
 </section>
