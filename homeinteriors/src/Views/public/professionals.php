@@ -77,15 +77,6 @@ $directorySubtitle = $directorySubtitle ?? (string)($content['directory.subtitle
         <?php foreach ($pros as $pro): ?>
           <?php
             $slides = [];
-            if (!empty($pro['profile_pic'])) {
-                $slides[] = [
-                    'image' => $pro['profile_pic'],
-                    'title' => $pro['full_name'] ?? '',
-                    'location' => $pro['city'] ?? '',
-                    'work_type' => $pro['primary_work_type'] ?? '',
-                    'area_of_work' => $pro['primary_work_area'] ?? '',
-                ];
-            }
             foreach (($pro['portfolio_previews'] ?? []) as $preview) {
                 $image = $preview['media_json'][0] ?? '';
                 if (!$image) {
@@ -97,6 +88,15 @@ $directorySubtitle = $directorySubtitle ?? (string)($content['directory.subtitle
                     'location' => $preview['location'] ?? '',
                     'work_type' => $preview['work_type'] ?? '',
                     'area_of_work' => $preview['area_of_work'] ?? '',
+                ];
+            }
+            if (!empty($pro['profile_pic'])) {
+                $slides[] = [
+                    'image' => $pro['profile_pic'],
+                    'title' => $pro['full_name'] ?? '',
+                    'location' => $pro['city'] ?? '',
+                    'work_type' => $pro['primary_work_type'] ?? '',
+                    'area_of_work' => $pro['primary_work_area'] ?? '',
                 ];
             }
             $slidesJson = htmlspecialchars(json_encode($slides, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
@@ -166,15 +166,6 @@ $directorySubtitle = $directorySubtitle ?? (string)($content['directory.subtitle
 
   function card(pro) {
     const slides = [];
-    if (pro.profile_pic) {
-      slides.push({
-        image: pro.profile_pic,
-        title: pro.full_name || '',
-        location: pro.city || '',
-        work_type: pro.primary_work_type || '',
-        area_of_work: pro.primary_work_area || '',
-      });
-    }
     (pro.portfolio_previews || []).forEach((preview) => {
       const image = (preview.media_json || [])[0] || '';
       if (!image) return;
@@ -186,6 +177,15 @@ $directorySubtitle = $directorySubtitle ?? (string)($content['directory.subtitle
         area_of_work: preview.area_of_work || '',
       });
     });
+    if (pro.profile_pic) {
+      slides.push({
+        image: pro.profile_pic,
+        title: pro.full_name || '',
+        location: pro.city || '',
+        work_type: pro.primary_work_type || '',
+        area_of_work: pro.primary_work_area || '',
+      });
+    }
     const premium = Number(pro.is_premium) === 1;
     return `
       <article class="listing-card ${premium ? 'premium' : ''}" data-carousel-slides="${esc(JSON.stringify(slides))}">
