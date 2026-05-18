@@ -2077,4 +2077,12 @@ textarea {
   .studio-image-strip img:nth-child(2) {
     margin-top: 0;
   }
+
+  .directory-layout > aside {
+    order: 2;
+  }
+
+  .directory-layout > div {
+    order: 1;
+  }
 }
