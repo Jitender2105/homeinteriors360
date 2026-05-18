@@ -844,19 +844,26 @@ button, .btn-primary, .btn-muted, .btn-link {
 
 .directory-layout {
   display: grid;
-  grid-template-columns: 290px 1fr;
+  grid-template-columns: 270px 1fr;
   gap: 18px;
 }
-.filter-card { padding: 16px; position: sticky; top: 96px; align-self: start; display: grid; gap: 8px; }
+.filter-card { padding: 14px; position: sticky; top: 96px; align-self: start; display: grid; gap: 8px; box-shadow: none; }
 .filter-card h3 { margin: 0; }
 .filter-card p { margin: 0 0 6px; color: var(--muted); }
 .budget-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.listing-card { display: grid; grid-template-columns: 160px 1fr; overflow: hidden; }
+.listing-card {
+  display: grid;
+  grid-template-columns: minmax(360px, 48%) 1fr;
+  overflow: hidden;
+  box-shadow: none;
+  border-color: rgba(29, 42, 38, 0.12);
+  background: #fffdf8;
+}
 .listing-carousel { position: relative; min-height: 100%; }
 .listing-carousel-image {
   width: 100%;
   height: 100%;
-  min-height: 260px;
+  min-height: 360px;
   object-fit: cover;
   display: block;
   border-radius: 8px 0 0 8px;
@@ -866,26 +873,36 @@ button, .btn-primary, .btn-muted, .btn-link {
 }
 .listing-carousel-caption {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
   border-radius: 8px;
-  background: rgba(15, 23, 31, 0.72);
+  background: rgba(15, 23, 31, 0.78);
   color: #fff;
-  padding: 10px 12px;
+  padding: 12px 14px;
   display: grid;
   gap: 2px;
   backdrop-filter: blur(8px);
 }
-.listing-carousel-caption strong { font-size: 14px; }
+.listing-carousel-caption strong { font-size: 17px; }
 .listing-carousel-caption span { font-size: 12px; opacity: 0.88; }
 .listing-carousel-caption small { font-size: 11px; opacity: 0.76; }
-.listing-card > div { padding: 12px; gap: 6px; }
+.listing-card > div {
+  padding: clamp(18px, 2.5vw, 30px);
+  gap: 10px;
+  display: grid;
+  align-content: center;
+}
 .listing-card h4, .listing-card p { margin: 0; }
+.listing-card h4 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1;
+  font-weight: 500;
+}
 .listing-card.premium {
-  border-color: #d7b26f;
-  box-shadow: 0 20px 40px rgba(183, 139, 58, 0.18);
-  background: linear-gradient(180deg, #fffaf0 0%, #ffffff 58%);
+  border-color: rgba(164, 95, 66, 0.34);
+  background: linear-gradient(180deg, #fff8ed 0%, #fffdf8 62%);
 }
 .listing-card.premium .listing-carousel-caption {
   background: linear-gradient(135deg, rgba(188, 139, 74, 0.92), rgba(109, 73, 26, 0.84));
@@ -902,6 +919,48 @@ button, .btn-primary, .btn-muted, .btn-link {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   margin-bottom: 4px;
+}
+.listing-topline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.listing-pill {
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.listing-pill-premium {
+  border-color: rgba(164, 95, 66, 0.36);
+  color: var(--clay);
+  background: #fff3e4;
+}
+.listing-speciality {
+  color: var(--muted);
+  font-size: 16px;
+}
+.listing-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+}
+.listing-stats-row span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  color: var(--text);
+}
+.listing-price {
+  color: var(--primary);
+  font-weight: 800;
 }
 .file-field {
   display: grid;
@@ -1921,10 +1980,10 @@ textarea {
 
   .listing-card img {
     border-radius: 8px 8px 0 0;
-    height: 210px;
+    height: 300px;
   }
   .listing-carousel-image {
-    min-height: 210px;
+    min-height: 300px;
     border-radius: 8px 8px 0 0;
   }
   .listing-card .listing-carousel-image {

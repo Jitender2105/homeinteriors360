@@ -113,14 +113,19 @@ $directorySubtitle = $directorySubtitle ?? (string)($content['directory.subtitle
               </div>
             </div>
             <div>
+              <div class="listing-topline">
+                <?php if ($isPremium): ?><span class="listing-pill listing-pill-premium">Premium</span><?php endif; ?>
+                <?php if ((int)($pro['verification_status'] ?? 0) === 1): ?><span class="listing-pill">Verified</span><?php endif; ?>
+              </div>
               <h4><?= htmlspecialchars((string)$pro['full_name'], ENT_QUOTES, 'UTF-8') ?></h4>
               <p><?= htmlspecialchars((string)($pro['role'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($pro['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-              <p><?= htmlspecialchars((string)($content['profile.work_type'] ?? 'Type of Work'), ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string)($pro['primary_work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-              <p><?= htmlspecialchars((string)($content['profile.work_area'] ?? 'Area of Work'), ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string)($pro['primary_work_area'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-              <p>★ <?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?><?php if ((int)($pro['verification_status'] ?? 0) === 1): ?> <span class="verify-badge"><?= htmlspecialchars((string)($content['directory.verified'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></p>
-              <p><?= htmlspecialchars((string)($content['directory.starting_from'] ?? ''), ENT_QUOTES, 'UTF-8') ?> ₹<?= number_format((float)($pro['starting_price'] ?? 0), 0) ?></p>
-              <p><?= htmlspecialchars((string)($content['directory.experience'] ?? ''), ENT_QUOTES, 'UTF-8') ?> <?= (int)($pro['years_experience'] ?? 0) ?>+</p>
-              <p>Projects Delivered: <?= (int)($pro['projects_delivered'] ?? 0) ?></p>
+              <p class="listing-speciality"><?= htmlspecialchars((string)($pro['primary_work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?><?= !empty($pro['primary_work_area']) ? ' · ' . htmlspecialchars((string)$pro['primary_work_area'], ENT_QUOTES, 'UTF-8') : '' ?></p>
+              <div class="listing-stats-row">
+                <span>★ <?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?></span>
+                <span><?= (int)($pro['years_experience'] ?? 0) ?>+ yrs</span>
+                <span><?= (int)($pro['projects_delivered'] ?? 0) ?> projects</span>
+              </div>
+              <p class="listing-price"><?= htmlspecialchars((string)($content['directory.starting_from'] ?? ''), ENT_QUOTES, 'UTF-8') ?> ₹<?= number_format((float)($pro['starting_price'] ?? 0), 0) ?></p>
               <a class="btn-link" href="/professionals/<?= htmlspecialchars((string)$pro['slug'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($content['directory.cta'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
             </div>
           </article>
@@ -194,14 +199,19 @@ $directorySubtitle = $directorySubtitle ?? (string)($content['directory.subtitle
           </div>
         </div>
         <div>
+          <div class="listing-topline">
+            ${premium ? '<span class="listing-pill listing-pill-premium">Premium</span>' : ''}
+            ${Number(pro.verification_status) === 1 ? '<span class="listing-pill">Verified</span>' : ''}
+          </div>
           <h4>${esc(pro.full_name || '')}</h4>
           <p>${esc(pro.role || '')} · ${esc(pro.city || '')}</p>
-          <p>${labels.workTypeLabel}: ${esc(pro.primary_work_type || '')}</p>
-          <p>${labels.workAreaLabel}: ${esc(pro.primary_work_area || '')}</p>
-          <p>★ ${esc(pro.rating || 0)} ${Number(pro.verification_status) === 1 ? `<span class="verify-badge">${labels.verified}</span>` : ''}</p>
-          <p>${labels.startingFrom} ₹${Number(pro.starting_price || 0).toLocaleString('en-IN')}</p>
-          <p>${labels.experience} ${Number(pro.years_experience || 0)}+</p>
-          <p>Projects Delivered: ${Number(pro.projects_delivered || 0)}</p>
+          <p class="listing-speciality">${esc(pro.primary_work_type || '')}${pro.primary_work_area ? ' · ' + esc(pro.primary_work_area) : ''}</p>
+          <div class="listing-stats-row">
+            <span>★ ${esc(pro.rating || 0)}</span>
+            <span>${Number(pro.years_experience || 0)}+ yrs</span>
+            <span>${Number(pro.projects_delivered || 0)} projects</span>
+          </div>
+          <p class="listing-price">${labels.startingFrom} ₹${Number(pro.starting_price || 0).toLocaleString('en-IN')}</p>
           <a class="btn-link" href="/professionals/${esc(pro.slug || '')}">${labels.cta}</a>
         </div>
       </article>
