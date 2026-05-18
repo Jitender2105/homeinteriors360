@@ -1965,7 +1965,6 @@ textarea {
   }
   .calculator-summary {
     position: static;
-    order: -1;
     padding: 16px;
   }
   .calculator-actions,
