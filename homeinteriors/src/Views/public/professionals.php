@@ -9,7 +9,7 @@ $directoryTitle = $directoryTitle ?? (string)($content['directory.title'] ?? '')
 $directorySubtitle = $directorySubtitle ?? (string)($content['directory.subtitle'] ?? '');
 ?>
 <section class="section">
-  <div class="container directory-layout" data-reveal>
+  <div class="container directory-layout">
     <aside class="filter-card">
       <h3><?= htmlspecialchars((string)$directoryTitle, ENT_QUOTES, 'UTF-8') ?></h3>
       <p><?= htmlspecialchars((string)$directorySubtitle, ENT_QUOTES, 'UTF-8') ?></p>
