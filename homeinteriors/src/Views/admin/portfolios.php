@@ -110,12 +110,14 @@
   };
 
   function fillForm(item) {
-    Object.keys(form.elements).forEach((name) => {
-      if (!form.elements[name]) return;
-      if (item[name] !== undefined && item[name] !== null) {
-        form.elements[name].value = item[name];
+    for (const [name, value] of Object.entries(item)) {
+      const el = form.elements[name];
+      if (!el) continue;
+      if (el.type === 'file') continue;
+      if (value !== undefined && value !== null) {
+        el.value = value;
       }
-    });
+    }
     form.elements.current_media_json.value = JSON.stringify(parseArray(item.media_json));
     form.elements.materials_json.value = stringifyCsv(item.materials_json);
     mediaPreview.innerHTML = parseArray(item.media_json).map((src) => `<img src="${esc(src)}" alt="portfolio">`).join('');

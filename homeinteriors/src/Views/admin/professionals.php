@@ -149,6 +149,7 @@
     for (const [k, val] of Object.entries(pro)) {
       const el = form.elements[k];
       if (!el) continue;
+      if (el.type === 'file') continue;
       if (el.type === 'checkbox') {
         el.checked = Number(val) === 1;
       } else {
