@@ -132,9 +132,10 @@ $packages = [
     <aside class="calculator-summary">
       <p class="eyebrow eyebrow-dark">Live Summary</p>
       <h2>Your estimate</h2>
-      <div class="calc-estimate-box">
-        <span id="calcEstimateLabel">Starting from</span>
-        <strong id="calcEstimate">Select options</strong>
+      <div class="calc-estimate-box calc-estimate-locked" id="calcEstimateBox">
+        <span id="calcEstimateLabel">Estimate locked</span>
+        <strong id="calcEstimate">Fill lead form</strong>
+        <small id="calcEstimateHint">Complete the steps and submit your contact details to view the price.</small>
       </div>
       <dl>
         <div><dt>BHK Type</dt><dd id="summaryPlan">Not selected</dd></div>
@@ -162,8 +163,10 @@ $packages = [
   const submitBtn = document.getElementById('calcSubmit');
   const progressBar = document.getElementById('calcProgressBar');
   const stepLabel = document.getElementById('calcStepLabel');
+  const estimateBox = document.getElementById('calcEstimateBox');
   const estimateEl = document.getElementById('calcEstimate');
   const estimateLabel = document.getElementById('calcEstimateLabel');
+  const estimateHint = document.getElementById('calcEstimateHint');
   const msg = document.getElementById('calcMsg');
   const summaryPlan = document.getElementById('summaryPlan');
   const summarySize = document.getElementById('summarySize');
@@ -171,18 +174,6 @@ $packages = [
   const summaryPackage = document.getElementById('summaryPackage');
   let current = 0;
   let latestEstimate = null;
-
-  const baseCosts = { '1BHK': 280000, '2BHK': 420000, '3BHK': 620000, '4BHK': 850000 };
-  const roomCosts = {
-    'Living Room': 90000,
-    Kitchen: 140000,
-    'Master Bedroom': 110000,
-    'Bedroom 2': 90000,
-    'Bedroom 3': 90000,
-    Bathroom: 60000,
-    'Pooja Unit': 35000
-  };
-  const multipliers = { Essential: 1, Premium: 1.35, Luxury: 1.8 };
 
   function getChecked(name) {
     return form.querySelector(`input[name="${name}"]:checked`);
@@ -194,15 +185,6 @@ $packages = [
 
   function formatCurrency(value) {
     return `₹${Number(value || 0).toLocaleString('en-IN')}`;
-  }
-
-  function localEstimate() {
-    const plan = getChecked('floor_plan')?.value;
-    const tier = getChecked('package_tier')?.value || 'Essential';
-    const rooms = getRooms();
-    if (!plan || rooms.length === 0) return null;
-    const roomTotal = rooms.reduce((sum, room) => sum + (roomCosts[room] || 50000), 0);
-    return Math.round((baseCosts[plan] + roomTotal) * (multipliers[tier] || 1));
   }
 
   function setMessage(text, type = '') {
@@ -239,21 +221,23 @@ $packages = [
     const size = getChecked('home_size')?.value || 'Not selected';
     const tier = getChecked('package_tier')?.value || 'Not selected';
     const rooms = getRooms();
-    const estimate = localEstimate();
-
     summaryPlan.textContent = plan;
     summarySize.textContent = size;
     summaryRooms.textContent = rooms.length ? rooms.join(', ') : 'Not selected';
     summaryPackage.textContent = tier;
 
     if (latestEstimate) {
+      estimateBox.classList.remove('calc-estimate-locked');
       estimateLabel.textContent = <?= json_encode((string)($content['calculator.result_prefix'] ?? 'Estimated starting from'), JSON_UNESCAPED_UNICODE) ?>;
       estimateEl.textContent = formatCurrency(latestEstimate);
+      estimateHint.textContent = 'This estimate has been generated after saving your calculator lead.';
       return;
     }
 
-    estimateLabel.textContent = estimate ? 'Indicative starting from' : 'Starting from';
-    estimateEl.textContent = estimate ? formatCurrency(estimate) : 'Select options';
+    estimateBox.classList.add('calc-estimate-locked');
+    estimateLabel.textContent = 'Estimate locked';
+    estimateEl.textContent = 'Fill lead form';
+    estimateHint.textContent = 'Complete the steps and submit your contact details to view the price.';
   }
 
   function sync() {

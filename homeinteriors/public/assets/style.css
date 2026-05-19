@@ -1483,6 +1483,16 @@ button, .btn-primary, .btn-muted, .btn-link {
   font-size: clamp(30px, 4vw, 46px);
   font-weight: 500;
 }
+.calc-estimate-box small {
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.45;
+}
+.calc-estimate-box.calc-estimate-locked {
+  background: #4b463d;
+}
+.calc-estimate-box.calc-estimate-locked strong {
+  font-size: clamp(26px, 3.2vw, 38px);
+}
 .calculator-summary dl {
   display: grid;
   gap: 10px;
