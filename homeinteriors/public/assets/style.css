@@ -1881,7 +1881,10 @@ textarea {
 }
 
 @media (max-width: 760px) {
-  .nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+.nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  body.menu-open {
+    overflow: hidden;
+  }
   .nav-shell {
     min-height: 86px;
   }
@@ -1897,12 +1900,16 @@ textarea {
     left: 0;
     right: 0;
     top: 88px;
+    z-index: 1000;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
+    box-shadow: 0 24px 48px rgba(29, 42, 38, 0.16);
     display: none;
     flex-direction: column;
     gap: 0;
     padding: 12px 20px;
+    max-height: calc(100vh - 88px);
+    overflow-y: auto;
   }
   .menu-open .nav-links { display: flex; }
   .nav-links a { width: 100%; padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -2071,7 +2078,35 @@ textarea {
   }
 
   .aggregator-card {
-    grid-template-rows: 250px 1fr;
+    grid-template-rows: auto;
+    background: #fffdf8;
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    overflow: visible;
+  }
+
+  .aggregator-card img {
+    height: 320px;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .aggregator-card div {
+    padding: 16px;
+    gap: 9px;
+  }
+
+  .aggregator-card h3 {
+    font-size: 27px;
+    line-height: 1.08;
+  }
+
+  .aggregator-card p {
+    display: block;
+  }
+
+  .aggregator-card .btn-link {
+    width: 100%;
+    margin-top: 4px;
   }
 
   .studio-image-strip img:nth-child(2) {

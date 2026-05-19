@@ -42,7 +42,7 @@ foreach ($styleCandidates as $stylePath) {
       <a class="brand" href="/">
         <img src="/logo.png" alt="HomeInteriors360" onerror="this.style.display='none'" />
       </a>
-      <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-label="Open menu">☰</button>
+      <button class="nav-toggle" id="navToggle" type="button" aria-expanded="false" aria-label="Open menu">☰</button>
       <nav class="nav-links">
         <a class="<?= $active === 'home' ? 'active' : '' ?>" href="/"><?= htmlspecialchars($navHome, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'directory' ? 'active' : '' ?>" href="/professionals"><?= htmlspecialchars($navDirectory, ENT_QUOTES, 'UTF-8') ?></a>
