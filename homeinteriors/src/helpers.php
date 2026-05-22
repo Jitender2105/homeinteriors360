@@ -142,3 +142,97 @@ function getJsonArrayField(array $data, string $key, array $fallback = []): arra
     }
     return array_values(array_filter(array_map('trim', explode(',', (string)$value))));
 }
+
+function buyerUser(): ?array
+{
+    Auth::start();
+    return isset($_SESSION['buyer_user']) && is_array($_SESSION['buyer_user']) ? $_SESSION['buyer_user'] : null;
+}
+
+function requireBuyer(): array
+{
+    $buyer = buyerUser();
+    if (!$buyer) {
+        $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+        if (str_starts_with($path, '/api/') || str_starts_with($path, '/lead-download/')) {
+            jsonResponse(['error' => 'Buyer login required'], 401);
+        }
+        redirectTo('/lead-checkout');
+    }
+    return $buyer;
+}
+
+function setBuyerSession(array $buyer): void
+{
+    Auth::start();
+    $_SESSION['buyer_user'] = [
+        'id' => (int)$buyer['id'],
+        'name' => (string)$buyer['name'],
+        'email' => (string)($buyer['email'] ?? ''),
+        'phone' => (string)$buyer['phone'],
+    ];
+}
+
+function clearBuyerSession(): void
+{
+    Auth::start();
+    unset($_SESSION['buyer_user']);
+}
+
+function razorpayConfigured(): bool
+{
+    return defined('RAZORPAY_KEY_ID') && defined('RAZORPAY_KEY_SECRET') && RAZORPAY_KEY_ID !== '' && RAZORPAY_KEY_SECRET !== '';
+}
+
+function razorpayCreateOrder(int $amountPaise, string $receipt, array $notes = []): array
+{
+    if (!razorpayConfigured()) {
+        throw new RuntimeException('Razorpay gateway is not configured.');
+    }
+    if ($amountPaise < 100) {
+        throw new RuntimeException('Razorpay order amount must be at least 100 paise.');
+    }
+
+    $payload = [
+        'amount' => $amountPaise,
+        'currency' => defined('RAZORPAY_CURRENCY') ? RAZORPAY_CURRENCY : 'INR',
+        'receipt' => substr($receipt, 0, 40),
+        'notes' => $notes,
+    ];
+
+    $ch = curl_init('https://api.razorpay.com/v1/orders');
+    if (!$ch) {
+        throw new RuntimeException('Failed to initialize Razorpay request.');
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+        CURLOPT_USERPWD => RAZORPAY_KEY_ID . ':' . RAZORPAY_KEY_SECRET,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        CURLOPT_TIMEOUT => 30,
+    ]);
+    $response = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $status < 200 || $status >= 300) {
+        throw new RuntimeException('Razorpay order creation failed' . ($error !== '' ? ': ' . $error : '.'));
+    }
+    $data = json_decode((string)$response, true);
+    if (!is_array($data) || empty($data['id'])) {
+        throw new RuntimeException('Invalid Razorpay order response.');
+    }
+    return $data;
+}
+
+function razorpaySignatureIsValid(string $orderId, string $paymentId, string $signature): bool
+{
+    if (!razorpayConfigured() || $signature === '') {
+        return false;
+    }
+    $generated = hash_hmac('sha256', $orderId . '|' . $paymentId, RAZORPAY_KEY_SECRET);
+    return hash_equals($generated, $signature);
+}

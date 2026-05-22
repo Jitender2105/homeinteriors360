@@ -2131,3 +2131,121 @@ textarea {
     order: 1;
   }
 }
+
+/* Lead marketplace uses homepage primitives with only layout-specific glue. */
+.lead-shop-hero {
+  min-height: min(72vh, 680px);
+}
+.lead-shop-page h1 {
+  margin: 0 0 12px;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(38px, 5vw, 76px);
+  line-height: 0.98;
+  font-weight: 500;
+}
+.lead-filter-card .btn-primary,
+.lead-filter-card .btn-link {
+  min-height: 48px;
+}
+.lead-market-sections,
+.lead-cart-list {
+  display: grid;
+  gap: clamp(18px, 3vw, 34px);
+}
+.lead-package-section {
+  display: grid;
+  gap: 14px;
+}
+.lead-package-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.lead-package-card,
+.lead-cart-item,
+.lead-checkout-summary {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.lead-package-card {
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+  min-height: 100%;
+}
+.lead-package-card h3,
+.lead-cart-item h2,
+.lead-checkout-summary h2 {
+  margin: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 500;
+}
+.lead-package-card h3 {
+  font-size: 28px;
+  line-height: 1.05;
+}
+.lead-package-count {
+  display: grid;
+  gap: 2px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: #eeece2;
+  border: 1px solid var(--line);
+}
+.lead-package-count strong {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(32px, 4vw, 54px);
+  line-height: 1;
+  font-weight: 500;
+}
+.lead-package-count span,
+.lead-slab-lines span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.lead-cart-item {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1.2fr 1.3fr auto auto;
+  gap: 14px;
+  align-items: center;
+}
+.lead-slab-lines {
+  display: grid;
+  gap: 4px;
+}
+.lead-checkout-summary {
+  padding: 20px;
+  position: sticky;
+  top: 112px;
+  display: grid;
+  gap: 12px;
+}
+.lead-shop-layout {
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .lead-package-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lead-cart-item {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .lead-package-grid,
+  .lead-cart-item,
+  .lead-shop-layout {
+    grid-template-columns: 1fr;
+  }
+  .lead-checkout-summary {
+    position: static;
+  }
+  .lead-shop-hero {
+    min-height: 540px;
+  }
+}

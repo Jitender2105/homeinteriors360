@@ -746,4 +746,329 @@ final class SiteRepository
         );
         self::$contentCache = null;
     }
+
+    public static function leadMarketplaceCounts(string $dateFilter = 'last_30_days', ?string $startDate = null, ?string $endDate = null): array
+    {
+        $leads = self::leadRowsForDateFilter($dateFilter, $startDate, $endDate);
+        $definitions = self::leadFilterDefinitions($leads);
+        $cards = [];
+        foreach ($definitions as $definition) {
+            $matching = array_values(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $definition['criteria'])));
+            $count = count($matching);
+            if ($count <= 0) {
+                continue;
+            }
+            $price = self::leadPriceForCount($count);
+            $cards[] = [
+                'id' => hash('sha256', $definition['name'] . json_encode($definition['criteria']) . $dateFilter . $startDate . $endDate),
+                'section' => $definition['section'],
+                'filter_name' => $definition['name'],
+                'criteria' => $definition['criteria'],
+                'date_filter' => $dateFilter,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'lead_count' => $count,
+                'price_total' => $price['total'],
+                'pricing' => $price,
+            ];
+        }
+        return $cards;
+    }
+
+    public static function leadPriceForCount(int $count): array
+    {
+        $first = min($count, 100);
+        $second = min(max($count - 100, 0), 900);
+        $third = max($count - 1000, 0);
+        $lines = [];
+        if ($first > 0) {
+            $lines[] = ['label' => 'First 100 leads', 'count' => $first, 'rate' => 100, 'amount' => $first * 100];
+        }
+        if ($second > 0) {
+            $lines[] = ['label' => '101 to 1000 leads', 'count' => $second, 'rate' => 80, 'amount' => $second * 80];
+        }
+        if ($third > 0) {
+            $lines[] = ['label' => 'Above 1000 leads', 'count' => $third, 'rate' => 60, 'amount' => $third * 60];
+        }
+        return [
+            'total' => array_sum(array_column($lines, 'amount')),
+            'lines' => $lines,
+        ];
+    }
+
+    public static function normalizeLeadCartItem(array $item): array
+    {
+        $criteria = is_array($item['criteria'] ?? null) ? $item['criteria'] : [];
+        $dateFilter = (string)($item['date_filter'] ?? 'last_30_days');
+        $startDate = isset($item['start_date']) ? (string)$item['start_date'] : null;
+        $endDate = isset($item['end_date']) ? (string)$item['end_date'] : null;
+        $count = self::countLeadsForCriteria($criteria, $dateFilter, $startDate, $endDate);
+        $price = self::leadPriceForCount($count);
+        return [
+            'id' => hash('sha256', json_encode([$criteria, $dateFilter, $startDate, $endDate])),
+            'filter_name' => (string)($item['filter_name'] ?? self::criteriaLabel($criteria)),
+            'criteria' => $criteria,
+            'date_filter' => $dateFilter,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'lead_count' => $count,
+            'price_total' => $price['total'],
+            'pricing' => $price,
+        ];
+    }
+
+    public static function countLeadsForCriteria(array $criteria, string $dateFilter, ?string $startDate = null, ?string $endDate = null): int
+    {
+        $leads = self::leadRowsForDateFilter($dateFilter, $startDate, $endDate);
+        return count(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $criteria)));
+    }
+
+    public static function createOrLoginBuyer(array $data): array
+    {
+        $phone = preg_replace('/\D+/', '', (string)($data['phone'] ?? '')) ?? '';
+        $email = trim((string)($data['email'] ?? ''));
+        $password = (string)($data['password'] ?? '');
+        if (strlen($phone) < 10 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 6) {
+            throw new InvalidArgumentException('Valid email, 10 digit mobile and 6 character password are required.');
+        }
+        $existing = Database::one('SELECT * FROM lead_buyers WHERE phone = ? AND is_active = 1', [$phone]);
+        if ($existing) {
+            if (!password_verify($password, (string)$existing['password_hash'])) {
+                throw new InvalidArgumentException('Mobile already exists. Please login with the correct password.');
+            }
+            return $existing;
+        }
+        $id = Database::exec(
+            'INSERT INTO lead_buyers (name, email, phone, password_hash) VALUES (?, ?, ?, ?)',
+            [
+                trim((string)($data['name'] ?? 'Buyer')),
+                $email,
+                $phone,
+                password_hash($password, PASSWORD_DEFAULT),
+            ]
+        );
+        return Database::one('SELECT * FROM lead_buyers WHERE id = ?', [$id]) ?? [];
+    }
+
+    public static function loginBuyer(string $phone, string $password): ?array
+    {
+        $cleanPhone = preg_replace('/\D+/', '', $phone) ?? '';
+        $buyer = Database::one('SELECT * FROM lead_buyers WHERE phone = ? AND is_active = 1', [$cleanPhone]);
+        if (!$buyer || !password_verify($password, (string)$buyer['password_hash'])) {
+            return null;
+        }
+        return $buyer;
+    }
+
+    public static function createLeadPurchaseOrder(int $buyerId, array $cart, string $orderId, float $amount): int
+    {
+        return Database::exec(
+            'INSERT INTO lead_purchases (buyer_id, razorpay_order_id, amount_total, currency, payment_status, cart_json)
+             VALUES (?, ?, ?, ?, ?, ?)',
+            [$buyerId, $orderId, $amount, defined('RAZORPAY_CURRENCY') ? RAZORPAY_CURRENCY : 'INR', 'pending', json_encode($cart, JSON_UNESCAPED_UNICODE)]
+        );
+    }
+
+    public static function markLeadPurchasePaid(string $orderId, int $buyerId, string $paymentId, string $signature): void
+    {
+        $purchase = Database::one('SELECT * FROM lead_purchases WHERE razorpay_order_id = ? AND buyer_id = ?', [$orderId, $buyerId]);
+        if (!$purchase) {
+            throw new RuntimeException('Payment order mismatch.');
+        }
+        if (($purchase['payment_status'] ?? '') !== 'paid') {
+            Database::exec(
+                'UPDATE lead_purchases SET razorpay_payment_id=?, razorpay_signature=?, payment_status="paid", paid_at=NOW(), updated_at=NOW() WHERE id=?',
+                [$paymentId, $signature, (int)$purchase['id']]
+            );
+            $cart = json_decode((string)($purchase['cart_json'] ?? '[]'), true);
+            if (!is_array($cart)) {
+                $cart = [];
+            }
+            foreach ($cart as $item) {
+                $normalized = self::normalizeLeadCartItem(is_array($item) ? $item : []);
+                Database::exec(
+                    'INSERT INTO lead_purchase_items (purchase_id, buyer_id, filter_name, filter_json, date_filter, leads_count, amount_total, pricing_json)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    [
+                        (int)$purchase['id'],
+                        $buyerId,
+                        $normalized['filter_name'],
+                        json_encode([
+                            'criteria' => $normalized['criteria'],
+                            'start_date' => $normalized['start_date'],
+                            'end_date' => $normalized['end_date'],
+                        ], JSON_UNESCAPED_UNICODE),
+                        $normalized['date_filter'],
+                        $normalized['lead_count'],
+                        $normalized['price_total'],
+                        json_encode($normalized['pricing'], JSON_UNESCAPED_UNICODE),
+                    ]
+                );
+            }
+        }
+    }
+
+    public static function buyerPurchases(int $buyerId): array
+    {
+        return Database::query(
+            'SELECT i.*, p.amount_total AS purchase_total, p.razorpay_payment_id, p.payment_status, p.created_at AS purchase_date
+             FROM lead_purchase_items i
+             JOIN lead_purchases p ON p.id = i.purchase_id
+             WHERE i.buyer_id = ? AND p.payment_status = "paid"
+             ORDER BY i.created_at DESC',
+            [$buyerId]
+        );
+    }
+
+    public static function purchasedLeadRows(int $buyerId, int $itemId): array
+    {
+        $item = Database::one(
+            'SELECT i.* FROM lead_purchase_items i JOIN lead_purchases p ON p.id=i.purchase_id WHERE i.id=? AND i.buyer_id=? AND p.payment_status="paid"',
+            [$itemId, $buyerId]
+        );
+        if (!$item) {
+            throw new RuntimeException('Purchased lead package not found.');
+        }
+        $filter = json_decode((string)$item['filter_json'], true);
+        $criteria = is_array($filter['criteria'] ?? null) ? $filter['criteria'] : [];
+        $leads = self::leadRowsForDateFilter((string)($item['date_filter'] ?? 'last_30_days'), $filter['start_date'] ?? null, $filter['end_date'] ?? null);
+        return array_values(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $criteria)));
+    }
+
+    private static function leadRowsForDateFilter(string $dateFilter, ?string $startDate = null, ?string $endDate = null): array
+    {
+        $where = [];
+        $params = [];
+        if ($dateFilter === 'today') {
+            $where[] = 'DATE(created_at) = CURDATE()';
+        } elseif ($dateFilter === 'last_7_days') {
+            $where[] = 'created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
+        } elseif ($dateFilter === 'last_30_days') {
+            $where[] = 'created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+        } elseif ($dateFilter === 'custom' && $startDate && $endDate) {
+            $where[] = 'DATE(created_at) BETWEEN ? AND ?';
+            $params[] = $startDate;
+            $params[] = $endDate;
+        }
+        $sql = 'SELECT id, name, phone, city, society_area, budget, requirement, source, status, estimate, created_at FROM leads';
+        if ($where) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $sql .= ' ORDER BY created_at DESC';
+        return Database::query($sql, $params);
+    }
+
+    private static function leadFilterDefinitions(array $leads): array
+    {
+        $cities = array_values(array_unique(array_filter(array_map(static fn(array $l): string => (string)$l['city'], $leads)))) ?: ['Gurgaon', 'Delhi', 'Noida'];
+        $societies = array_slice(array_values(array_unique(array_filter(array_map(static fn(array $l): string => (string)($l['society_area'] ?? ''), $leads)))), 0, 12);
+        $workTypes = ['Full home', 'Kitchen', 'Wardrobe', 'Bathroom', 'Renovation'];
+        $budgetRanges = [
+            'under_10_lakh' => 'Under 10 lakh',
+            '10_20_lakh' => '10-20 lakh',
+            'above_20_lakh' => 'Above 20 lakh',
+        ];
+        $defs = [];
+        foreach ($cities as $city) {
+            $defs[] = ['section' => 'City', 'name' => $city, 'criteria' => ['city' => $city]];
+            foreach ($budgetRanges as $key => $label) {
+                $defs[] = ['section' => 'City + Budget', 'name' => $city . ' ' . strtolower($label), 'criteria' => ['city' => $city, 'budget_range' => $key]];
+            }
+            foreach ($workTypes as $type) {
+                $defs[] = ['section' => 'City + Type of Work', 'name' => $city . ' ' . strtolower($type), 'criteria' => ['city' => $city, 'work_type' => $type]];
+            }
+        }
+        foreach ($societies as $society) {
+            $defs[] = ['section' => 'Society', 'name' => $society, 'criteria' => ['society' => $society]];
+            foreach ($cities as $city) {
+                $defs[] = ['section' => 'City + Society', 'name' => $city . ' + ' . $society, 'criteria' => ['city' => $city, 'society' => $society]];
+            }
+            foreach ($workTypes as $type) {
+                $defs[] = ['section' => 'Society + Type of Work', 'name' => $society . ' ' . strtolower($type), 'criteria' => ['society' => $society, 'work_type' => $type]];
+            }
+        }
+        foreach ($workTypes as $type) {
+            $defs[] = ['section' => 'Type of Work', 'name' => $type, 'criteria' => ['work_type' => $type]];
+        }
+        foreach ($cities as $city) {
+            foreach ($budgetRanges as $key => $label) {
+                foreach ($workTypes as $type) {
+                    $defs[] = ['section' => 'City + Budget + Type', 'name' => $city . ' ' . strtolower($label) . ' ' . strtolower($type), 'criteria' => ['city' => $city, 'budget_range' => $key, 'work_type' => $type]];
+                }
+            }
+        }
+        return $defs;
+    }
+
+    private static function leadMatchesCriteria(array $lead, array $criteria): bool
+    {
+        if (!empty($criteria['city']) && strcasecmp((string)$lead['city'], (string)$criteria['city']) !== 0) {
+            return false;
+        }
+        if (!empty($criteria['society']) && strcasecmp((string)($lead['society_area'] ?? ''), (string)$criteria['society']) !== 0) {
+            return false;
+        }
+        if (!empty($criteria['work_type']) && !self::leadRequirementHasWorkType((string)$lead['requirement'], (string)$criteria['work_type'])) {
+            return false;
+        }
+        if (!empty($criteria['budget_range']) && !self::leadBudgetInRange((string)($lead['budget'] ?? ''), (string)$criteria['budget_range'])) {
+            return false;
+        }
+        return true;
+    }
+
+    private static function leadRequirementHasWorkType(string $requirement, string $type): bool
+    {
+        $haystack = strtolower($requirement);
+        $needle = strtolower($type);
+        if ($needle === 'full home') {
+            return str_contains($haystack, 'full home') || str_contains($haystack, 'complete home');
+        }
+        return str_contains($haystack, $needle);
+    }
+
+    private static function leadBudgetInRange(string $budget, string $range): bool
+    {
+        $amount = self::budgetToRupees($budget);
+        if ($amount <= 0) {
+            return false;
+        }
+        if ($range === 'under_10_lakh') {
+            return $amount < 1000000;
+        }
+        if ($range === '10_20_lakh') {
+            return $amount >= 1000000 && $amount <= 2000000;
+        }
+        if ($range === 'above_20_lakh') {
+            return $amount > 2000000;
+        }
+        return true;
+    }
+
+    private static function budgetToRupees(string $budget): float
+    {
+        $value = strtolower(str_replace([',', '₹', 'rs.', 'rs'], '', $budget));
+        if (!preg_match('/([0-9]+(?:\\.[0-9]+)?)/', $value, $m)) {
+            return 0;
+        }
+        $num = (float)$m[1];
+        if (str_contains($value, 'cr')) {
+            return $num * 10000000;
+        }
+        if (str_contains($value, 'lakh') || str_contains($value, 'lac') || str_contains($value, 'l')) {
+            return $num * 100000;
+        }
+        return $num;
+    }
+
+    private static function criteriaLabel(array $criteria): string
+    {
+        $parts = [];
+        foreach (['city', 'society', 'budget_range', 'work_type'] as $key) {
+            if (!empty($criteria[$key])) {
+                $parts[] = str_replace('_', ' ', (string)$criteria[$key]);
+            }
+        }
+        return $parts ? implode(' + ', $parts) : 'Lead package';
+    }
 }

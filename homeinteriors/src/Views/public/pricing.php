@@ -87,6 +87,9 @@ $leadPurchaseSteps = [
               <li><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8') ?></li>
             <?php endforeach; ?>
           </ul>
+          <?php if ($plan['id'] === 'lead_purchase'): ?>
+            <a class="btn-primary" href="/lead-marketplace">Buy filtered leads</a>
+          <?php endif; ?>
           <button class="btn-link pricing-select" type="button" data-plan="<?= htmlspecialchars($plan['title'], ENT_QUOTES, 'UTF-8') ?>">Register interest</button>
         </article>
       <?php endforeach; ?>

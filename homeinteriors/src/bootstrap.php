@@ -6,6 +6,15 @@ $config = require __DIR__ . '/config.php';
 if (!defined('APP_KEY')) {
     define('APP_KEY', (string)($config['app']['key'] ?? 'change-this-app-key'));
 }
+if (!defined('RAZORPAY_KEY_ID')) {
+    define('RAZORPAY_KEY_ID', (string)($config['razorpay']['key_id'] ?? ''));
+}
+if (!defined('RAZORPAY_KEY_SECRET')) {
+    define('RAZORPAY_KEY_SECRET', (string)($config['razorpay']['key_secret'] ?? ''));
+}
+if (!defined('RAZORPAY_CURRENCY')) {
+    define('RAZORPAY_CURRENCY', (string)($config['razorpay']['currency'] ?? 'INR'));
+}
 require __DIR__ . '/Database.php';
 require __DIR__ . '/helpers.php';
 require __DIR__ . '/Auth.php';

@@ -41,4 +41,9 @@ return [
         'base_url' => getenv('APP_BASE_URL') ?: '',
         'key' => getenv('APP_KEY') ?: 'change-this-app-key',
     ],
+    'razorpay' => [
+        'key_id' => getenv('RAZORPAY_KEY_ID') ?: '',
+        'key_secret' => getenv('RAZORPAY_KEY_SECRET') ?: '',
+        'currency' => getenv('RAZORPAY_CURRENCY') ?: 'INR',
+    ],
 ];

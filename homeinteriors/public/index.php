@@ -160,6 +160,117 @@ try {
         jsonResponse(['estimate' => $estimate]);
     }
 
+    if ($path === '/api/lead-marketplace/counts' && $method === 'GET') {
+        $dateFilter = (string)($_GET['date_filter'] ?? 'last_30_days');
+        jsonResponse([
+            'items' => SiteRepository::leadMarketplaceCounts(
+                $dateFilter,
+                isset($_GET['start_date']) ? (string)$_GET['start_date'] : null,
+                isset($_GET['end_date']) ? (string)$_GET['end_date'] : null
+            ),
+        ]);
+    }
+
+    if ($path === '/api/lead-cart') {
+        Auth::start();
+        $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
+        if ($method === 'GET') {
+            $items = array_map(static fn(array $item): array => SiteRepository::normalizeLeadCartItem($item), $_SESSION['lead_cart']);
+            jsonResponse(['items' => $items, 'grand_total' => array_sum(array_column($items, 'price_total'))]);
+        }
+        if ($method === 'POST') {
+            $body = requestJson();
+            $item = SiteRepository::normalizeLeadCartItem($body);
+            $_SESSION['lead_cart'][$item['id']] = $item;
+            $items = array_values($_SESSION['lead_cart']);
+            jsonResponse(['success' => true, 'items' => $items, 'grand_total' => array_sum(array_column($items, 'price_total'))]);
+        }
+        if ($method === 'DELETE') {
+            $id = (string)($_GET['id'] ?? '');
+            if ($id === 'all') {
+                $_SESSION['lead_cart'] = [];
+            } elseif ($id !== '') {
+                unset($_SESSION['lead_cart'][$id]);
+            }
+            $items = array_values($_SESSION['lead_cart']);
+            jsonResponse(['success' => true, 'items' => $items, 'grand_total' => array_sum(array_column($items, 'price_total'))]);
+        }
+    }
+
+    if ($path === '/api/buyer/login' && $method === 'POST') {
+        $body = requestJson();
+        $buyer = SiteRepository::loginBuyer((string)($body['phone'] ?? ''), (string)($body['password'] ?? ''));
+        if (!$buyer) {
+            jsonResponse(['error' => 'Invalid mobile number or password'], 401);
+        }
+        setBuyerSession($buyer);
+        jsonResponse(['success' => true, 'buyer' => buyerUser()]);
+    }
+
+    if ($path === '/api/buyer/logout' && ($method === 'POST' || $method === 'GET')) {
+        clearBuyerSession();
+        if ($method === 'GET') {
+            redirectTo('/lead-checkout');
+        }
+        jsonResponse(['success' => true]);
+    }
+
+    if ($path === '/api/buyer/me' && $method === 'GET') {
+        jsonResponse(['buyer' => buyerUser()]);
+    }
+
+    if ($path === '/api/buyer/purchases' && $method === 'GET') {
+        $buyer = requireBuyer();
+        jsonResponse(['purchases' => SiteRepository::buyerPurchases((int)$buyer['id'])]);
+    }
+
+    if ($path === '/api/lead-orders/create' && $method === 'POST') {
+        Auth::start();
+        $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
+        $body = requestJson();
+        $buyer = buyerUser();
+        if (!$buyer) {
+            $buyer = SiteRepository::createOrLoginBuyer($body['buyer'] ?? []);
+            setBuyerSession($buyer);
+        }
+        $cart = array_values(array_map(static fn(array $item): array => SiteRepository::normalizeLeadCartItem($item), $_SESSION['lead_cart']));
+        if (!$cart) {
+            jsonResponse(['error' => 'Cart is empty'], 400);
+        }
+        $amount = (float)array_sum(array_column($cart, 'price_total'));
+        if ($amount <= 0) {
+            jsonResponse(['error' => 'No payable leads in cart'], 400);
+        }
+        $receipt = 'leads_' . (int)$buyer['id'] . '_' . time();
+        $order = razorpayCreateOrder((int)round($amount * 100), $receipt, ['buyer_id' => (int)$buyer['id'], 'module' => 'lead_marketplace']);
+        SiteRepository::createLeadPurchaseOrder((int)$buyer['id'], $cart, (string)$order['id'], $amount);
+        jsonResponse([
+            'success' => true,
+            'key_id' => defined('RAZORPAY_KEY_ID') ? RAZORPAY_KEY_ID : '',
+            'order_id' => (string)$order['id'],
+            'amount' => (int)($order['amount'] ?? round($amount * 100)),
+            'currency' => (string)($order['currency'] ?? 'INR'),
+            'buyer' => buyerUser(),
+        ]);
+    }
+
+    if ($path === '/api/lead-orders/verify' && $method === 'POST') {
+        $buyer = requireBuyer();
+        $body = requestJson();
+        $orderId = trim((string)($body['razorpay_order_id'] ?? ''));
+        $paymentId = trim((string)($body['razorpay_payment_id'] ?? ''));
+        $signature = trim((string)($body['razorpay_signature'] ?? ''));
+        if ($orderId === '' || $paymentId === '' || $signature === '') {
+            jsonResponse(['error' => 'Missing Razorpay payment fields'], 400);
+        }
+        if (!razorpaySignatureIsValid($orderId, $paymentId, $signature)) {
+            jsonResponse(['error' => 'Payment signature mismatch'], 400);
+        }
+        SiteRepository::markLeadPurchasePaid($orderId, (int)$buyer['id'], $paymentId, $signature);
+        $_SESSION['lead_cart'] = [];
+        jsonResponse(['success' => true, 'redirect_url' => '/lead-dashboard?payment=success']);
+    }
+
     // Admin APIs
     if ($path === '/api/admin/content') {
         Auth::requireAuth();
@@ -396,6 +507,68 @@ try {
             'content' => $content,
             'reviews' => SiteRepository::pricingReviews(),
         ]);
+        exit;
+    }
+
+    if ($path === '/lead-marketplace') {
+        render('public/lead-marketplace', [
+            'title' => 'Buy Filtered Interior Design Leads | HomeInteriors360',
+            'metaDescription' => 'Buy verified homeowner lead packages by city, society, budget, work type, and date range.',
+            'active' => 'pricing',
+            'content' => $content,
+        ]);
+        exit;
+    }
+
+    if ($path === '/lead-cart') {
+        render('public/lead-cart', [
+            'title' => 'Lead Cart | HomeInteriors360',
+            'metaDescription' => 'Review selected filtered lead packages and slab-based pricing.',
+            'active' => 'pricing',
+            'content' => $content,
+        ]);
+        exit;
+    }
+
+    if ($path === '/lead-checkout') {
+        render('public/lead-checkout', [
+            'title' => 'Lead Checkout | HomeInteriors360',
+            'metaDescription' => 'Create your buyer account, login, and complete Razorpay payment for lead packages.',
+            'active' => 'pricing',
+            'content' => $content,
+            'buyer' => buyerUser(),
+            'razorpayConfigured' => razorpayConfigured(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/lead-dashboard') {
+        $buyer = requireBuyer();
+        render('public/lead-dashboard', [
+            'title' => 'Lead Buyer Dashboard | HomeInteriors360',
+            'metaDescription' => 'Download purchased lead packages securely.',
+            'active' => 'pricing',
+            'content' => $content,
+            'buyer' => $buyer,
+            'purchases' => SiteRepository::buyerPurchases((int)$buyer['id']),
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/lead-download/(\\d+)$#', $path, $match)) {
+        $buyer = requireBuyer();
+        $rows = SiteRepository::purchasedLeadRows((int)$buyer['id'], (int)$match[1]);
+        header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+        header('Content-Disposition: attachment; filename="HomeInteriors360-Leads-' . (int)$match[1] . '.xls"');
+        echo "<table><tr><th>Name</th><th>Phone</th><th>City</th><th>Society / Area</th><th>Budget</th><th>Requirement</th><th>Source</th><th>Date</th></tr>";
+        foreach ($rows as $row) {
+            echo '<tr>';
+            foreach (['name', 'phone', 'city', 'society_area', 'budget', 'requirement', 'source', 'created_at'] as $key) {
+                echo '<td>' . htmlspecialchars((string)($row[$key] ?? ''), ENT_QUOTES, 'UTF-8') . '</td>';
+            }
+            echo '</tr>';
+        }
+        echo '</table>';
         exit;
     }
 
