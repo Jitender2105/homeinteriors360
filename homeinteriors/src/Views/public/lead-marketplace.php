@@ -1,39 +1,44 @@
 <?php require __DIR__ . '/../partials/header.php'; ?>
-<section class="studio-hero lead-shop-hero" style="--hero-bg:url('https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=1500&q=85');">
-  <div class="container studio-hero-inner" data-reveal>
-    <p class="eyebrow">Lead Marketplace</p>
-    <h1>Buy filtered homeowner leads with full context.</h1>
-    <p class="hero-subtitle">Choose leads by city, society, budget, type of work, and date range. Pricing is slab-based and transparent before checkout.</p>
-  </div>
-</section>
-
-<section class="section lead-band" data-reveal>
-  <div class="container lead-band-grid">
-    <div>
-      <p class="eyebrow eyebrow-dark">Filter Inventory</p>
-      <h2>Live lead counts for architects and interior designers.</h2>
-      <p>Counts refresh by date range and every card can be added to your cart as a purchasable lead package.</p>
+<section class="lead-market-firstfold" data-reveal>
+  <div class="container lead-market-firstfold-grid">
+    <div class="lead-market-copy">
+      <p class="eyebrow eyebrow-dark">Lead Marketplace</p>
+      <h1>Buy filtered homeowner leads with full context.</h1>
+      <p class="hero-subtitle">Choose leads by city, society, budget, type of work, and date range. Your matching packages update instantly in the first fold.</p>
+      <div class="story-badges">
+        <span class="chip">City-wise leads</span>
+        <span class="chip">Work-type filters</span>
+        <span class="chip">Slab pricing</span>
+      </div>
     </div>
-    <div class="lead-card lead-card-flat lead-filter-card">
-      <div class="hero-lead-grid">
+
+    <div class="lead-card lead-card-flat lead-filter-card lead-market-panel">
+      <div class="hero-lead-grid lead-market-controls">
         <label><span>Date Filter</span><select id="leadDateFilter"><option value="today">Today</option><option value="last_7_days">Last 7 days</option><option value="last_30_days" selected>Last 30 days</option><option value="custom">Custom date range</option></select></label>
+        <label><span>City</span><select id="leadCityFilter"><option value="">All cities</option></select></label>
+        <label><span>Type of Work</span><select id="leadWorkFilter"><option value="">All work types</option></select></label>
+        <a class="btn-primary hero-lead-submit" href="/lead-cart">Open Cart</a>
         <label><span>Start Date</span><input id="leadStartDate" type="date" disabled></label>
         <label><span>End Date</span><input id="leadEndDate" type="date" disabled></label>
-        <a class="btn-primary hero-lead-submit" href="/lead-cart">Open Cart</a>
       </div>
       <p class="form-message" id="leadMarketMsg"></p>
+      <div id="leadSections" class="lead-market-sections lead-market-first-results"></div>
     </div>
   </div>
 </section>
 
-<section class="section" data-reveal>
-  <div class="container">
-    <div class="section-head section-head-wide">
-      <p class="eyebrow eyebrow-dark">Available Packages</p>
-      <h2>Grouped by the filters professionals actually buy.</h2>
-      <p>City, society, budget, work type, and mixed combinations are generated from available lead data.</p>
-    </div>
-    <div id="leadSections" class="lead-market-sections"></div>
+<section class="section section-tight" data-reveal>
+  <div class="container twin-grid">
+    <article class="story-panel story-essay">
+      <p class="eyebrow eyebrow-dark">How pricing works</p>
+      <h2>Transparent slab pricing for every filter.</h2>
+      <p>First 100 leads are charged at ₹100 per lead, leads 101 to 1000 at ₹80, and any additional volume above 1000 at ₹60.</p>
+    </article>
+    <article class="story-panel story-essay">
+      <p class="eyebrow eyebrow-dark">Secure access</p>
+      <h2>Download only what you buy.</h2>
+      <p>Each purchase stores the exact filter criteria. Your dashboard can only download Excel files for paid lead packages linked to your buyer account.</p>
+    </article>
   </div>
 </section>
 
@@ -42,8 +47,11 @@
   const sections = document.getElementById('leadSections');
   const msg = document.getElementById('leadMarketMsg');
   const dateFilter = document.getElementById('leadDateFilter');
+  const cityFilter = document.getElementById('leadCityFilter');
+  const workFilter = document.getElementById('leadWorkFilter');
   const start = document.getElementById('leadStartDate');
   const end = document.getElementById('leadEndDate');
+  let allItems = [];
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const money = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
   const sectionOrder = ['City', 'Society', 'City + Budget', 'Type of Work', 'City + Type of Work', 'City + Society', 'City + Budget + Type', 'Society + Type of Work'];
@@ -57,6 +65,25 @@
     return p;
   }
 
+  function hydrateFilters(items) {
+    const currentCity = cityFilter.value;
+    const currentWork = workFilter.value;
+    const cities = [...new Set(items.map((item) => item.criteria?.city).filter(Boolean))].sort();
+    const workTypes = [...new Set(items.map((item) => item.criteria?.work_type).filter(Boolean))].sort();
+    cityFilter.innerHTML = '<option value="">All cities</option>' + cities.map((city) => `<option value="${esc(city)}">${esc(city)}</option>`).join('');
+    workFilter.innerHTML = '<option value="">All work types</option>' + workTypes.map((type) => `<option value="${esc(type)}">${esc(type)}</option>`).join('');
+    cityFilter.value = cities.includes(currentCity) ? currentCity : '';
+    workFilter.value = workTypes.includes(currentWork) ? currentWork : '';
+  }
+
+  function selectedItems() {
+    return allItems.filter((item) => {
+      if (cityFilter.value && item.criteria?.city !== cityFilter.value) return false;
+      if (workFilter.value && item.criteria?.work_type !== workFilter.value) return false;
+      return true;
+    });
+  }
+
   function render(items) {
     const grouped = items.reduce((acc, item) => {
       (acc[item.section] ||= []).push(item);
@@ -64,28 +91,37 @@
     }, {});
     sections.innerHTML = sectionOrder.filter((name) => grouped[name]?.length).map((name) => `
       <div class="lead-package-section">
-        <div class="section-head"><h2>${esc(name)}</h2><p>${grouped[name].length} available combinations</p></div>
-        <div class="lead-package-grid">
+        <div class="section-head lead-mini-head"><h2>${esc(name)}</h2><p>${grouped[name].length} combinations</p></div>
+        <div class="lead-package-grid lead-package-grid-compact">
           ${grouped[name].map((item) => `
             <article class="lead-package-card" data-item='${esc(JSON.stringify(item))}'>
               <p class="eyebrow eyebrow-dark">${esc(item.date_filter.replaceAll('_', ' '))}</p>
               <h3>${esc(item.filter_name)}</h3>
               <div class="lead-package-count"><strong>${Number(item.lead_count).toLocaleString('en-IN')}</strong><span>matching leads</span></div>
-              <p class="muted">Estimated package price ${money(item.price_total)}</p>
+              <p class="muted">Estimated price ${money(item.price_total)}</p>
               <button type="button" class="btn-primary add-lead-cart">Add to Cart</button>
             </article>
           `).join('')}
         </div>
       </div>
-    `).join('') || '<div class="lead-card"><h2>No matching lead packages yet.</h2><p class="muted">Try another date range.</p></div>';
+    `).join('') || '<div class="lead-card"><h2>No matching lead packages yet.</h2><p class="muted">Try another city, work type, or date range.</p></div>';
   }
 
   async function load() {
     msg.textContent = 'Loading lead counts...';
     const res = await fetch(`/api/lead-marketplace/counts?${params()}`);
     const data = await res.json();
-    render(data.items || []);
-    msg.textContent = `${(data.items || []).length} packages found.`;
+    allItems = data.items || [];
+    hydrateFilters(allItems);
+    const visible = selectedItems();
+    render(visible);
+    msg.textContent = `${visible.length} packages shown from ${allItems.length} available.`;
+  }
+
+  function rerender() {
+    const visible = selectedItems();
+    render(visible);
+    msg.textContent = `${visible.length} packages shown from ${allItems.length} available.`;
   }
 
   dateFilter.addEventListener('change', () => {
@@ -96,6 +132,8 @@
   });
   start.addEventListener('change', load);
   end.addEventListener('change', load);
+  cityFilter.addEventListener('change', rerender);
+  workFilter.addEventListener('change', rerender);
 
   sections.addEventListener('click', async (event) => {
     const btn = event.target.closest('.add-lead-cart');

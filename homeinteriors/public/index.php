@@ -514,7 +514,7 @@ try {
         render('public/lead-marketplace', [
             'title' => 'Buy Filtered Interior Design Leads | HomeInteriors360',
             'metaDescription' => 'Buy verified homeowner lead packages by city, society, budget, work type, and date range.',
-            'active' => 'pricing',
+            'active' => 'leads',
             'content' => $content,
         ]);
         exit;
@@ -524,7 +524,7 @@ try {
         render('public/lead-cart', [
             'title' => 'Lead Cart | HomeInteriors360',
             'metaDescription' => 'Review selected filtered lead packages and slab-based pricing.',
-            'active' => 'pricing',
+            'active' => 'leads',
             'content' => $content,
         ]);
         exit;
@@ -534,7 +534,7 @@ try {
         render('public/lead-checkout', [
             'title' => 'Lead Checkout | HomeInteriors360',
             'metaDescription' => 'Create your buyer account, login, and complete Razorpay payment for lead packages.',
-            'active' => 'pricing',
+            'active' => 'leads',
             'content' => $content,
             'buyer' => buyerUser(),
             'razorpayConfigured' => razorpayConfigured(),
@@ -547,7 +547,7 @@ try {
         render('public/lead-dashboard', [
             'title' => 'Lead Buyer Dashboard | HomeInteriors360',
             'metaDescription' => 'Download purchased lead packages securely.',
-            'active' => 'pricing',
+            'active' => 'leads',
             'content' => $content,
             'buyer' => $buyer,
             'purchases' => SiteRepository::buyerPurchases((int)$buyer['id']),
