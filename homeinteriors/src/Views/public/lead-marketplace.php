@@ -10,6 +10,11 @@
         <span class="chip">Work-type filters</span>
         <span class="chip">Slab pricing</span>
       </div>
+      <div class="lead-offer-strip">
+        <span>Launch Offer</span>
+        <strong>First 10 leads are free</strong>
+        <p>Start with real homeowner demand before you pay for scale.</p>
+      </div>
     </div>
 
     <div class="lead-card lead-card-flat lead-filter-card lead-market-panel">
@@ -98,7 +103,7 @@
               <p class="eyebrow eyebrow-dark">${esc(item.date_filter.replaceAll('_', ' '))}</p>
               <h3>${esc(item.filter_name)}</h3>
               <div class="lead-package-count"><strong>${Number(item.lead_count).toLocaleString('en-IN')}</strong><span>matching leads</span></div>
-              <p class="muted">Estimated price ${money(item.price_total)}</p>
+              <p class="muted">First 10 free · Estimated price ${money(item.price_total)}</p>
               <button type="button" class="btn-primary add-lead-cart">Add to Cart</button>
             </article>
           `).join('')}

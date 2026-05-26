@@ -2345,3 +2345,37 @@ textarea {
     display: block;
   }
 }
+
+.lead-offer-strip {
+  display: grid;
+  gap: 4px;
+  width: min(430px, 100%);
+  padding: 15px 16px;
+  border: 1px solid rgba(140, 111, 74, 0.34);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(255, 253, 248, 0.94), rgba(238, 236, 226, 0.94)),
+    radial-gradient(circle at top right, rgba(164, 95, 66, 0.22), transparent 38%);
+  box-shadow: var(--shadow);
+}
+.lead-offer-strip span {
+  color: var(--clay);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+.lead-offer-strip strong {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1;
+  font-weight: 500;
+}
+.lead-offer-strip p {
+  margin: 0;
+  color: var(--muted);
+}
+.lead-offer-strip-inline {
+  margin: 14px 0 18px;
+  width: 100%;
+}

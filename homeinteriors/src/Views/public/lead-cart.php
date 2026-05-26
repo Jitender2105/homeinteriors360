@@ -5,6 +5,11 @@
       <p class="eyebrow eyebrow-dark">Lead Cart</p>
       <h1>Your selected lead packages</h1>
       <p class="muted">Each item uses slab pricing: first 100 leads at ₹100, next 900 at ₹80, and above 1000 at ₹60 per lead.</p>
+      <div class="lead-offer-strip lead-offer-strip-inline">
+        <span>First-time offer</span>
+        <strong>First 10 leads free</strong>
+        <p>The free leads are automatically included in every package price shown below.</p>
+      </div>
       <div id="cartItems" class="lead-cart-list"></div>
     </div>
     <aside class="lead-card lead-checkout-summary">

@@ -5,6 +5,11 @@
       <p class="eyebrow eyebrow-dark">Checkout</p>
       <h1>Login or create your buyer account.</h1>
       <p class="muted">Use your mobile number for future login. Razorpay opens only after the account and cart are validated.</p>
+      <div class="lead-offer-strip lead-offer-strip-inline">
+        <span>Launch Offer</span>
+        <strong>First 10 leads free</strong>
+        <p>Your order total already reflects the free-lead benefit.</p>
+      </div>
       <?php if (!$razorpayConfigured): ?><p class="form-message error">Razorpay keys are not configured on this server yet.</p><?php endif; ?>
       <?php if ($buyer): ?><p class="form-message ok">Logged in as <?= htmlspecialchars((string)$buyer['name'], ENT_QUOTES, 'UTF-8') ?>.</p><?php endif; ?>
     </div>

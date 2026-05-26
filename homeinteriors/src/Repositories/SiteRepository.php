@@ -777,10 +777,15 @@ final class SiteRepository
 
     public static function leadPriceForCount(int $count): array
     {
-        $first = min($count, 100);
-        $second = min(max($count - 100, 0), 900);
-        $third = max($count - 1000, 0);
+        $free = min($count, 10);
+        $payable = max($count - $free, 0);
+        $first = min($payable, 100);
+        $second = min(max($payable - 100, 0), 900);
+        $third = max($payable - 1000, 0);
         $lines = [];
+        if ($free > 0) {
+            $lines[] = ['label' => 'First-time offer', 'count' => $free, 'rate' => 0, 'amount' => 0];
+        }
         if ($first > 0) {
             $lines[] = ['label' => 'First 100 leads', 'count' => $first, 'rate' => 100, 'amount' => $first * 100];
         }
@@ -792,6 +797,7 @@ final class SiteRepository
         }
         return [
             'total' => array_sum(array_column($lines, 'amount')),
+            'free_leads' => $free,
             'lines' => $lines,
         ];
     }
