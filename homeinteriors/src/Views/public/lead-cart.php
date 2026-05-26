@@ -8,7 +8,7 @@
       <div class="lead-offer-strip lead-offer-strip-inline">
         <span>First-time offer</span>
         <strong>First 10 leads free</strong>
-        <p>The free leads are automatically included in every package price shown below.</p>
+        <p>This applies only to your first successful lead purchase. Final eligibility is checked at checkout.</p>
       </div>
       <div id="cartItems" class="lead-cart-list"></div>
     </div>
@@ -19,6 +19,7 @@
         <span>Coupon Discount <strong id="cartDiscount">₹0</strong></span>
       </div>
       <div class="lead-package-count"><strong id="cartGrandTotal">₹0</strong><span>grand total</span></div>
+      <p class="form-message" id="firstTimeMsg"></p>
       <form id="couponForm" class="coupon-apply-form">
         <input name="code" placeholder="Coupon code" />
         <button class="btn-link" type="submit">Apply</button>
@@ -37,6 +38,7 @@
   const total = document.getElementById('cartGrandTotal');
   const subtotal = document.getElementById('cartSubtotal');
   const discount = document.getElementById('cartDiscount');
+  const firstTimeMsg = document.getElementById('firstTimeMsg');
   const msg = document.getElementById('cartMsg');
   const money = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -46,6 +48,8 @@
     subtotal.textContent = money(data.subtotal || 0);
     discount.textContent = `-${money(data.discount_amount || 0)}`;
     total.textContent = money(data.grand_total || 0);
+    firstTimeMsg.className = data.first_time_eligible ? 'form-message ok' : 'form-message';
+    firstTimeMsg.textContent = data.first_time_eligible ? 'First-time 10 free leads benefit is currently applied.' : 'First-time free leads benefit is not applicable for this buyer.';
     wrap.innerHTML = (data.items || []).map((item) => `
       <article class="lead-card lead-cart-item">
         <div><p class="eyebrow eyebrow-dark">${esc(item.date_filter.replaceAll('_', ' '))}</p><h2>${esc(item.filter_name)}</h2><p class="muted">${Number(item.lead_count).toLocaleString('en-IN')} leads</p></div>

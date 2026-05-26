@@ -178,14 +178,16 @@ try {
     if ($path === '/api/lead-cart') {
         Auth::start();
         $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
+        $buyer = buyerUser();
+        $firstTimeEligible = !$buyer || SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
         if ($method === 'GET') {
-            jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null));
+            jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
         }
         if ($method === 'POST') {
             $body = requestJson();
-            $item = SiteRepository::normalizeLeadCartItem($body);
+            $item = SiteRepository::normalizeLeadCartItem($body, $firstTimeEligible);
             $_SESSION['lead_cart'][$item['id']] = $item;
-            jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null));
+            jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
         }
         if ($method === 'DELETE') {
             $id = (string)($_GET['id'] ?? '');
@@ -195,7 +197,7 @@ try {
             } elseif ($id !== '') {
                 unset($_SESSION['lead_cart'][$id]);
             }
-            jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null));
+            jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
         }
     }
 
@@ -204,17 +206,21 @@ try {
         $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
         $body = requestJson();
         $code = strtoupper(trim((string)($body['code'] ?? '')));
-        $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null);
+        $buyer = buyerUser();
+        $firstTimeEligible = !$buyer || SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
+        $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible);
         $coupon = SiteRepository::validateLeadCoupon($code, (float)$summary['subtotal'], (int)$summary['lead_count']);
         $_SESSION['lead_coupon'] = (string)$coupon['code'];
-        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon']));
+        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'], $firstTimeEligible));
     }
 
     if ($path === '/api/lead-cart/coupon' && $method === 'DELETE') {
         Auth::start();
         unset($_SESSION['lead_coupon']);
         $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
-        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null));
+        $buyer = buyerUser();
+        $firstTimeEligible = !$buyer || SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
+        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible));
     }
 
     if ($path === '/api/buyer/login' && $method === 'POST') {
@@ -253,7 +259,8 @@ try {
             $buyer = SiteRepository::createOrLoginBuyer($body['buyer'] ?? []);
             setBuyerSession($buyer);
         }
-        $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null);
+        $firstTimeEligible = SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
+        $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible);
         $cart = $summary['items'];
         if (!$summary['items']) {
             jsonResponse(['error' => 'Cart is empty'], 400);

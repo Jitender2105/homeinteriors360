@@ -758,7 +758,7 @@ final class SiteRepository
             if ($count <= 0) {
                 continue;
             }
-            $price = self::leadPriceForCount($count);
+            $price = self::leadPriceForCount($count, true);
             $cards[] = [
                 'id' => hash('sha256', $definition['name'] . json_encode($definition['criteria']) . $dateFilter . $startDate . $endDate),
                 'section' => $definition['section'],
@@ -775,9 +775,9 @@ final class SiteRepository
         return $cards;
     }
 
-    public static function leadPriceForCount(int $count): array
+    public static function leadPriceForCount(int $count, bool $firstTimeEligible = true): array
     {
-        $free = min($count, 10);
+        $free = $firstTimeEligible ? min($count, 10) : 0;
         $payable = max($count - $free, 0);
         $first = min($payable, 100);
         $second = min(max($payable - 100, 0), 900);
@@ -798,18 +798,19 @@ final class SiteRepository
         return [
             'total' => array_sum(array_column($lines, 'amount')),
             'free_leads' => $free,
+            'first_time_eligible' => $firstTimeEligible,
             'lines' => $lines,
         ];
     }
 
-    public static function normalizeLeadCartItem(array $item): array
+    public static function normalizeLeadCartItem(array $item, bool $firstTimeEligible = true): array
     {
         $criteria = is_array($item['criteria'] ?? null) ? $item['criteria'] : [];
         $dateFilter = (string)($item['date_filter'] ?? 'last_30_days');
         $startDate = isset($item['start_date']) ? (string)$item['start_date'] : null;
         $endDate = isset($item['end_date']) ? (string)$item['end_date'] : null;
         $count = self::countLeadsForCriteria($criteria, $dateFilter, $startDate, $endDate);
-        $price = self::leadPriceForCount($count);
+        $price = self::leadPriceForCount($count, $firstTimeEligible);
         return [
             'id' => hash('sha256', json_encode([$criteria, $dateFilter, $startDate, $endDate])),
             'filter_name' => (string)($item['filter_name'] ?? self::criteriaLabel($criteria)),
@@ -823,9 +824,9 @@ final class SiteRepository
         ];
     }
 
-    public static function leadCartSummary(array $cart, ?string $couponCode = null): array
+    public static function leadCartSummary(array $cart, ?string $couponCode = null, bool $firstTimeEligible = true): array
     {
-        $items = array_values(array_map(static fn(array $item): array => self::normalizeLeadCartItem($item), $cart));
+        $items = array_values(array_map(static fn(array $item): array => self::normalizeLeadCartItem($item, $firstTimeEligible), $cart));
         $subtotal = (float)array_sum(array_column($items, 'price_total'));
         $leadCount = (int)array_sum(array_column($items, 'lead_count'));
         $coupon = null;
@@ -841,7 +842,14 @@ final class SiteRepository
             'coupon' => $coupon,
             'discount_amount' => $discount,
             'grand_total' => max($subtotal - $discount, 0),
+            'first_time_eligible' => $firstTimeEligible,
         ];
+    }
+
+    public static function buyerFirstTimeLeadOfferEligible(int $buyerId): bool
+    {
+        $row = Database::one('SELECT COUNT(*) AS c FROM lead_purchases WHERE buyer_id=? AND payment_status="paid"', [$buyerId]);
+        return (int)($row['c'] ?? 0) === 0;
     }
 
     public static function validateLeadCoupon(string $code, float $subtotal, int $leadCount): array

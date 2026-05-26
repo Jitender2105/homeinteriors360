@@ -8,7 +8,7 @@
       <div class="lead-offer-strip lead-offer-strip-inline">
         <span>Launch Offer</span>
         <strong>First 10 leads free</strong>
-        <p>Your order total already reflects the free-lead benefit.</p>
+        <p>Valid only on your first successful lead purchase. The final order total is recalculated after login/signup.</p>
       </div>
       <?php if (!$razorpayConfigured): ?><p class="form-message error">Razorpay keys are not configured on this server yet.</p><?php endif; ?>
       <?php if ($buyer): ?><p class="form-message ok">Logged in as <?= htmlspecialchars((string)$buyer['name'], ENT_QUOTES, 'UTF-8') ?>.</p><?php endif; ?>
@@ -42,7 +42,8 @@
   async function renderCart() {
     const res = await fetch('/api/lead-cart');
     const data = await res.json();
-    cartWrap.innerHTML = `<div class="section-head"><h2>Checkout Summary</h2><p>Subtotal ${money(data.subtotal || 0)} · Discount -${money(data.discount_amount || 0)} · Grand total ${money(data.grand_total || 0)}</p></div>` + ((data.items || []).map((item) => `<article class="lead-card lead-cart-item"><h2>${esc(item.filter_name)}</h2><p class="muted">${item.lead_count} leads</p><strong>${money(item.price_total)}</strong></article>`).join('') || '<div class="lead-card"><h2>Cart is empty.</h2><a class="btn-link" href="/lead-marketplace">Choose packages</a></div>');
+    const offerText = data.first_time_eligible ? 'First-time 10 free leads benefit is applied.' : 'First-time free leads benefit is not applicable for this buyer.';
+    cartWrap.innerHTML = `<div class="section-head"><h2>Checkout Summary</h2><p>Subtotal ${money(data.subtotal || 0)} · Discount -${money(data.discount_amount || 0)} · Grand total ${money(data.grand_total || 0)}</p><p class="form-message">${offerText}</p></div>` + ((data.items || []).map((item) => `<article class="lead-card lead-cart-item"><h2>${esc(item.filter_name)}</h2><p class="muted">${item.lead_count} leads</p><strong>${money(item.price_total)}</strong></article>`).join('') || '<div class="lead-card"><h2>Cart is empty.</h2><a class="btn-link" href="/lead-marketplace">Choose packages</a></div>');
   }
   document.getElementById('buyerLoginOnly').addEventListener('click', async () => {
     const fd = Object.fromEntries(new FormData(form).entries());
@@ -50,6 +51,7 @@
     const data = await res.json();
     msg.className = res.ok ? 'form-message ok' : 'form-message error';
     msg.textContent = res.ok ? 'Logged in. You can continue payment or open dashboard.' : (data.error || 'Login failed');
+    if (res.ok) renderCart();
   });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();

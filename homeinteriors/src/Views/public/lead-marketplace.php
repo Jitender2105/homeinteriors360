@@ -13,7 +13,7 @@
       <div class="lead-offer-strip">
         <span>Launch Offer</span>
         <strong>First 10 leads are free</strong>
-        <p>Start with real homeowner demand before you pay for scale.</p>
+        <p>Available once for first-time buyers. Final eligibility is checked at purchase.</p>
       </div>
       <div id="publicCouponStrip" class="lead-public-coupons"></div>
     </div>
@@ -38,7 +38,7 @@
     <article class="story-panel story-essay">
       <p class="eyebrow eyebrow-dark">How pricing works</p>
       <h2>Transparent slab pricing for every filter.</h2>
-      <p>First 100 leads are charged at ₹100 per lead, leads 101 to 1000 at ₹80, and any additional volume above 1000 at ₹60.</p>
+      <p>First-time buyers get 10 free leads once. After that, paid slabs apply: first 100 leads at ₹100, leads 101 to 1000 at ₹80, and additional volume above 1000 at ₹60.</p>
     </article>
     <article class="story-panel story-essay">
       <p class="eyebrow eyebrow-dark">Secure access</p>
@@ -104,7 +104,7 @@
               <p class="eyebrow eyebrow-dark">${esc(item.date_filter.replaceAll('_', ' '))}</p>
               <h3>${esc(item.filter_name)}</h3>
               <div class="lead-package-count"><strong>${Number(item.lead_count).toLocaleString('en-IN')}</strong><span>matching leads</span></div>
-              <p class="muted">First 10 free · Estimated price ${money(item.price_total)}</p>
+              <p class="muted">First 10 free for first purchase · Estimated price ${money(item.price_total)}</p>
               <button type="button" class="btn-primary add-lead-cart">Add to Cart</button>
             </article>
           `).join('')}
