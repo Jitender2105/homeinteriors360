@@ -1040,6 +1040,14 @@ final class SiteRepository
         }
     }
 
+    public static function createFreeLeadPurchase(int $buyerId, array $cart, ?string $couponCode = null, float $discount = 0): string
+    {
+        $orderId = 'free_' . $buyerId . '_' . time() . '_' . bin2hex(random_bytes(3));
+        self::createLeadPurchaseOrder($buyerId, $cart, $orderId, 0, $couponCode, $discount);
+        self::markLeadPurchasePaid($orderId, $buyerId, 'free_checkout', 'free_checkout');
+        return $orderId;
+    }
+
     public static function buyerPurchases(int $buyerId): array
     {
         return Database::query(

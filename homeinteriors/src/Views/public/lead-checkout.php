@@ -4,7 +4,7 @@
     <div>
       <p class="eyebrow eyebrow-dark">Checkout</p>
       <h1>Login or create your buyer account.</h1>
-      <p class="muted">Use your mobile number for future login. Razorpay opens only after the account and cart are validated.</p>
+      <p class="muted">Use your mobile number for future login. Razorpay opens for paid orders; eligible ₹0 first-time orders complete instantly.</p>
       <div class="lead-offer-strip lead-offer-strip-inline">
         <span>Launch Offer</span>
         <strong>First 10 leads free</strong>
@@ -64,6 +64,12 @@
     if (!res.ok) {
       msg.className = 'form-message error';
       msg.textContent = order.error || 'Could not create order.';
+      return;
+    }
+    if (order.free_checkout) {
+      msg.className = 'form-message ok';
+      msg.textContent = 'Free lead package activated. Redirecting to dashboard...';
+      window.location.href = order.redirect_url || '/lead-dashboard?payment=free';
       return;
     }
     const rzp = new Razorpay({

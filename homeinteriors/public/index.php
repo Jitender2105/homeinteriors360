@@ -267,7 +267,15 @@ try {
         }
         $amount = (float)$summary['grand_total'];
         if ($amount <= 0) {
-            jsonResponse(['error' => 'No payable leads in cart'], 400);
+            SiteRepository::createFreeLeadPurchase((int)$buyer['id'], $cart, $summary['coupon']['code'] ?? null, (float)$summary['discount_amount']);
+            $_SESSION['lead_cart'] = [];
+            unset($_SESSION['lead_coupon']);
+            jsonResponse([
+                'success' => true,
+                'free_checkout' => true,
+                'redirect_url' => '/lead-dashboard?payment=free',
+                'buyer' => buyerUser(),
+            ]);
         }
         $receipt = 'leads_' . (int)$buyer['id'] . '_' . time();
         $order = razorpayCreateOrder((int)round($amount * 100), $receipt, ['buyer_id' => (int)$buyer['id'], 'module' => 'lead_marketplace']);
