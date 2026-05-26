@@ -13,6 +13,7 @@
       <a class="btn-link" href="/admin/leads"><?= htmlspecialchars((string)($content['admin.leads.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
       <a class="btn-link" href="/admin/professionals">Professionals Backend</a>
       <a class="btn-link" href="/admin/portfolios">Portfolio Backend</a>
+      <a class="btn-link" href="/admin/lead-coupons">Lead Coupons</a>
       <a class="btn-link" href="/admin/pros"><?= htmlspecialchars((string)($content['admin.pros.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
       <a class="btn-link" href="/api/auth/logout">Logout</a>
     </div>

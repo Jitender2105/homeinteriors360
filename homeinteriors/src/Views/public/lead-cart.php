@@ -14,7 +14,16 @@
     </div>
     <aside class="lead-card lead-checkout-summary">
       <h2>Cart Total</h2>
+      <div class="lead-total-lines">
+        <span>Subtotal <strong id="cartSubtotal">₹0</strong></span>
+        <span>Coupon Discount <strong id="cartDiscount">₹0</strong></span>
+      </div>
       <div class="lead-package-count"><strong id="cartGrandTotal">₹0</strong><span>grand total</span></div>
+      <form id="couponForm" class="coupon-apply-form">
+        <input name="code" placeholder="Coupon code" />
+        <button class="btn-link" type="submit">Apply</button>
+      </form>
+      <button class="btn-muted" id="removeCoupon" type="button">Remove Coupon</button>
       <a class="btn-primary" href="/lead-checkout">Buy Now</a>
       <a class="btn-link" href="/lead-marketplace">Add More Leads</a>
       <button class="btn-muted" id="clearCart" type="button">Clear Cart</button>
@@ -26,12 +35,16 @@
 (() => {
   const wrap = document.getElementById('cartItems');
   const total = document.getElementById('cartGrandTotal');
+  const subtotal = document.getElementById('cartSubtotal');
+  const discount = document.getElementById('cartDiscount');
   const msg = document.getElementById('cartMsg');
   const money = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   async function load() {
     const res = await fetch('/api/lead-cart');
     const data = await res.json();
+    subtotal.textContent = money(data.subtotal || 0);
+    discount.textContent = `-${money(data.discount_amount || 0)}`;
     total.textContent = money(data.grand_total || 0);
     wrap.innerHTML = (data.items || []).map((item) => `
       <article class="lead-card lead-cart-item">
@@ -51,6 +64,20 @@
   document.getElementById('clearCart').addEventListener('click', async () => {
     await fetch('/api/lead-cart?id=all', { method: 'DELETE' });
     msg.textContent = 'Cart cleared.';
+    load();
+  });
+  document.getElementById('couponForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const code = new FormData(event.currentTarget).get('code');
+    const res = await fetch('/api/lead-cart/coupon', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code}) });
+    const data = await res.json();
+    msg.className = res.ok ? 'form-message ok' : 'form-message error';
+    msg.textContent = res.ok ? `Coupon ${data.coupon.code} applied.` : (data.error || 'Coupon failed.');
+    load();
+  });
+  document.getElementById('removeCoupon').addEventListener('click', async () => {
+    await fetch('/api/lead-cart/coupon', { method: 'DELETE' });
+    msg.textContent = 'Coupon removed.';
     load();
   });
   load();

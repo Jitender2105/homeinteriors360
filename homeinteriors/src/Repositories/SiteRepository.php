@@ -823,6 +823,121 @@ final class SiteRepository
         ];
     }
 
+    public static function leadCartSummary(array $cart, ?string $couponCode = null): array
+    {
+        $items = array_values(array_map(static fn(array $item): array => self::normalizeLeadCartItem($item), $cart));
+        $subtotal = (float)array_sum(array_column($items, 'price_total'));
+        $leadCount = (int)array_sum(array_column($items, 'lead_count'));
+        $coupon = null;
+        $discount = 0.0;
+        if ($couponCode) {
+            $coupon = self::validateLeadCoupon($couponCode, $subtotal, $leadCount);
+            $discount = (float)$coupon['discount_amount'];
+        }
+        return [
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'lead_count' => $leadCount,
+            'coupon' => $coupon,
+            'discount_amount' => $discount,
+            'grand_total' => max($subtotal - $discount, 0),
+        ];
+    }
+
+    public static function validateLeadCoupon(string $code, float $subtotal, int $leadCount): array
+    {
+        $coupon = Database::one('SELECT * FROM lead_coupons WHERE UPPER(code)=UPPER(?) AND is_active=1', [trim($code)]);
+        if (!$coupon) {
+            throw new InvalidArgumentException('Invalid coupon code.');
+        }
+        $today = date('Y-m-d');
+        if (!empty($coupon['valid_from']) && $today < (string)$coupon['valid_from']) {
+            throw new InvalidArgumentException('Coupon is not active yet.');
+        }
+        if (!empty($coupon['valid_to']) && $today > (string)$coupon['valid_to']) {
+            throw new InvalidArgumentException('Coupon has expired.');
+        }
+        if ($coupon['usage_limit'] !== null && (int)$coupon['usage_limit'] > 0 && (int)$coupon['used_count'] >= (int)$coupon['usage_limit']) {
+            throw new InvalidArgumentException('Coupon usage limit reached.');
+        }
+        if ($coupon['min_leads'] !== null && $leadCount < (int)$coupon['min_leads']) {
+            throw new InvalidArgumentException('Coupon requires at least ' . (int)$coupon['min_leads'] . ' leads.');
+        }
+        if ($coupon['max_leads'] !== null && (int)$coupon['max_leads'] > 0 && $leadCount > (int)$coupon['max_leads']) {
+            throw new InvalidArgumentException('Coupon is valid up to ' . (int)$coupon['max_leads'] . ' leads.');
+        }
+        if ($coupon['min_order_amount'] !== null && $subtotal < (float)$coupon['min_order_amount']) {
+            throw new InvalidArgumentException('Coupon requires minimum order of ₹' . number_format((float)$coupon['min_order_amount'], 0));
+        }
+        $discount = (string)$coupon['discount_type'] === 'flat'
+            ? (float)$coupon['discount_value']
+            : $subtotal * ((float)$coupon['discount_value'] / 100);
+        if ($coupon['max_discount_amount'] !== null && (float)$coupon['max_discount_amount'] > 0) {
+            $discount = min($discount, (float)$coupon['max_discount_amount']);
+        }
+        $discount = min($discount, $subtotal);
+        $coupon['discount_amount'] = round($discount, 2);
+        return $coupon;
+    }
+
+    public static function publicLeadCoupons(): array
+    {
+        return Database::query(
+            'SELECT id, code, title, description, discount_type, discount_value, min_leads, max_leads, min_order_amount, max_discount_amount, valid_to
+             FROM lead_coupons
+             WHERE show_on_frontend=1 AND is_active=1
+               AND (valid_from IS NULL OR valid_from <= CURDATE())
+               AND (valid_to IS NULL OR valid_to >= CURDATE())
+               AND (usage_limit IS NULL OR usage_limit = 0 OR used_count < usage_limit)
+             ORDER BY discount_value DESC, id DESC'
+        );
+    }
+
+    public static function listLeadCoupons(): array
+    {
+        return Database::query('SELECT * FROM lead_coupons ORDER BY created_at DESC');
+    }
+
+    public static function saveLeadCoupon(array $data, ?int $id = null): int
+    {
+        $code = strtoupper(trim((string)($data['code'] ?? '')));
+        if ($code === '' || empty($data['title'])) {
+            throw new InvalidArgumentException('Coupon code and title are required.');
+        }
+        $values = [
+            $code,
+            trim((string)$data['title']),
+            (string)($data['description'] ?? ''),
+            in_array(($data['discount_type'] ?? 'percentage'), ['percentage', 'flat'], true) ? (string)$data['discount_type'] : 'percentage',
+            (float)($data['discount_value'] ?? 0),
+            ($data['min_leads'] ?? '') !== '' ? (int)$data['min_leads'] : null,
+            ($data['max_leads'] ?? '') !== '' ? (int)$data['max_leads'] : null,
+            ($data['min_order_amount'] ?? '') !== '' ? (float)$data['min_order_amount'] : null,
+            ($data['max_discount_amount'] ?? '') !== '' ? (float)$data['max_discount_amount'] : null,
+            ($data['valid_from'] ?? '') !== '' ? (string)$data['valid_from'] : null,
+            ($data['valid_to'] ?? '') !== '' ? (string)$data['valid_to'] : null,
+            ($data['usage_limit'] ?? '') !== '' ? (int)$data['usage_limit'] : null,
+            !empty($data['show_on_frontend']) ? 1 : 0,
+            !empty($data['is_active']) ? 1 : 0,
+        ];
+        if ($id) {
+            Database::exec(
+                'UPDATE lead_coupons SET code=?, title=?, description=?, discount_type=?, discount_value=?, min_leads=?, max_leads=?, min_order_amount=?, max_discount_amount=?, valid_from=?, valid_to=?, usage_limit=?, show_on_frontend=?, is_active=?, updated_at=NOW() WHERE id=?',
+                [...$values, $id]
+            );
+            return $id;
+        }
+        return Database::exec(
+            'INSERT INTO lead_coupons (code, title, description, discount_type, discount_value, min_leads, max_leads, min_order_amount, max_discount_amount, valid_from, valid_to, usage_limit, show_on_frontend, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            $values
+        );
+    }
+
+    public static function deleteLeadCoupon(int $id): void
+    {
+        Database::exec('DELETE FROM lead_coupons WHERE id=?', [$id]);
+    }
+
     public static function countLeadsForCriteria(array $criteria, string $dateFilter, ?string $startDate = null, ?string $endDate = null): int
     {
         $leads = self::leadRowsForDateFilter($dateFilter, $startDate, $endDate);
@@ -866,12 +981,12 @@ final class SiteRepository
         return $buyer;
     }
 
-    public static function createLeadPurchaseOrder(int $buyerId, array $cart, string $orderId, float $amount): int
+    public static function createLeadPurchaseOrder(int $buyerId, array $cart, string $orderId, float $amount, ?string $couponCode = null, float $discount = 0): int
     {
         return Database::exec(
-            'INSERT INTO lead_purchases (buyer_id, razorpay_order_id, amount_total, currency, payment_status, cart_json)
-             VALUES (?, ?, ?, ?, ?, ?)',
-            [$buyerId, $orderId, $amount, defined('RAZORPAY_CURRENCY') ? RAZORPAY_CURRENCY : 'INR', 'pending', json_encode($cart, JSON_UNESCAPED_UNICODE)]
+            'INSERT INTO lead_purchases (buyer_id, razorpay_order_id, coupon_code, discount_amount, amount_total, currency, payment_status, cart_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [$buyerId, $orderId, $couponCode, $discount, $amount, defined('RAZORPAY_CURRENCY') ? RAZORPAY_CURRENCY : 'INR', 'pending', json_encode($cart, JSON_UNESCAPED_UNICODE)]
         );
     }
 
@@ -886,6 +1001,9 @@ final class SiteRepository
                 'UPDATE lead_purchases SET razorpay_payment_id=?, razorpay_signature=?, payment_status="paid", paid_at=NOW(), updated_at=NOW() WHERE id=?',
                 [$paymentId, $signature, (int)$purchase['id']]
             );
+            if (!empty($purchase['coupon_code'])) {
+                Database::exec('UPDATE lead_coupons SET used_count = used_count + 1, updated_at=NOW() WHERE UPPER(code)=UPPER(?)', [(string)$purchase['coupon_code']]);
+            }
             $cart = json_decode((string)($purchase['cart_json'] ?? '[]'), true);
             if (!is_array($cart)) {
                 $cart = [];

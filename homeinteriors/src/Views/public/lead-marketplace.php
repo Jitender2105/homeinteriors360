@@ -15,6 +15,7 @@
         <strong>First 10 leads are free</strong>
         <p>Start with real homeowner demand before you pay for scale.</p>
       </div>
+      <div id="publicCouponStrip" class="lead-public-coupons"></div>
     </div>
 
     <div class="lead-card lead-card-flat lead-filter-card lead-market-panel">
@@ -123,6 +124,19 @@
     msg.textContent = `${visible.length} packages shown from ${allItems.length} available.`;
   }
 
+  async function loadCoupons() {
+    const res = await fetch('/api/lead-coupons/public');
+    if (!res.ok) return;
+    const data = await res.json();
+    const coupons = data.coupons || [];
+    document.getElementById('publicCouponStrip').innerHTML = coupons.slice(0, 3).map((coupon) => `
+      <button type="button" class="lead-coupon-pill" data-code="${esc(coupon.code)}">
+        <span>${esc(coupon.code)}</span>
+        <strong>${esc(coupon.title)}</strong>
+      </button>
+    `).join('');
+  }
+
   function rerender() {
     const visible = selectedItems();
     render(visible);
@@ -152,6 +166,13 @@
     btn.textContent = res.ok ? 'Added' : 'Add to Cart';
     msg.textContent = res.ok ? 'Package added to cart.' : 'Could not add package.';
   });
+  document.getElementById('publicCouponStrip').addEventListener('click', async (event) => {
+    const btn = event.target.closest('.lead-coupon-pill');
+    if (!btn) return;
+    await navigator.clipboard?.writeText(btn.dataset.code).catch(() => {});
+    msg.textContent = `${btn.dataset.code} copied. Apply it in cart.`;
+  });
+  loadCoupons();
   load();
 })();
 </script>

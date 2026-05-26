@@ -42,7 +42,7 @@
   async function renderCart() {
     const res = await fetch('/api/lead-cart');
     const data = await res.json();
-    cartWrap.innerHTML = `<div class="section-head"><h2>Checkout Summary</h2><p>Grand total ${money(data.grand_total || 0)}</p></div>` + ((data.items || []).map((item) => `<article class="lead-card lead-cart-item"><h2>${esc(item.filter_name)}</h2><p class="muted">${item.lead_count} leads</p><strong>${money(item.price_total)}</strong></article>`).join('') || '<div class="lead-card"><h2>Cart is empty.</h2><a class="btn-link" href="/lead-marketplace">Choose packages</a></div>');
+    cartWrap.innerHTML = `<div class="section-head"><h2>Checkout Summary</h2><p>Subtotal ${money(data.subtotal || 0)} · Discount -${money(data.discount_amount || 0)} · Grand total ${money(data.grand_total || 0)}</p></div>` + ((data.items || []).map((item) => `<article class="lead-card lead-cart-item"><h2>${esc(item.filter_name)}</h2><p class="muted">${item.lead_count} leads</p><strong>${money(item.price_total)}</strong></article>`).join('') || '<div class="lead-card"><h2>Cart is empty.</h2><a class="btn-link" href="/lead-marketplace">Choose packages</a></div>');
   }
   document.getElementById('buyerLoginOnly').addEventListener('click', async () => {
     const fd = Object.fromEntries(new FormData(form).entries());

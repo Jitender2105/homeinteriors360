@@ -2379,3 +2379,56 @@ textarea {
   margin: 14px 0 18px;
   width: 100%;
 }
+
+.lead-public-coupons {
+  display: grid;
+  gap: 8px;
+  width: min(430px, 100%);
+}
+.lead-coupon-pill {
+  text-align: left;
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px dashed rgba(140, 111, 74, 0.58);
+  background: rgba(255, 253, 248, 0.88);
+  box-shadow: none;
+}
+.lead-coupon-pill span {
+  color: var(--clay);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+.lead-coupon-pill strong {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 20px;
+  font-weight: 500;
+}
+.lead-total-lines {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+}
+.lead-total-lines span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+.coupon-apply-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.coupon-apply-form .btn-link {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .coupon-apply-form {
+    grid-template-columns: 1fr;
+  }
+}

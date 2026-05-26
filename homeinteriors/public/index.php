@@ -171,30 +171,50 @@ try {
         ]);
     }
 
+    if ($path === '/api/lead-coupons/public' && $method === 'GET') {
+        jsonResponse(['coupons' => SiteRepository::publicLeadCoupons()]);
+    }
+
     if ($path === '/api/lead-cart') {
         Auth::start();
         $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
         if ($method === 'GET') {
-            $items = array_map(static fn(array $item): array => SiteRepository::normalizeLeadCartItem($item), $_SESSION['lead_cart']);
-            jsonResponse(['items' => $items, 'grand_total' => array_sum(array_column($items, 'price_total'))]);
+            jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null));
         }
         if ($method === 'POST') {
             $body = requestJson();
             $item = SiteRepository::normalizeLeadCartItem($body);
             $_SESSION['lead_cart'][$item['id']] = $item;
-            $items = array_values($_SESSION['lead_cart']);
-            jsonResponse(['success' => true, 'items' => $items, 'grand_total' => array_sum(array_column($items, 'price_total'))]);
+            jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null));
         }
         if ($method === 'DELETE') {
             $id = (string)($_GET['id'] ?? '');
             if ($id === 'all') {
                 $_SESSION['lead_cart'] = [];
+                unset($_SESSION['lead_coupon']);
             } elseif ($id !== '') {
                 unset($_SESSION['lead_cart'][$id]);
             }
-            $items = array_values($_SESSION['lead_cart']);
-            jsonResponse(['success' => true, 'items' => $items, 'grand_total' => array_sum(array_column($items, 'price_total'))]);
+            jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null));
         }
+    }
+
+    if ($path === '/api/lead-cart/coupon' && $method === 'POST') {
+        Auth::start();
+        $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
+        $body = requestJson();
+        $code = strtoupper(trim((string)($body['code'] ?? '')));
+        $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null);
+        $coupon = SiteRepository::validateLeadCoupon($code, (float)$summary['subtotal'], (int)$summary['lead_count']);
+        $_SESSION['lead_coupon'] = (string)$coupon['code'];
+        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon']));
+    }
+
+    if ($path === '/api/lead-cart/coupon' && $method === 'DELETE') {
+        Auth::start();
+        unset($_SESSION['lead_coupon']);
+        $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
+        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null));
     }
 
     if ($path === '/api/buyer/login' && $method === 'POST') {
@@ -233,17 +253,18 @@ try {
             $buyer = SiteRepository::createOrLoginBuyer($body['buyer'] ?? []);
             setBuyerSession($buyer);
         }
-        $cart = array_values(array_map(static fn(array $item): array => SiteRepository::normalizeLeadCartItem($item), $_SESSION['lead_cart']));
-        if (!$cart) {
+        $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null);
+        $cart = $summary['items'];
+        if (!$summary['items']) {
             jsonResponse(['error' => 'Cart is empty'], 400);
         }
-        $amount = (float)array_sum(array_column($cart, 'price_total'));
+        $amount = (float)$summary['grand_total'];
         if ($amount <= 0) {
             jsonResponse(['error' => 'No payable leads in cart'], 400);
         }
         $receipt = 'leads_' . (int)$buyer['id'] . '_' . time();
         $order = razorpayCreateOrder((int)round($amount * 100), $receipt, ['buyer_id' => (int)$buyer['id'], 'module' => 'lead_marketplace']);
-        SiteRepository::createLeadPurchaseOrder((int)$buyer['id'], $cart, (string)$order['id'], $amount);
+        SiteRepository::createLeadPurchaseOrder((int)$buyer['id'], $cart, (string)$order['id'], $amount, $summary['coupon']['code'] ?? null, (float)$summary['discount_amount']);
         jsonResponse([
             'success' => true,
             'key_id' => defined('RAZORPAY_KEY_ID') ? RAZORPAY_KEY_ID : '',
@@ -268,6 +289,7 @@ try {
         }
         SiteRepository::markLeadPurchasePaid($orderId, (int)$buyer['id'], $paymentId, $signature);
         $_SESSION['lead_cart'] = [];
+        unset($_SESSION['lead_coupon']);
         jsonResponse(['success' => true, 'redirect_url' => '/lead-dashboard?payment=success']);
     }
 
@@ -319,6 +341,31 @@ try {
         }
         SiteRepository::setProVerification((int)$body['pro_id'], (bool)$body['verification_status']);
         jsonResponse(['success' => true]);
+    }
+
+    if ($path === '/api/admin/lead-coupons') {
+        Auth::requireAuth();
+        if ($method === 'GET') {
+            jsonResponse(['coupons' => SiteRepository::listLeadCoupons()]);
+        }
+        if ($method === 'POST') {
+            $body = requestJson();
+            $id = SiteRepository::saveLeadCoupon($body);
+            jsonResponse(['success' => true, 'id' => $id]);
+        }
+    }
+
+    if (preg_match('#^/api/admin/lead-coupons/(\\d+)$#', $path, $match)) {
+        Auth::requireAuth();
+        $id = (int)$match[1];
+        if ($method === 'PUT' || $method === 'POST') {
+            SiteRepository::saveLeadCoupon(requestJson(), $id);
+            jsonResponse(['success' => true]);
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deleteLeadCoupon($id);
+            jsonResponse(['success' => true]);
+        }
     }
 
     if ($path === '/api/admin/professionals') {
@@ -674,6 +721,18 @@ try {
             'content' => $content,
             'portfolios' => SiteRepository::listPortfolioForAdmin(),
             'professionals' => SiteRepository::professionalOptions(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/lead-coupons') {
+        Auth::requireAuth();
+        render('admin/lead-coupons', [
+            'title' => 'Lead Coupon Backend',
+            'metaDescription' => 'Create and manage lead marketplace coupons by slab, discount, visibility, and dates.',
+            'active' => 'admin',
+            'content' => $content,
+            'coupons' => SiteRepository::listLeadCoupons(),
         ]);
         exit;
     }
