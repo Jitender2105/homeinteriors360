@@ -40,6 +40,36 @@ function redirectTo(string $path): void
     exit;
 }
 
+function appBaseUrl(): string
+{
+    $configured = trim((string)(getenv('APP_BASE_URL') ?: getenv('NEXT_PUBLIC_SITE_URL') ?: ''));
+    if ($configured !== '') {
+        return rtrim($configured, '/');
+    }
+
+    $host = (string)($_SERVER['HTTP_HOST'] ?? 'homeinteriors360.com');
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'https';
+    return $scheme . '://' . $host;
+}
+
+function absoluteUrl(string $path = '/'): string
+{
+    if (preg_match('#^https?://#i', $path)) {
+        return $path;
+    }
+
+    return appBaseUrl() . '/' . ltrim($path, '/');
+}
+
+function canonicalPath(string $path): string
+{
+    $path = parse_url($path, PHP_URL_PATH) ?: '/';
+    if ($path !== '/') {
+        $path = rtrim($path, '/');
+    }
+    return $path === '' ? '/' : $path;
+}
+
 function slugify(string $value): string
 {
     $value = strtolower(trim($value));
@@ -184,7 +214,7 @@ function razorpayConfigured(): bool
     return defined('RAZORPAY_KEY_ID') && defined('RAZORPAY_KEY_SECRET') && RAZORPAY_KEY_ID !== '' && RAZORPAY_KEY_SECRET !== '';
 }
 
-function razorpayCreateOrder(int $amountPaise, string $receipt, array $notes = []): array
+function razorpayCreateOrder(int $amountPaise, string $receipt, array $notes = [], ?string $currency = null): array
 {
     if (!razorpayConfigured()) {
         throw new RuntimeException('Razorpay gateway is not configured.');
@@ -195,7 +225,7 @@ function razorpayCreateOrder(int $amountPaise, string $receipt, array $notes = [
 
     $payload = [
         'amount' => $amountPaise,
-        'currency' => defined('RAZORPAY_CURRENCY') ? RAZORPAY_CURRENCY : 'INR',
+        'currency' => strtoupper($currency ?: (defined('RAZORPAY_CURRENCY') ? RAZORPAY_CURRENCY : 'INR')),
         'receipt' => substr($receipt, 0, 40),
         'notes' => $notes,
     ];
@@ -219,7 +249,8 @@ function razorpayCreateOrder(int $amountPaise, string $receipt, array $notes = [
     curl_close($ch);
 
     if ($response === false || $status < 200 || $status >= 300) {
-        throw new RuntimeException('Razorpay order creation failed' . ($error !== '' ? ': ' . $error : '.'));
+        $message = 'Razorpay order creation failed' . ($error !== '' ? ': ' . $error : '.');
+        throw new RuntimeException($message, $status === 401 ? 401 : 500);
     }
     $data = json_decode((string)$response, true);
     if (!is_array($data) || empty($data['id'])) {

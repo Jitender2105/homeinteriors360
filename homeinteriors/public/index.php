@@ -20,8 +20,131 @@ if ($method === 'POST' && !empty($_POST['_method'])) {
     $method = strtoupper((string)$_POST['_method']);
 }
 $content = SiteRepository::allContent();
+$seoCityPages = [
+    'delhi-ncr' => ['city' => 'Delhi NCR', 'nearby' => 'Delhi, Gurugram, Noida, Faridabad, and Ghaziabad'],
+    'gurgaon' => ['city' => 'Gurugram', 'nearby' => 'Golf Course Road, Sohna Road, Dwarka Expressway, and New Gurgaon'],
+    'noida' => ['city' => 'Noida', 'nearby' => 'Noida, Greater Noida, and Noida Extension'],
+    'mumbai' => ['city' => 'Mumbai', 'nearby' => 'Mumbai, Navi Mumbai, and Thane'],
+    'pune' => ['city' => 'Pune', 'nearby' => 'Kharadi, Wakad, Baner, Hinjewadi, and nearby Pune markets'],
+    'hyderabad' => ['city' => 'Hyderabad', 'nearby' => 'Gachibowli, Hitech City, Kondapur, and Attapur'],
+    'bangalore' => ['city' => 'Bangalore', 'nearby' => 'Whitefield, Sarjapur Road, Electronic City, and North Bangalore'],
+];
+$seoLeadPages = [
+    '/interior-design-leads' => [
+        'keyword' => 'interior design leads',
+        'title' => 'Interior Design Leads for Architects & Interior Designers',
+        'subtitle' => 'Buy verified interior design leads from homeowners searching for modular kitchens, full home interiors, renovation, wardrobes, and premium residential design services.',
+        'meta' => 'Buy verified interior design leads for architects, interior designers, studios, and contractors. Filter by city, locality, budget, work type, and date range.',
+    ],
+    '/interior-designer-leads' => [
+        'keyword' => 'interior designer leads',
+        'title' => 'Interior Designer Leads for Growing Design Studios',
+        'subtitle' => 'Get homeowner enquiries matched by city, budget, locality, and work type so your sales team can focus on serious interior design prospects.',
+        'meta' => 'Interior designer leads for design studios and firms. Buy filtered homeowner leads with transparent pricing and secure Razorpay checkout.',
+    ],
+    '/buy-interior-design-leads' => [
+        'keyword' => 'buy interior design leads',
+        'title' => 'Buy Interior Design Leads Online',
+        'subtitle' => 'Choose active lead packages, add filtered opportunities to cart, and access purchased leads from your buyer dashboard after payment verification.',
+        'meta' => 'Buy interior design leads online from HomeInteriors360. City-wise and work-type lead packages with first-time free lead offer and slab pricing.',
+    ],
+    '/interior-leads-provider-india' => [
+        'keyword' => 'interior leads provider in India',
+        'title' => 'Interior Leads Provider in India',
+        'subtitle' => 'HomeInteriors360 connects interior designers, architects, and contractors with verified residential interior leads across India-focused service markets.',
+        'meta' => 'Interior leads provider in India for architects, interior designers, and contractors. Buy verified residential interior leads with transparent pricing.',
+    ],
+    '/interior-design-lead-generation' => [
+        'keyword' => 'interior design lead generation',
+        'title' => 'Interior Design Lead Generation for Professionals',
+        'subtitle' => 'A lead generation marketplace built for interior brands that need qualified homeowner enquiries, clean filtering, and sales-ready lead context.',
+        'meta' => 'Interior design lead generation for architects, interior designers, contractors, and studios. Verified homeowner leads with city and budget filters.',
+    ],
+];
+foreach ($seoCityPages as $slug => $cityData) {
+    $seoLeadPages['/interior-designer-leads-' . $slug] = [
+        'keyword' => 'interior designer leads ' . $cityData['city'],
+        'title' => 'Interior Designer Leads in ' . $cityData['city'],
+        'subtitle' => 'Buy location-specific interior designer leads from homeowners in ' . $cityData['nearby'] . '. Filter by budget, work type, locality, and recency.',
+        'meta' => 'Buy verified interior designer leads in ' . $cityData['city'] . '. Homeowner enquiries for full home interiors, kitchens, wardrobes, and renovation projects.',
+        'city' => $cityData['city'],
+    ];
+    $seoLeadPages['/interior-design-lead-generation-' . $slug] = [
+        'keyword' => 'interior design lead generation ' . $cityData['city'],
+        'title' => 'Interior Design Lead Generation in ' . $cityData['city'],
+        'subtitle' => 'Grow your interior business in ' . $cityData['city'] . ' with verified homeowner enquiries, digital lead delivery, and transparent lead package pricing.',
+        'meta' => 'Interior design lead generation in ' . $cityData['city'] . ' for designers, architects, and contractors. Buy filtered residential interior leads.',
+        'city' => $cityData['city'],
+    ];
+}
+$seoCityLinks = array_map(
+    static fn(string $slug, array $data): array => [
+        'href' => '/interior-designer-leads-' . $slug,
+        'label' => 'Interior Designer Leads in ' . $data['city'],
+    ],
+    array_keys($seoCityPages),
+    $seoCityPages
+);
 
 try {
+    if ($path === '/robots.txt') {
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "User-agent: *\n";
+        echo "Allow: /\n";
+        echo "Disallow: /admin\n";
+        echo "Disallow: /api/\n";
+        echo "Disallow: /lead-cart\n";
+        echo "Disallow: /lead-checkout\n";
+        echo "Disallow: /lead-dashboard\n";
+        echo "Disallow: /lead-download/\n";
+        echo "Sitemap: " . absoluteUrl('/sitemap.xml') . "\n";
+        exit;
+    }
+
+    if ($path === '/sitemap.xml') {
+        $today = date('Y-m-d');
+        $urls = [
+            ['loc' => '/', 'priority' => '1.0', 'changefreq' => 'daily'],
+            ['loc' => '/home-interior-hire-a-designer', 'priority' => '0.96', 'changefreq' => 'weekly'],
+            ['loc' => '/lead-marketplace', 'priority' => '0.95', 'changefreq' => 'daily'],
+            ['loc' => '/pricing-details', 'priority' => '0.9', 'changefreq' => 'weekly'],
+            ['loc' => '/pricing', 'priority' => '0.75', 'changefreq' => 'weekly'],
+            ['loc' => '/professionals', 'priority' => '0.8', 'changefreq' => 'weekly'],
+            ['loc' => '/cost-calculator', 'priority' => '0.72', 'changefreq' => 'monthly'],
+            ['loc' => '/contact-us', 'priority' => '0.45', 'changefreq' => 'yearly'],
+            ['loc' => '/privacy-policy', 'priority' => '0.35', 'changefreq' => 'yearly'],
+            ['loc' => '/terms-and-conditions', 'priority' => '0.35', 'changefreq' => 'yearly'],
+            ['loc' => '/shipping-policy', 'priority' => '0.35', 'changefreq' => 'yearly'],
+            ['loc' => '/cancellation-and-refunds-policy', 'priority' => '0.35', 'changefreq' => 'yearly'],
+        ];
+        foreach (array_keys($seoLeadPages) as $seoPath) {
+            $urls[] = ['loc' => $seoPath, 'priority' => '0.92', 'changefreq' => 'weekly'];
+        }
+        foreach (['interior-designer-in-gurgaon', 'interior-designer-in-delhi-ncr', 'architect-interior-designer-in-gurgaon', 'full-home-interior-designer-in-gurgaon', 'kitchen-interior-designer-in-gurgaon'] as $aliasPath) {
+            $urls[] = ['loc' => '/professionals/' . $aliasPath, 'priority' => '0.65', 'changefreq' => 'weekly'];
+        }
+        foreach (Database::query('SELECT slug, updated_at FROM pros WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 200') as $pro) {
+            $urls[] = ['loc' => '/professionals/' . $pro['slug'], 'priority' => '0.55', 'changefreq' => 'weekly', 'lastmod' => substr((string)($pro['updated_at'] ?? $today), 0, 10)];
+        }
+        foreach (Database::query('SELECT slug, updated_at FROM projects ORDER BY updated_at DESC LIMIT 200') as $project) {
+            $urls[] = ['loc' => '/portfolio/' . $project['slug'], 'priority' => '0.5', 'changefreq' => 'monthly', 'lastmod' => substr((string)($project['updated_at'] ?? $today), 0, 10)];
+        }
+
+        header('Content-Type: application/xml; charset=utf-8');
+        echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+        echo "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
+        foreach ($urls as $url) {
+            echo "  <url>\n";
+            echo "    <loc>" . htmlspecialchars(absoluteUrl((string)$url['loc']), ENT_XML1, 'UTF-8') . "</loc>\n";
+            echo "    <lastmod>" . htmlspecialchars((string)($url['lastmod'] ?? $today), ENT_XML1, 'UTF-8') . "</lastmod>\n";
+            echo "    <changefreq>" . htmlspecialchars((string)$url['changefreq'], ENT_XML1, 'UTF-8') . "</changefreq>\n";
+            echo "    <priority>" . htmlspecialchars((string)$url['priority'], ENT_XML1, 'UTF-8') . "</priority>\n";
+            echo "  </url>\n";
+        }
+        echo "</urlset>\n";
+        exit;
+    }
+
     // Auth APIs
     if ($path === '/api/auth/login' && $method === 'POST') {
         $body = requestJson();
@@ -161,7 +284,7 @@ try {
     }
 
     if ($path === '/api/lead-marketplace/counts' && $method === 'GET') {
-        $dateFilter = (string)($_GET['date_filter'] ?? 'last_30_days');
+        $dateFilter = (string)($_GET['date_filter'] ?? 'all_time');
         jsonResponse([
             'items' => SiteRepository::leadMarketplaceCounts(
                 $dateFilter,
@@ -181,13 +304,23 @@ try {
         $buyer = buyerUser();
         $firstTimeEligible = !$buyer || SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
         if ($method === 'GET') {
-            jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
+            try {
+                jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
+            } catch (InvalidArgumentException) {
+                unset($_SESSION['lead_coupon']);
+                jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible));
+            }
         }
         if ($method === 'POST') {
             $body = requestJson();
             $item = SiteRepository::normalizeLeadCartItem($body, $firstTimeEligible);
             $_SESSION['lead_cart'][$item['id']] = $item;
-            jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
+            try {
+                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
+            } catch (InvalidArgumentException) {
+                unset($_SESSION['lead_coupon']);
+                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible));
+            }
         }
         if ($method === 'DELETE') {
             $id = (string)($_GET['id'] ?? '');
@@ -197,7 +330,12 @@ try {
             } elseif ($id !== '') {
                 unset($_SESSION['lead_cart'][$id]);
             }
-            jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
+            try {
+                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
+            } catch (InvalidArgumentException) {
+                unset($_SESSION['lead_coupon']);
+                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible));
+            }
         }
     }
 
@@ -250,17 +388,55 @@ try {
         jsonResponse(['purchases' => SiteRepository::buyerPurchases((int)$buyer['id'])]);
     }
 
-    if ($path === '/api/lead-orders/create' && $method === 'POST') {
+    if (($path === '/api/create-order' || $path === '/api/lead-orders/create') && $method === 'POST') {
         Auth::start();
-        $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
         $body = requestJson();
+
+        if (isset($body['amount'])) {
+            $amount = (int)$body['amount'];
+            if ($amount < 100) {
+                jsonResponse(['error' => 'Amount must be at least 100 paise'], 400);
+            }
+            $currency = strtoupper(trim((string)($body['currency'] ?? (defined('RAZORPAY_CURRENCY') ? RAZORPAY_CURRENCY : 'INR'))));
+            if (!preg_match('/^[A-Z]{3}$/', $currency)) {
+                jsonResponse(['error' => 'Currency must be a valid 3-letter code'], 400);
+            }
+            $receipt = trim((string)($body['receipt'] ?? 'order_' . time()));
+            try {
+                $order = razorpayCreateOrder($amount, $receipt, ['module' => 'standard_checkout'], $currency);
+            } catch (RuntimeException $e) {
+                jsonResponse(['error' => $e->getMessage()], $e->getCode() === 401 ? 401 : 500);
+            }
+            jsonResponse([
+                'success' => true,
+                'order_id' => (string)$order['id'],
+                'amount' => (int)($order['amount'] ?? $amount),
+                'currency' => (string)($order['currency'] ?? $currency),
+            ]);
+        }
+
+        $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
         $buyer = buyerUser();
         if (!$buyer) {
             $buyer = SiteRepository::createOrLoginBuyer($body['buyer'] ?? []);
             setBuyerSession($buyer);
         }
         $firstTimeEligible = SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
-        $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible);
+        if (!empty($body['account_only'])) {
+            try {
+                $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible);
+            } catch (InvalidArgumentException) {
+                unset($_SESSION['lead_coupon']);
+                $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible);
+            }
+            jsonResponse(['success' => true, 'buyer' => buyerUser(), 'cart' => $summary]);
+        }
+        try {
+            $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible);
+        } catch (InvalidArgumentException) {
+            unset($_SESSION['lead_coupon']);
+            $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible);
+        }
         $cart = $summary['items'];
         if (!$summary['items']) {
             jsonResponse(['error' => 'Cart is empty'], 400);
@@ -278,7 +454,11 @@ try {
             ]);
         }
         $receipt = 'leads_' . (int)$buyer['id'] . '_' . time();
-        $order = razorpayCreateOrder((int)round($amount * 100), $receipt, ['buyer_id' => (int)$buyer['id'], 'module' => 'lead_marketplace']);
+        try {
+            $order = razorpayCreateOrder((int)round($amount * 100), $receipt, ['buyer_id' => (int)$buyer['id'], 'module' => 'lead_marketplace']);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], $e->getCode() === 401 ? 401 : 500);
+        }
         SiteRepository::createLeadPurchaseOrder((int)$buyer['id'], $cart, (string)$order['id'], $amount, $summary['coupon']['code'] ?? null, (float)$summary['discount_amount']);
         jsonResponse([
             'success' => true,
@@ -290,8 +470,8 @@ try {
         ]);
     }
 
-    if ($path === '/api/lead-orders/verify' && $method === 'POST') {
-        $buyer = requireBuyer();
+    if (($path === '/api/verify-payment' || $path === '/api/lead-orders/verify') && $method === 'POST') {
+        $buyer = $path === '/api/lead-orders/verify' ? requireBuyer() : buyerUser();
         $body = requestJson();
         $orderId = trim((string)($body['razorpay_order_id'] ?? ''));
         $paymentId = trim((string)($body['razorpay_payment_id'] ?? ''));
@@ -302,9 +482,12 @@ try {
         if (!razorpaySignatureIsValid($orderId, $paymentId, $signature)) {
             jsonResponse(['error' => 'Payment signature mismatch'], 400);
         }
-        SiteRepository::markLeadPurchasePaid($orderId, (int)$buyer['id'], $paymentId, $signature);
-        $_SESSION['lead_cart'] = [];
-        unset($_SESSION['lead_coupon']);
+        $shouldMarkLeadPurchase = $path === '/api/lead-orders/verify' || (string)($body['context'] ?? '') === 'lead_marketplace';
+        if ($buyer && $shouldMarkLeadPurchase) {
+            SiteRepository::markLeadPurchasePaid($orderId, (int)$buyer['id'], $paymentId, $signature);
+            $_SESSION['lead_cart'] = [];
+            unset($_SESSION['lead_coupon']);
+        }
         jsonResponse(['success' => true, 'redirect_url' => '/lead-dashboard?payment=success']);
     }
 
@@ -459,6 +642,321 @@ try {
         }
     }
 
+    $legalPages = [
+        '/contact-us' => [
+            'title' => 'Contact Us',
+            'meta' => 'Contact HomeInteriors360 for lead purchases, interior design enquiries, support, and billing help.',
+            'sections' => [
+                [
+                    'title' => 'Business and Support Contact',
+                    'body' => [
+                        'HomeInteriors360 helps homeowners discover interior professionals and helps architects, interior designers, contractors, and related service providers purchase qualified homeowner leads.',
+                        [
+                            'Support email: admin@homeinteriors360.com',
+                            'Support phone: +91 93158 68727',
+                            'Website: https://homeinteriors360.com',
+                            'Typical response time: within 1 to 2 business days',
+                        ],
+                    ],
+                ],
+                [
+                    'title' => 'Payment Support',
+                    'body' => [
+                        'For Razorpay payment queries, share your registered mobile number, email address, order amount, payment date, and Razorpay payment ID if available.',
+                    ],
+                ],
+            ],
+        ],
+        '/privacy-policy' => [
+            'title' => 'Privacy Policy',
+            'meta' => 'Privacy policy for HomeInteriors360 users, lead buyers, and payment customers.',
+            'sections' => [
+                [
+                    'title' => 'Information We Collect',
+                    'body' => [
+                        'We collect information submitted through forms, account registration, lead checkout, and professional profile requests. This may include name, phone number, email address, city, society or locality, budget, project requirement, and payment-related order references.',
+                    ],
+                ],
+                [
+                    'title' => 'How We Use Information',
+                    'body' => [
+                        [
+                            'To respond to homeowner and professional enquiries.',
+                            'To create buyer accounts and provide purchased lead access.',
+                            'To process lead package orders through Razorpay.',
+                            'To maintain platform security, prevent misuse, and improve services.',
+                        ],
+                    ],
+                ],
+                [
+                    'title' => 'Payments and Sensitive Data',
+                    'body' => [
+                        'Online payments are processed by Razorpay. We do not store card numbers, UPI PINs, banking passwords, or full payment instrument details on our server.',
+                    ],
+                ],
+                [
+                    'title' => 'Data Sharing',
+                    'body' => [
+                        'We may share relevant lead information with registered buyers after a successful purchase. We may also share necessary transaction details with payment, hosting, analytics, legal, or compliance service providers where required.',
+                    ],
+                ],
+            ],
+        ],
+        '/terms-and-conditions' => [
+            'title' => 'Terms and Conditions',
+            'meta' => 'Terms and conditions for HomeInteriors360 services, lead purchases, and website use.',
+            'sections' => [
+                [
+                    'title' => 'Use of the Website',
+                    'body' => [
+                        'By using HomeInteriors360.com, submitting an enquiry, creating a buyer account, or purchasing a lead package, you agree to use the website lawfully and provide accurate information.',
+                    ],
+                ],
+                [
+                    'title' => 'Services Offered',
+                    'body' => [
+                        'HomeInteriors360 provides an online discovery and lead marketplace for interior design, architecture, contractor, and related home improvement services. Paid products currently include digital lead packages and managed growth enquiries for professionals.',
+                    ],
+                ],
+                [
+                    'title' => 'Lead Purchase Terms',
+                    'body' => [
+                        [
+                            'Lead packages are priced according to available filters, lead count, and pricing slabs shown before checkout.',
+                            'Purchased leads are for the buyer account that completed payment and must not be resold, scraped, or misused.',
+                            'A lead is not a guaranteed conversion, sale, site visit, or project award.',
+                            'Buyers are responsible for contacting leads professionally and complying with applicable laws.',
+                        ],
+                    ],
+                ],
+                [
+                    'title' => 'Payments',
+                    'body' => [
+                        'Payments are collected in INR through Razorpay. An order is considered successful only after payment confirmation and signature verification by the website.',
+                    ],
+                ],
+            ],
+        ],
+        '/shipping-policy' => [
+            'title' => 'Shipping Policy',
+            'meta' => 'Shipping and delivery policy for HomeInteriors360 digital lead packages.',
+            'sections' => [
+                [
+                    'title' => 'Digital Delivery Only',
+                    'body' => [
+                        'HomeInteriors360 currently sells digital lead packages and service enquiries. No physical product is shipped by courier, post, or transport.',
+                    ],
+                ],
+                [
+                    'title' => 'Delivery Timeline',
+                    'body' => [
+                        'After successful payment verification, purchased lead packages are made available in the buyer dashboard for download or access. Delivery is usually immediate, but may take up to 24 hours if payment confirmation, account verification, or technical review is required.',
+                    ],
+                ],
+                [
+                    'title' => 'Delivery Issues',
+                    'body' => [
+                        'If a paid lead package is not visible in your dashboard after successful payment, contact support with your registered mobile number, email address, amount paid, and Razorpay payment ID.',
+                    ],
+                ],
+            ],
+        ],
+        '/pricing-details' => [
+            'title' => 'Pricing Details',
+            'meta' => 'Pricing details for HomeInteriors360 lead packages and managed growth services.',
+            'sections' => [
+                [
+                    'title' => 'Lead Package Pricing',
+                    'body' => [
+                        'Lead package prices are shown before checkout based on the selected city, locality, budget, work type, date range, and available lead count.',
+                        [
+                            'First-time eligible buyer offer: up to first 10 leads at INR 0 when available.',
+                            'First 100 paid leads: INR 100 per lead.',
+                            '101 to 1000 paid leads: INR 80 per lead.',
+                            'Above 1000 paid leads: INR 60 per lead.',
+                        ],
+                    ],
+                ],
+                [
+                    'title' => 'Final Payable Amount',
+                    'body' => [
+                        'The cart and checkout pages show subtotal, coupon discount if any, and final payable amount before Razorpay payment is opened.',
+                    ],
+                ],
+                [
+                    'title' => 'Managed Growth Account',
+                    'body' => [
+                        'Managed growth account pricing is custom and depends on scope, geography, profile management, content support, and lead generation requirements. Interested professionals can submit the pricing enquiry form and the sales team will respond.',
+                    ],
+                ],
+            ],
+        ],
+        '/cancellation-and-refunds-policy' => [
+            'title' => 'Cancellation and Refunds Policy',
+            'meta' => 'Cancellation and refund policy for HomeInteriors360 paid lead packages and services.',
+            'sections' => [
+                [
+                    'title' => 'Cancellation Before Payment',
+                    'body' => [
+                        'You can cancel a lead package order any time before completing Razorpay payment by leaving checkout or clearing your cart. No amount is charged before successful payment.',
+                    ],
+                ],
+                [
+                    'title' => 'After Successful Payment',
+                    'body' => [
+                        'Paid lead packages are digital products. Once leads are delivered or made available in the buyer dashboard, cancellation is generally not available.',
+                    ],
+                ],
+                [
+                    'title' => 'Refund Eligibility',
+                    'body' => [
+                        [
+                            'Duplicate payment for the same order.',
+                            'Payment debited but no order or lead package created after verification.',
+                            'Technical delivery failure that HomeInteriors360 cannot resolve within a reasonable time.',
+                        ],
+                    ],
+                ],
+                [
+                    'title' => 'Refund Timeline',
+                    'body' => [
+                        'Approved refunds are initiated to the original payment method through Razorpay or the relevant payment channel. Bank or payment provider timelines may apply after the refund is initiated.',
+                    ],
+                ],
+                [
+                    'title' => 'Non-Refundable Cases',
+                    'body' => [
+                        'Refunds are not provided merely because a purchased lead does not convert into a project, the buyer changes their mind after delivery, or the buyer misuses or fails to contact the leads.',
+                    ],
+                ],
+            ],
+        ],
+    ];
+
+    if (isset($legalPages[$path])) {
+        $page = $legalPages[$path];
+        render('public/legal', [
+            'title' => $page['title'] . ' | HomeInteriors360',
+            'metaDescription' => $page['meta'],
+            'active' => '',
+            'content' => $content,
+            'legalTitle' => $page['title'],
+            'sections' => $page['sections'],
+        ]);
+        exit;
+    }
+
+    if (isset($seoLeadPages[$path])) {
+        $page = $seoLeadPages[$path];
+        $keyword = (string)$page['keyword'];
+        $citySuffix = !empty($page['city']) ? ' in ' . (string)$page['city'] : '';
+        $faqs = [
+            [
+                'question' => 'What are interior design leads?',
+                'answer' => 'Interior design leads are homeowner enquiries with project context such as city, locality, budget, work type, requirement, and contact details that help professionals start qualified conversations.',
+            ],
+            [
+                'question' => 'Can I buy leads by city and locality?',
+                'answer' => 'Yes. HomeInteriors360 lets buyers filter lead packages by city, society or locality, budget band, work type, and date range where matching data is available.',
+            ],
+            [
+                'question' => 'Are interior designer leads guaranteed to convert?',
+                'answer' => 'No lead marketplace can guarantee conversion. We provide filtered homeowner enquiries, and your sales follow-up, pricing, portfolio, service quality, and response time influence conversion.',
+            ],
+            [
+                'question' => 'How much do interior design leads cost?',
+                'answer' => 'Eligible first-time buyers can get up to the first 10 leads free. Paid slabs are INR 100 per lead for the first 100 paid leads, INR 80 from 101 to 1000, and INR 60 above 1000.',
+            ],
+        ];
+        $landingSections = [
+            [
+                'title' => 'Buy ' . ucwords($keyword) . ' With Clear Filters',
+                'body' => [
+                    'HomeInteriors360 is built for professionals who want practical lead discovery instead of random enquiries. Each package is created from available homeowner requirements and can be filtered by city, locality, budget, work type, and recency.',
+                    'This helps architects, interior designers, contractors, modular kitchen teams, and full-home interior studios focus on leads that match their target service areas and project value.',
+                ],
+            ],
+            [
+                'title' => 'Why Professionals Use HomeInteriors360',
+                'body' => [
+                    'The marketplace combines lead generation, buyer account access, secure payment, and dashboard delivery. You can review lead counts and estimated pricing before opening Razorpay checkout.',
+                    'For competitive searches like interior designer leads, interior design lead generation, and interior leads provider in India, the page structure is designed to explain service intent clearly to both users and search engines.',
+                ],
+            ],
+            [
+                'title' => 'Verified Lead Context' . $citySuffix,
+                'body' => [
+                    'Lead quality depends on context. HomeInteriors360 captures project requirement, phone number, city, society or area, budget, package details, and source wherever the homeowner provided it.',
+                    'The buyer dashboard restricts downloads to paid packages linked to your account, keeping lead access cleaner and easier to audit.',
+                ],
+            ],
+            [
+                'title' => 'Transparent Pricing and Digital Delivery',
+                'body' => [
+                    'Lead packages use visible slab pricing. First-time eligibility, coupons, subtotal, discount, and grand total are shown before payment.',
+                    'After successful Razorpay payment verification, the purchased package becomes available from the buyer dashboard as a digital download.',
+                ],
+            ],
+        ];
+        $faqSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'FAQPage',
+            'mainEntity' => array_map(static fn(array $faq): array => [
+                '@type' => 'Question',
+                'name' => $faq['question'],
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => $faq['answer'],
+                ],
+            ], $faqs),
+        ];
+        $serviceSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Service',
+            'name' => $page['title'],
+            'description' => $page['meta'],
+            'provider' => [
+                '@type' => 'Organization',
+                'name' => 'HomeInteriors360',
+                'url' => absoluteUrl('/'),
+            ],
+            'areaServed' => (string)($page['city'] ?? 'India'),
+            'serviceType' => 'Interior design lead generation',
+            'offers' => [
+                '@type' => 'AggregateOffer',
+                'priceCurrency' => 'INR',
+                'lowPrice' => '0',
+                'highPrice' => '100',
+                'offerCount' => '3',
+                'url' => absoluteUrl('/lead-marketplace'),
+            ],
+        ];
+        $breadcrumbSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => absoluteUrl('/')],
+                ['@type' => 'ListItem', 'position' => 2, 'name' => $page['title'], 'item' => absoluteUrl($path)],
+            ],
+        ];
+        render('public/seo-landing', [
+            'title' => $page['title'] . ' | HomeInteriors360',
+            'metaDescription' => $page['meta'],
+            'canonicalUrl' => absoluteUrl($path),
+            'metaModifiedTime' => date('c'),
+            'active' => 'leads',
+            'content' => $content,
+            'landingTitle' => $page['title'],
+            'landingSubtitle' => $page['subtitle'],
+            'keywordChips' => [$keyword, 'verified interior leads', 'interior lead generation', 'lead marketplace'],
+            'landingSections' => $landingSections,
+            'faqs' => $faqs,
+            'cityLinks' => $seoCityLinks,
+            'structuredData' => [$serviceSchema, $faqSchema, $breadcrumbSchema],
+        ]);
+        exit;
+    }
+
     // Public pages
     if ($path === '/') {
         render('public/home', [
@@ -467,6 +965,41 @@ try {
             'active' => 'home',
             'content' => $content,
             'payload' => SiteRepository::homepagePayload(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/home-interior-hire-a-designer' || $path === '/hire-a-designer') {
+        $serviceSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Service',
+            'name' => 'Home Interior Designer Matching',
+            'description' => 'Hire a home interior designer through HomeInteriors360. Submit your requirement and get matched with verified interior designers, architects, contractors, and aggregator partners.',
+            'provider' => [
+                '@type' => 'Organization',
+                'name' => 'HomeInteriors360',
+                'url' => absoluteUrl('/'),
+            ],
+            'areaServed' => ['Delhi NCR', 'Gurugram', 'Noida', 'Faridabad', 'Ghaziabad'],
+            'serviceType' => 'Home interior designer lead generation and matching',
+        ];
+        $breadcrumbSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => absoluteUrl('/')],
+                ['@type' => 'ListItem', 'position' => 2, 'name' => 'Hire a Designer', 'item' => absoluteUrl('/home-interior-hire-a-designer')],
+            ],
+        ];
+        render('public/home-interior-hire-designer', [
+            'title' => 'Hire a Home Interior Designer | HomeInteriors360',
+            'metaDescription' => 'Hire a home interior designer through HomeInteriors360. Compare verified interior designers, architects, and aggregator partners for full home interiors, kitchens, wardrobes, and renovation.',
+            'canonicalUrl' => absoluteUrl('/home-interior-hire-a-designer'),
+            'active' => 'directory',
+            'content' => $content,
+            'payload' => SiteRepository::homepagePayload(),
+            'filterOptions' => SiteRepository::proFilterOptions(),
+            'structuredData' => [$serviceSchema, $breadcrumbSchema],
         ]);
         exit;
     }
@@ -586,6 +1119,7 @@ try {
         render('public/lead-cart', [
             'title' => 'Lead Cart | HomeInteriors360',
             'metaDescription' => 'Review selected filtered lead packages and slab-based pricing.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'leads',
             'content' => $content,
         ]);
@@ -596,6 +1130,7 @@ try {
         render('public/lead-checkout', [
             'title' => 'Lead Checkout | HomeInteriors360',
             'metaDescription' => 'Create your buyer account, login, and complete Razorpay payment for lead packages.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'leads',
             'content' => $content,
             'buyer' => buyerUser(),
@@ -609,6 +1144,7 @@ try {
         render('public/lead-dashboard', [
             'title' => 'Lead Buyer Dashboard | HomeInteriors360',
             'metaDescription' => 'Download purchased lead packages securely.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'leads',
             'content' => $content,
             'buyer' => $buyer,
@@ -662,6 +1198,7 @@ try {
         render('admin/login', [
             'title' => (string)SiteRepository::content('admin.login.title', 'Admin Login'),
             'metaDescription' => 'Secure admin login for managing professionals, portfolios, leads, and site content.',
+            'metaRobots' => 'noindex,nofollow',
             'content' => $content,
         ]);
         exit;
@@ -672,6 +1209,7 @@ try {
         render('admin/dashboard', [
             'title' => (string)SiteRepository::content('admin.title', 'Admin Dashboard'),
             'metaDescription' => 'Admin dashboard for HomeInteriors360 site management, leads, professionals, and content.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'admin',
             'content' => $content,
             'counts' => SiteRepository::adminCounts(),
@@ -684,6 +1222,7 @@ try {
         render('admin/content', [
             'title' => (string)SiteRepository::content('admin.content.title', 'Content Manager'),
             'metaDescription' => 'Update homepage content, logos, SEO fields, and reusable site copy from the admin panel.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'admin',
             'content' => $content,
             'items' => SiteRepository::contentList(),
@@ -696,6 +1235,7 @@ try {
         render('admin/leads', [
             'title' => (string)SiteRepository::content('admin.leads.title', 'Lead Tracker'),
             'metaDescription' => 'Review and update incoming leads with status tracking for the HomeInteriors360 sales team.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'admin',
             'content' => $content,
             'leads' => SiteRepository::listLeads(),
@@ -708,6 +1248,7 @@ try {
         render('admin/pros', [
             'title' => (string)SiteRepository::content('admin.pros.title', 'Pro Verification'),
             'metaDescription' => 'Verify professionals, manage premium status, and control public listing visibility.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'admin',
             'content' => $content,
             'pros' => SiteRepository::listPros([]),
@@ -720,6 +1261,7 @@ try {
         render('admin/professionals', [
             'title' => 'Professionals Manager',
             'metaDescription' => 'Create and manage professional profiles with images, filters, pricing, and portfolio linkage.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'admin',
             'content' => $content,
             'professionals' => SiteRepository::listProfessionalsForAdmin(),
@@ -732,6 +1274,7 @@ try {
         render('admin/portfolios', [
             'title' => 'Portfolio Manager',
             'metaDescription' => 'Create and manage portfolio projects, images, testimonials, and project metadata.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'admin',
             'content' => $content,
             'portfolios' => SiteRepository::listPortfolioForAdmin(),
@@ -745,6 +1288,7 @@ try {
         render('admin/lead-coupons', [
             'title' => 'Lead Coupon Backend',
             'metaDescription' => 'Create and manage lead marketplace coupons by slab, discount, visibility, and dates.',
+            'metaRobots' => 'noindex,nofollow',
             'active' => 'admin',
             'content' => $content,
             'coupons' => SiteRepository::listLeadCoupons(),

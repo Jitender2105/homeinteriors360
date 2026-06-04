@@ -747,7 +747,7 @@ final class SiteRepository
         self::$contentCache = null;
     }
 
-    public static function leadMarketplaceCounts(string $dateFilter = 'last_30_days', ?string $startDate = null, ?string $endDate = null): array
+    public static function leadMarketplaceCounts(string $dateFilter = 'all_time', ?string $startDate = null, ?string $endDate = null): array
     {
         $leads = self::leadRowsForDateFilter($dateFilter, $startDate, $endDate);
         $definitions = self::leadFilterDefinitions($leads);
@@ -758,7 +758,7 @@ final class SiteRepository
             if ($count <= 0) {
                 continue;
             }
-            $price = self::leadPriceForCount($count, true);
+            $price = self::leadPriceForCount($count, false);
             $cards[] = [
                 'id' => hash('sha256', $definition['name'] . json_encode($definition['criteria']) . $dateFilter . $startDate . $endDate),
                 'section' => $definition['section'],
@@ -806,19 +806,23 @@ final class SiteRepository
     public static function normalizeLeadCartItem(array $item, bool $firstTimeEligible = true): array
     {
         $criteria = is_array($item['criteria'] ?? null) ? $item['criteria'] : [];
-        $dateFilter = (string)($item['date_filter'] ?? 'last_30_days');
+        $dateFilter = (string)($item['date_filter'] ?? 'all_time');
         $startDate = isset($item['start_date']) ? (string)$item['start_date'] : null;
         $endDate = isset($item['end_date']) ? (string)$item['end_date'] : null;
-        $count = self::countLeadsForCriteria($criteria, $dateFilter, $startDate, $endDate);
+        $availableCount = self::countLeadsForCriteria($criteria, $dateFilter, $startDate, $endDate);
+        $requestedCount = isset($item['selected_count']) ? (int)$item['selected_count'] : (isset($item['lead_count']) ? (int)$item['lead_count'] : $availableCount);
+        $count = $availableCount > 0 ? max(1, min($requestedCount, $availableCount)) : 0;
         $price = self::leadPriceForCount($count, $firstTimeEligible);
         return [
-            'id' => hash('sha256', json_encode([$criteria, $dateFilter, $startDate, $endDate])),
+            'id' => hash('sha256', json_encode([$criteria, $dateFilter, $startDate, $endDate, $count])),
             'filter_name' => (string)($item['filter_name'] ?? self::criteriaLabel($criteria)),
             'criteria' => $criteria,
             'date_filter' => $dateFilter,
             'start_date' => $startDate,
             'end_date' => $endDate,
             'lead_count' => $count,
+            'available_lead_count' => $availableCount,
+            'selected_count' => $count,
             'price_total' => $price['total'],
             'pricing' => $price,
         ];
@@ -1071,8 +1075,9 @@ final class SiteRepository
         }
         $filter = json_decode((string)$item['filter_json'], true);
         $criteria = is_array($filter['criteria'] ?? null) ? $filter['criteria'] : [];
-        $leads = self::leadRowsForDateFilter((string)($item['date_filter'] ?? 'last_30_days'), $filter['start_date'] ?? null, $filter['end_date'] ?? null);
-        return array_values(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $criteria)));
+        $leads = self::leadRowsForDateFilter((string)($item['date_filter'] ?? 'all_time'), $filter['start_date'] ?? null, $filter['end_date'] ?? null);
+        $matching = array_values(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $criteria)));
+        return array_slice($matching, 0, max(0, (int)($item['leads_count'] ?? count($matching))));
     }
 
     private static function leadRowsForDateFilter(string $dateFilter, ?string $startDate = null, ?string $endDate = null): array

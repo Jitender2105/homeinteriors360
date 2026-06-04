@@ -20,14 +20,20 @@
       </div>
       <div class="lead-package-count"><strong id="cartGrandTotal">₹0</strong><span>grand total</span></div>
       <p class="form-message" id="firstTimeMsg"></p>
-      <form id="couponForm" class="coupon-apply-form">
-        <input name="code" placeholder="Coupon code" />
-        <button class="btn-link" type="submit">Apply</button>
-      </form>
-      <button class="btn-muted" id="removeCoupon" type="button">Remove Coupon</button>
-      <a class="btn-primary" href="/lead-checkout">Buy Now</a>
-      <a class="btn-link" href="/lead-marketplace">Add More Leads</a>
-      <button class="btn-muted" id="clearCart" type="button">Clear Cart</button>
+      <a class="btn-primary lead-buy-now" href="/lead-checkout">Buy Now</a>
+      <div class="lead-cart-secondary-actions">
+        <a class="btn-link" href="/lead-marketplace">Add More Leads</a>
+        <button class="btn-muted" id="clearCart" type="button">Clear Cart</button>
+      </div>
+      <div class="lead-coupon-panel">
+        <h3>Apply Coupon</h3>
+        <form id="couponForm" class="coupon-apply-form">
+          <input name="code" placeholder="Coupon code" />
+          <button class="btn-link" type="submit">Apply</button>
+        </form>
+        <div id="cartCouponSuggestions" class="lead-public-coupons lead-cart-coupons"></div>
+        <button class="btn-muted" id="removeCoupon" type="button">Remove Coupon</button>
+      </div>
       <p class="form-message" id="cartMsg"></p>
     </aside>
   </div>
@@ -40,6 +46,8 @@
   const discount = document.getElementById('cartDiscount');
   const firstTimeMsg = document.getElementById('firstTimeMsg');
   const msg = document.getElementById('cartMsg');
+  const couponSuggestions = document.getElementById('cartCouponSuggestions');
+  const couponForm = document.getElementById('couponForm');
   const money = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   async function load() {
@@ -70,20 +78,42 @@
     msg.textContent = 'Cart cleared.';
     load();
   });
-  document.getElementById('couponForm').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const code = new FormData(event.currentTarget).get('code');
+  async function applyCoupon(code) {
     const res = await fetch('/api/lead-cart/coupon', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code}) });
     const data = await res.json();
     msg.className = res.ok ? 'form-message ok' : 'form-message error';
     msg.textContent = res.ok ? `Coupon ${data.coupon.code} applied.` : (data.error || 'Coupon failed.');
     load();
+  }
+  couponForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const code = new FormData(event.currentTarget).get('code');
+    applyCoupon(code);
+  });
+  couponSuggestions.addEventListener('click', (event) => {
+    const btn = event.target.closest('.lead-coupon-pill');
+    if (!btn) return;
+    couponForm.elements.code.value = btn.dataset.code || '';
+    applyCoupon(btn.dataset.code || '');
   });
   document.getElementById('removeCoupon').addEventListener('click', async () => {
     await fetch('/api/lead-cart/coupon', { method: 'DELETE' });
     msg.textContent = 'Coupon removed.';
     load();
   });
+  async function loadCoupons() {
+    const res = await fetch('/api/lead-coupons/public');
+    if (!res.ok) return;
+    const data = await res.json();
+    const coupons = data.coupons || [];
+    couponSuggestions.innerHTML = coupons.slice(0, 4).map((coupon) => `
+      <button type="button" class="lead-coupon-pill" data-code="${esc(coupon.code)}">
+        <span>${esc(coupon.code)}</span>
+        <strong>${esc(coupon.title)}</strong>
+      </button>
+    `).join('');
+  }
+  loadCoupons();
   load();
 })();
 </script>
