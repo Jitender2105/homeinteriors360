@@ -15,11 +15,11 @@ if (!$workTypes) {
 $heroImage = 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1500&q=85';
 $roomCards = [
   ['title' => '2BHK interiors', 'price' => 'Project-fit matches', 'image' => 'https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?auto=format&fit=crop&w=900&q=82'],
-  ['title' => '3BHK interiors', 'price' => 'Verified designers', 'image' => 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=900&q=82'],
+  ['title' => '3BHK interiors', 'price' => 'Verified designers', 'image' => 'https://images.pexels.com/photos/7031874/pexels-photo-7031874.jpeg?auto=compress&cs=tinysrgb&w=900'],
   ['title' => 'Modular kitchens', 'price' => 'Kitchen specialists', 'image' => 'https://images.unsplash.com/photo-1600489000022-c2086d79f9d4?auto=format&fit=crop&w=900&q=82'],
   ['title' => 'Bedroom design', 'price' => 'Storage-led planning', 'image' => 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=900&q=82'],
-  ['title' => 'Living room', 'price' => 'Portfolio comparison', 'image' => 'https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=900&q=82'],
-  ['title' => 'Renovation', 'price' => 'Scope-aware teams', 'image' => 'https://images.unsplash.com/photo-1600566752355-35792bedcfea?auto=format&fit=crop&w=900&q=82'],
+  ['title' => 'Living room', 'price' => 'Portfolio comparison', 'image' => 'https://images.pexels.com/photos/9976128/pexels-photo-9976128.jpeg?auto=compress&cs=tinysrgb&w=900'],
+  ['title' => 'Renovation', 'price' => 'Scope-aware teams', 'image' => 'https://images.pexels.com/photos/15124969/pexels-photo-15124969.jpeg?auto=compress&cs=tinysrgb&w=900'],
 ];
 $edgeRows = [
   ['label' => 'Choice', 'us' => 'Compare multiple verified designers and aggregator partners', 'market' => 'Talk to scattered vendors one by one'],
@@ -47,16 +47,16 @@ $steps = [
 $ideas = [
   ['title' => 'Modular Kitchen', 'image' => 'https://images.unsplash.com/photo-1600489000022-c2086d79f9d4?auto=format&fit=crop&w=800&q=82'],
   ['title' => 'Master Bedroom', 'image' => 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=800&q=82'],
-  ['title' => 'Living Room', 'image' => 'https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=800&q=82'],
+  ['title' => 'Living Room', 'image' => 'https://images.pexels.com/photos/9976128/pexels-photo-9976128.jpeg?auto=compress&cs=tinysrgb&w=900'],
   ['title' => 'Wardrobe', 'image' => 'https://images.pexels.com/photos/36221937/pexels-photo-36221937.jpeg?auto=compress&cs=tinysrgb&w=900'],
   ['title' => 'Bathroom', 'image' => 'https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=800&q=82'],
   ['title' => 'Pooja Room', 'image' => 'https://images.pexels.com/photos/32666419/pexels-photo-32666419.jpeg?auto=compress&cs=tinysrgb&w=900'],
-  ['title' => 'Balcony', 'image' => 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=82'],
+  ['title' => 'Balcony', 'image' => 'https://images.pexels.com/photos/15667608/pexels-photo-15667608.jpeg?auto=compress&cs=tinysrgb&w=900'],
   ['title' => 'Dining Room', 'image' => 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=800&q=82'],
   ['title' => 'Kids Room', 'image' => 'https://images.unsplash.com/photo-1617103996702-96ff29b1c467?auto=format&fit=crop&w=800&q=82'],
   ['title' => 'Workspace', 'image' => 'https://images.unsplash.com/photo-1593476550610-87baa860004a?auto=format&fit=crop&w=800&q=82'],
-  ['title' => 'Foyer', 'image' => 'https://images.unsplash.com/photo-1600566752355-35792bedcfea?auto=format&fit=crop&w=800&q=82'],
-  ['title' => 'Full Home', 'image' => 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=800&q=82'],
+  ['title' => 'Foyer', 'image' => 'https://images.pexels.com/photos/8135493/pexels-photo-8135493.jpeg?auto=compress&cs=tinysrgb&w=900'],
+  ['title' => 'Full Home', 'image' => 'https://images.pexels.com/photos/14613699/pexels-photo-14613699.jpeg?auto=compress&cs=tinysrgb&w=900'],
 ];
 ?>
 
@@ -96,9 +96,16 @@ $ideas = [
               <?php endforeach; ?>
             </select>
           </label>
-          <label><span>Society / Area</span><input name="society_area" placeholder="e.g. DLF Phase 5"></label>
-          <label><span>Budget</span><input name="budget" placeholder="e.g. 8-15 lakh"></label>
+          <?php require __DIR__ . '/../partials/society-field.php'; ?>
+          <label>
+            <span>Budget</span>
+            <select name="budget">
+              <option value="">Select budget</option>
+              <?php require __DIR__ . '/../partials/budget-options.php'; ?>
+            </select>
+          </label>
         </div>
+        <?php require __DIR__ . '/../partials/lead-consent.php'; ?>
         <button class="btn-primary hero-lead-submit" type="submit">Get Free Quote</button>
         <p class="form-message" id="hireLeadMessage"></p>
       </form>

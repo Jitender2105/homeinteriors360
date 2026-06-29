@@ -65,6 +65,7 @@ $leadPurchaseSteps = [
     'We route the request to the right interior professional segment.',
     'Your purchase request is stored in the backend and handed to sales.',
 ];
+$cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : ['Gurgaon', 'Delhi', 'Noida'];
 ?>
 
 <section class="section pricing-plans-first" data-reveal>
@@ -155,15 +156,20 @@ $leadPurchaseSteps = [
         </label>
         <label>
           <span><?= htmlspecialchars((string)($content['ui.city'] ?? 'City'), ENT_QUOTES, 'UTF-8') ?></span>
-          <input name="city" required placeholder="<?= htmlspecialchars((string)($content['ui.city'] ?? 'City'), ENT_QUOTES, 'UTF-8') ?>" />
+          <select name="city" required>
+            <option value=""><?= htmlspecialchars((string)($content['ui.city'] ?? 'City'), ENT_QUOTES, 'UTF-8') ?></option>
+            <?php foreach ($cities as $city): ?>
+              <option value="<?= htmlspecialchars((string)$city, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$city, ENT_QUOTES, 'UTF-8') ?></option>
+            <?php endforeach; ?>
+          </select>
         </label>
-        <label>
-          <span>Society / Area</span>
-          <input name="society_area" placeholder="Society / Area" />
-        </label>
+        <?php require __DIR__ . '/../partials/society-field.php'; ?>
         <label>
           <span>Budget</span>
-          <input name="budget" placeholder="Budget" />
+          <select name="budget">
+            <option value="">Select budget</option>
+            <?php require __DIR__ . '/../partials/budget-options.php'; ?>
+          </select>
         </label>
         <label>
           <span>Lead Purchase Focus</span>
@@ -187,6 +193,7 @@ $leadPurchaseSteps = [
           <span>Requirement</span>
           <textarea name="requirement" required placeholder="Tell us what you want to buy or manage"></textarea>
         </label>
+        <?php require __DIR__ . '/../partials/lead-consent.php'; ?>
         <button type="submit" class="btn-primary"><?= htmlspecialchars((string)($content['pricing.form.submit'] ?? 'Connect with Sales'), ENT_QUOTES, 'UTF-8') ?></button>
         <p class="form-message" id="pricingLeadMessage"></p>
       </form>
@@ -282,6 +289,7 @@ $leadPurchaseSteps = [
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!form.reportValidity()) return;
     const payload = Object.fromEntries(new FormData(form).entries());
     const leadFocus = String(payload.lead_focus || '').trim();
     if (leadFocus) {

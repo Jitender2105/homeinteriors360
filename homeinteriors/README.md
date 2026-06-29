@@ -4,14 +4,16 @@ This folder contains the PHP frontend + backend for HomeInteriors360.
 
 ## Included
 
-- Public pages: `/`, `/professionals`, `/professionals/{slug}`, `/cost-calculator`
+- Public pages: `/`, `/professionals`, `/professionals/{slug}`, `/properties`, `/property/{slug}`, `/cost-calculator`
 - Lead capture with homepage/profile/calculator sources
 - Admin auth and dashboard
+- Database-managed real estate projects for sale and rent, including inventory, media, floor plans, pricing, amenities, SEO, and enquiries
 - Admin pages: `/admin`, `/admin/content`, `/admin/leads`, `/admin/pros`
 - APIs:
   - `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`
   - `/api/homepage`, `/api/pros`, `/api/pros/{slug}`, `/api/site-content`
   - `/api/leads`, `/api/calculator/estimate`
+  - `/api/property-projects`, `/api/property-projects/{slug}`, `/api/property-enquiries`
   - `/api/admin/content`, `/api/admin/leads`, `/api/admin/leads/status`
   - `/api/admin/pros`, `/api/admin/pros/verify`
 

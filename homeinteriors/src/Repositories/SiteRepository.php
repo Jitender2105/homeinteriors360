@@ -9,23 +9,48 @@ final class SiteRepository
     private static function parseJsonArray(mixed $value): array
     {
         if (is_array($value)) {
-            return array_values(array_filter(array_map('strval', $value), static fn(string $v): bool => trim($v) !== ''));
+            $values = [];
+            foreach ($value as $item) {
+                if (is_array($item)) {
+                    array_push($values, ...self::parseJsonArray($item));
+                    continue;
+                }
+
+                $item = trim((string)$item);
+                if ($item === '') {
+                    continue;
+                }
+
+                $decodedItem = json_decode($item, true);
+                if (is_array($decodedItem)) {
+                    array_push($values, ...self::parseJsonArray($decodedItem));
+                    continue;
+                }
+
+                $values[] = $item;
+            }
+            return array_values($values);
         }
         if (is_string($value)) {
             $trimmed = trim($value);
             if ($trimmed === '') {
                 return [];
             }
+
+            $decoded = json_decode($trimmed, true);
+            if (is_array($decoded)) {
+                return self::parseJsonArray($decoded);
+            }
+            if (is_string($decoded) && $decoded !== $trimmed) {
+                return self::parseJsonArray($decoded);
+            }
+
             if (str_contains($trimmed, "\n")) {
                 return array_values(array_filter(array_map('trim', preg_split('/\R+/', $trimmed) ?: []), static fn(string $v): bool => $v !== ''));
             }
             if (str_contains($trimmed, ',')) {
                 return array_values(array_filter(array_map('trim', explode(',', $trimmed)), static fn(string $v): bool => $v !== ''));
             }
-        }
-        $decoded = json_decode((string)$value, true);
-        if (is_array($decoded)) {
-            return array_values(array_filter(array_map('strval', $decoded), static fn(string $v): bool => trim($v) !== ''));
         }
         return [];
     }
@@ -175,6 +200,8 @@ final class SiteRepository
                  ORDER BY pr.is_premium DESC, p.year_completed DESC, p.created_at DESC
                  LIMIT 8"
             ),
+            'featured_properties' => self::listRealEstateProjects(['listing_for' => 'buy']),
+            'property_filters' => self::realEstateFilterOptions(),
             'city_options' => self::cityOptions(),
             'requirement_options' => self::requirementOptions(),
         ];
@@ -183,7 +210,8 @@ final class SiteRepository
     public static function cityOptions(): array
     {
         $rows = Database::query("SELECT DISTINCT city FROM pros WHERE is_active = 1 AND city IS NOT NULL AND city <> '' ORDER BY city");
-        return array_map(static fn(array $row): string => (string)$row['city'], $rows);
+        $cities = array_map(static fn(array $row): string => (string)$row['city'], $rows);
+        return array_values(array_unique(array_merge(['Gurgaon', 'Delhi', 'Noida'], $cities)));
     }
 
     public static function requirementOptions(): array
@@ -193,11 +221,34 @@ final class SiteRepository
         return $options ?: ['Kitchen', 'Wardrobe', 'Full Home'];
     }
 
+    public static function societyOptions(string $query = '', ?string $city = null, int $limit = 250): array
+    {
+        $where = ['is_active = 1'];
+        $params = [];
+        $query = trim($query);
+        $city = trim((string)$city);
+
+        if ($query !== '') {
+            $where[] = 'name LIKE ?';
+            $params[] = '%' . $query . '%';
+        }
+        if ($city !== '') {
+            $where[] = '(city = ? OR city = "")';
+            $params[] = $city;
+        }
+
+        $limit = max(1, min(500, $limit));
+        return Database::query(
+            'SELECT id, name, city FROM societies WHERE ' . implode(' AND ', $where) . ' ORDER BY city = "" ASC, name ASC LIMIT ' . $limit,
+            $params
+        );
+    }
+
     public static function proFilterOptions(): array
     {
         return [
             'roles' => array_map(static fn(array $r): string => (string)$r['role'], Database::query("SELECT DISTINCT role FROM pros WHERE is_active=1 ORDER BY role")),
-            'cities' => array_map(static fn(array $r): string => (string)$r['city'], Database::query("SELECT DISTINCT city FROM pros WHERE is_active=1 AND city IS NOT NULL AND city <> '' ORDER BY city")),
+            'cities' => self::cityOptions(),
             'work_types' => array_map(static fn(array $r): string => (string)$r['primary_work_type'], Database::query("SELECT DISTINCT primary_work_type FROM pros WHERE is_active=1 AND primary_work_type IS NOT NULL AND primary_work_type <> '' ORDER BY primary_work_type")),
             'work_areas' => array_map(static fn(array $r): string => (string)$r['primary_work_area'], Database::query("SELECT DISTINCT primary_work_area FROM pros WHERE is_active=1 AND primary_work_area IS NOT NULL AND primary_work_area <> '' ORDER BY primary_work_area")),
         ];
@@ -723,6 +774,8 @@ final class SiteRepository
             'verified_pros' => (int)(Database::one('SELECT COUNT(*) AS c FROM pros WHERE is_active = 1 AND verification_status = 1')['c'] ?? 0),
             'leads' => (int)(Database::one('SELECT COUNT(*) AS c FROM leads')['c'] ?? 0),
             'new_leads' => (int)(Database::one("SELECT COUNT(*) AS c FROM leads WHERE status = 'new'")['c'] ?? 0),
+            'property_projects' => (int)(Database::one('SELECT COUNT(*) AS c FROM real_estate_projects WHERE is_active = 1')['c'] ?? 0),
+            'property_enquiries' => (int)(Database::one("SELECT COUNT(*) AS c FROM property_enquiries WHERE status = 'new'")['c'] ?? 0),
         ];
     }
 
@@ -759,6 +812,10 @@ final class SiteRepository
                 continue;
             }
             $price = self::leadPriceForCount($count, false);
+            $sampleLeads = array_map(
+                static fn(array $lead): array => self::publicSampleLead($lead),
+                self::sampleMatchingLeads($matching, 3)
+            );
             $cards[] = [
                 'id' => hash('sha256', $definition['name'] . json_encode($definition['criteria']) . $dateFilter . $startDate . $endDate),
                 'section' => $definition['section'],
@@ -770,9 +827,44 @@ final class SiteRepository
                 'lead_count' => $count,
                 'price_total' => $price['total'],
                 'pricing' => $price,
+                'sample_leads' => $sampleLeads,
             ];
         }
         return $cards;
+    }
+
+    private static function sampleMatchingLeads(array $leads, int $limit = 3): array
+    {
+        $leads = array_values($leads);
+        if (count($leads) <= $limit) {
+            return $leads;
+        }
+        shuffle($leads);
+        return array_slice($leads, 0, $limit);
+    }
+
+    private static function publicSampleLead(array $lead): array
+    {
+        return [
+            'name' => (string)($lead['name'] ?? ''),
+            'phone' => self::maskPhone((string)($lead['phone'] ?? '')),
+            'city' => (string)($lead['city'] ?? ''),
+            'society_area' => (string)($lead['society_area'] ?? ''),
+            'requirement' => (string)($lead['requirement'] ?? ''),
+            'budget' => (string)($lead['budget'] ?? ''),
+        ];
+    }
+
+    private static function maskPhone(string $phone): string
+    {
+        $digits = preg_replace('/\\D+/', '', $phone) ?? '';
+        $length = strlen($digits);
+        if ($length <= 4) {
+            return $length > 0 ? str_repeat('*', $length) : 'Masked';
+        }
+        $prefix = substr($digits, 0, min(2, $length));
+        $suffix = substr($digits, -2);
+        return $prefix . str_repeat('*', max(4, $length - 4)) . $suffix;
     }
 
     public static function leadPriceForCount(int $count, bool $firstTimeEligible = true): array
@@ -813,8 +905,10 @@ final class SiteRepository
         $requestedCount = isset($item['selected_count']) ? (int)$item['selected_count'] : (isset($item['lead_count']) ? (int)$item['lead_count'] : $availableCount);
         $count = $availableCount > 0 ? max(1, min($requestedCount, $availableCount)) : 0;
         $price = self::leadPriceForCount($count, $firstTimeEligible);
+        $packageId = hash('sha256', json_encode([$criteria, $dateFilter, $startDate, $endDate]));
         return [
             'id' => hash('sha256', json_encode([$criteria, $dateFilter, $startDate, $endDate, $count])),
+            'package_id' => $packageId,
             'filter_name' => (string)($item['filter_name'] ?? self::criteriaLabel($criteria)),
             'criteria' => $criteria,
             'date_filter' => $dateFilter,
@@ -830,9 +924,51 @@ final class SiteRepository
 
     public static function leadCartSummary(array $cart, ?string $couponCode = null, bool $firstTimeEligible = true): array
     {
-        $items = array_values(array_map(static fn(array $item): array => self::normalizeLeadCartItem($item, $firstTimeEligible), $cart));
-        $subtotal = (float)array_sum(array_column($items, 'price_total'));
-        $leadCount = (int)array_sum(array_column($items, 'lead_count'));
+        $items = [];
+        $seenLeadKeys = [];
+        $uniqueLeadCount = 0;
+        foreach ($cart as $cartItem) {
+            $normalized = self::normalizeLeadCartItem(is_array($cartItem) ? $cartItem : [], false);
+            $requestedCount = (int)$normalized['selected_count'];
+            $matching = self::matchingLeadRows(
+                $normalized['criteria'],
+                $normalized['date_filter'],
+                $normalized['start_date'],
+                $normalized['end_date']
+            );
+            $leadIds = [];
+            foreach (array_slice($matching, 0, $requestedCount) as $lead) {
+                $uniqueKey = self::leadUniqueKey($lead);
+                if (isset($seenLeadKeys[$uniqueKey])) {
+                    continue;
+                }
+                $seenLeadKeys[$uniqueKey] = true;
+                $leadIds[] = (int)$lead['id'];
+            }
+            $previousTotal = self::leadPriceForCount($uniqueLeadCount, $firstTimeEligible)['total'];
+            $uniqueLeadCount += count($leadIds);
+            $runningTotal = self::leadPriceForCount($uniqueLeadCount, $firstTimeEligible)['total'];
+            $itemAmount = max(0, $runningTotal - $previousTotal);
+            $normalized['requested_count'] = $requestedCount;
+            $normalized['lead_count'] = count($leadIds);
+            $normalized['unique_lead_count'] = count($leadIds);
+            $normalized['duplicate_count'] = max(0, $requestedCount - count($leadIds));
+            $normalized['lead_ids'] = $leadIds;
+            $normalized['price_total'] = $itemAmount;
+            $normalized['pricing'] = [
+                'total' => $itemAmount,
+                'lines' => [[
+                    'label' => 'Unique leads',
+                    'count' => count($leadIds),
+                    'rate' => count($leadIds) > 0 ? round($itemAmount / count($leadIds), 2) : 0,
+                    'amount' => $itemAmount,
+                ]],
+            ];
+            $items[] = $normalized;
+        }
+        $cartPricing = self::leadPriceForCount($uniqueLeadCount, $firstTimeEligible);
+        $subtotal = (float)$cartPricing['total'];
+        $leadCount = $uniqueLeadCount;
         $coupon = null;
         $discount = 0.0;
         if ($couponCode) {
@@ -843,11 +979,25 @@ final class SiteRepository
             'items' => $items,
             'subtotal' => $subtotal,
             'lead_count' => $leadCount,
+            'unique_lead_count' => $uniqueLeadCount,
+            'pricing' => $cartPricing,
             'coupon' => $coupon,
             'discount_amount' => $discount,
             'grand_total' => max($subtotal - $discount, 0),
             'first_time_eligible' => $firstTimeEligible,
         ];
+    }
+
+    private static function matchingLeadRows(array $criteria, string $dateFilter, ?string $startDate = null, ?string $endDate = null): array
+    {
+        $leads = self::leadRowsForDateFilter($dateFilter, $startDate, $endDate);
+        return array_values(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $criteria)));
+    }
+
+    private static function leadUniqueKey(array $lead): string
+    {
+        $phone = preg_replace('/\\D+/', '', (string)($lead['phone'] ?? '')) ?? '';
+        return $phone !== '' ? 'phone:' . $phone : 'id:' . (int)($lead['id'] ?? 0);
     }
 
     public static function buyerFirstTimeLeadOfferEligible(int $buyerId): bool
@@ -1022,6 +1172,10 @@ final class SiteRepository
             }
             foreach ($cart as $item) {
                 $normalized = self::normalizeLeadCartItem(is_array($item) ? $item : []);
+                $leadIds = array_values(array_filter(array_map('intval', (array)($item['lead_ids'] ?? []))));
+                $uniqueLeadCount = count($leadIds);
+                $itemAmount = (float)($item['price_total'] ?? 0);
+                $itemPricing = is_array($item['pricing'] ?? null) ? $item['pricing'] : ['total' => $itemAmount, 'lines' => []];
                 Database::exec(
                     'INSERT INTO lead_purchase_items (purchase_id, buyer_id, filter_name, filter_json, date_filter, leads_count, amount_total, pricing_json)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1033,11 +1187,12 @@ final class SiteRepository
                             'criteria' => $normalized['criteria'],
                             'start_date' => $normalized['start_date'],
                             'end_date' => $normalized['end_date'],
+                            'lead_ids' => $leadIds,
                         ], JSON_UNESCAPED_UNICODE),
                         $normalized['date_filter'],
-                        $normalized['lead_count'],
-                        $normalized['price_total'],
-                        json_encode($normalized['pricing'], JSON_UNESCAPED_UNICODE),
+                        $uniqueLeadCount,
+                        $itemAmount,
+                        json_encode($itemPricing, JSON_UNESCAPED_UNICODE),
                     ]
                 );
             }
@@ -1074,6 +1229,19 @@ final class SiteRepository
             throw new RuntimeException('Purchased lead package not found.');
         }
         $filter = json_decode((string)$item['filter_json'], true);
+        $leadIds = array_values(array_filter(array_map('intval', (array)($filter['lead_ids'] ?? []))));
+        if ($leadIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($leadIds), '?'));
+            $rows = Database::query(
+                'SELECT id, name, phone, city, society_area, budget, requirement, source, status, estimate, created_at FROM leads WHERE id IN (' . $placeholders . ')',
+                $leadIds
+            );
+            $byId = [];
+            foreach ($rows as $row) {
+                $byId[(int)$row['id']] = $row;
+            }
+            return array_values(array_filter(array_map(static fn(int $id): ?array => $byId[$id] ?? null, $leadIds)));
+        }
         $criteria = is_array($filter['criteria'] ?? null) ? $filter['criteria'] : [];
         $leads = self::leadRowsForDateFilter((string)($item['date_filter'] ?? 'all_time'), $filter['start_date'] ?? null, $filter['end_date'] ?? null);
         $matching = array_values(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $criteria)));
@@ -1215,5 +1383,798 @@ final class SiteRepository
             }
         }
         return $parts ? implode(' + ', $parts) : 'Lead package';
+    }
+
+    public static function realEstateFilterOptions(): array
+    {
+        return [
+            'cities' => array_map(
+                static fn(array $row): string => (string)$row['city'],
+                Database::query("SELECT DISTINCT city FROM real_estate_projects WHERE is_active=1 AND city<>'' ORDER BY city")
+            ),
+            'localities' => array_map(
+                static fn(array $row): string => (string)$row['locality'],
+                Database::query("SELECT DISTINCT locality FROM real_estate_projects WHERE is_active=1 AND locality IS NOT NULL AND locality<>'' ORDER BY locality")
+            ),
+            'property_types' => array_map(
+                static fn(array $row): string => (string)$row['property_type'],
+                Database::query("SELECT DISTINCT property_type FROM real_estate_projects WHERE is_active=1 AND property_type<>'' ORDER BY property_type")
+            ),
+            'bhk_types' => array_map(
+                static fn(array $row): string => (string)$row['bhk_type'],
+                Database::query("SELECT DISTINCT bhk_type FROM real_estate_units WHERE is_active=1 AND bhk_type IS NOT NULL AND bhk_type<>'' ORDER BY bhk_type")
+            ),
+        ];
+    }
+
+    public static function listRealEstateProjects(array $filters = [], bool $admin = false): array
+    {
+        $where = [];
+        $params = [];
+        if (!$admin) {
+            $where[] = 'p.is_active=1';
+        }
+        $listingFor = trim((string)($filters['listing_for'] ?? ''));
+        if (in_array($listingFor, ['buy', 'rent'], true)) {
+            $where[] = '(p.listing_for=? OR p.listing_for="both")';
+            $params[] = $listingFor;
+        }
+        foreach (['city', 'locality', 'property_type', 'project_status'] as $field) {
+            $value = trim((string)($filters[$field] ?? ''));
+            if ($value !== '') {
+                $where[] = 'p.' . $field . '=?';
+                $params[] = $value;
+            }
+        }
+        $bhk = trim((string)($filters['bhk_type'] ?? ''));
+        if ($bhk !== '') {
+            $where[] = 'EXISTS (SELECT 1 FROM real_estate_units bu WHERE bu.project_id=p.id AND bu.is_active=1 AND bu.bhk_type=?)';
+            $params[] = $bhk;
+        }
+        $keyword = trim((string)($filters['q'] ?? ''));
+        if ($keyword !== '') {
+            $where[] = '(p.project_name LIKE ? OR p.builder_name LIKE ? OR p.locality LIKE ? OR p.city LIKE ?)';
+            $search = '%' . $keyword . '%';
+            array_push($params, $search, $search, $search, $search);
+        }
+        $priceColumn = $listingFor === 'rent' ? 'rent_min' : 'price_min';
+        if (isset($filters['price_min']) && (float)$filters['price_min'] > 0) {
+            $where[] = 'p.' . $priceColumn . '>=?';
+            $params[] = (float)$filters['price_min'];
+        }
+        if (isset($filters['price_max']) && (float)$filters['price_max'] > 0) {
+            $where[] = 'p.' . $priceColumn . '<=?';
+            $params[] = (float)$filters['price_max'];
+        }
+
+        $order = match ((string)($filters['sort'] ?? '')) {
+            'price_low' => 'p.' . $priceColumn . ' ASC',
+            'price_high' => 'p.' . $priceColumn . ' DESC',
+            'possession' => 'p.possession_date ASC',
+            default => 'p.is_featured DESC, p.updated_at DESC',
+        };
+        $sql = 'SELECT p.*,
+                       (SELECT m.media_url FROM real_estate_media m WHERE m.project_id=p.id AND m.media_type="image" ORDER BY m.is_cover DESC, m.sort_order, m.id LIMIT 1) AS cover_image,
+                       (SELECT m.media_url FROM real_estate_media m WHERE m.project_id=p.id AND m.media_type="image" AND LOWER(m.category)="exterior" ORDER BY m.sort_order, m.id LIMIT 1) AS exterior_image,
+                       (SELECT GROUP_CONCAT(DISTINCT u.bhk_type ORDER BY u.sort_order SEPARATOR ", ") FROM real_estate_units u WHERE u.project_id=p.id AND u.is_active=1) AS configurations,
+                       (SELECT COUNT(*) FROM real_estate_units u WHERE u.project_id=p.id AND u.is_active=1) AS unit_count
+                FROM real_estate_projects p';
+        if ($where) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $sql .= ' ORDER BY ' . $order;
+        return Database::query($sql, $params);
+    }
+
+    public static function getRealEstateProject(int|string $identifier, bool $admin = false): ?array
+    {
+        $field = is_int($identifier) || ctype_digit((string)$identifier) ? 'id' : 'slug';
+        $sql = 'SELECT * FROM real_estate_projects WHERE ' . $field . '=?';
+        if (!$admin) {
+            $sql .= ' AND is_active=1';
+        }
+        $project = Database::one($sql, [$identifier]);
+        if (!$project) {
+            return null;
+        }
+        foreach (['amenities_json', 'highlights_json', 'nearby_json'] as $fieldName) {
+            $project[$fieldName] = self::parseJsonArray($project[$fieldName] ?? '[]');
+        }
+        $project['units'] = Database::query(
+            'SELECT * FROM real_estate_units WHERE project_id=?' . ($admin ? '' : ' AND is_active=1') . ' ORDER BY sort_order, sale_price, monthly_rent, id',
+            [(int)$project['id']]
+        );
+        $project['media'] = Database::query(
+            'SELECT * FROM real_estate_media WHERE project_id=? ORDER BY is_cover DESC, sort_order, id',
+            [(int)$project['id']]
+        );
+        $project['floor_plans'] = Database::query(
+            'SELECT fp.*, u.unit_name FROM real_estate_floor_plans fp LEFT JOIN real_estate_units u ON u.id=fp.unit_id WHERE fp.project_id=? ORDER BY fp.sort_order, fp.id',
+            [(int)$project['id']]
+        );
+        return $project;
+    }
+
+    public static function saveRealEstateProject(array $data, ?int $id = null): int
+    {
+        $fields = [
+            'slug', 'project_name', 'listing_for', 'property_type', 'project_status', 'builder_name', 'rera_number',
+            'possession_date', 'address', 'locality', 'city', 'state', 'pincode', 'latitude', 'longitude',
+            'short_description', 'description', 'price_min', 'price_max', 'rent_min', 'rent_max', 'price_per_sqft',
+            'area_min', 'area_max', 'total_units', 'total_towers', 'total_area_acres', 'video_url', 'brochure_url',
+            'amenities_json', 'highlights_json', 'nearby_json', 'meta_title', 'meta_description', 'is_featured', 'is_active',
+        ];
+        $jsonFields = ['amenities_json', 'highlights_json', 'nearby_json'];
+        $booleanFields = ['is_featured', 'is_active'];
+        $values = [];
+        foreach ($fields as $field) {
+            if (in_array($field, $jsonFields, true)) {
+                $values[] = json_encode(self::parseJsonArray($data[$field] ?? []), JSON_UNESCAPED_UNICODE);
+            } elseif (in_array($field, $booleanFields, true)) {
+                $values[] = !empty($data[$field]) ? 1 : 0;
+            } else {
+                $value = $data[$field] ?? null;
+                $values[] = $value === '' ? null : $value;
+            }
+        }
+
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        try {
+            if ($id) {
+                $sets = implode(', ', array_map(static fn(string $field): string => $field . '=?', $fields));
+                Database::exec('UPDATE real_estate_projects SET ' . $sets . ' WHERE id=?', [...$values, $id]);
+                $projectId = $id;
+            } else {
+                $columns = implode(', ', $fields);
+                $placeholders = implode(', ', array_fill(0, count($fields), '?'));
+                $projectId = Database::exec('INSERT INTO real_estate_projects (' . $columns . ') VALUES (' . $placeholders . ')', $values);
+            }
+
+            self::replaceRealEstateUnits($projectId, self::decodeStructuredRows($data['units_json'] ?? []));
+            self::replaceRealEstateMedia($projectId, self::decodeStructuredRows($data['media_json'] ?? []));
+            self::replaceRealEstateFloorPlans($projectId, self::decodeStructuredRows($data['floor_plans_json'] ?? []));
+            $pdo->commit();
+            return $projectId;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public static function decodeStructuredRows(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter($value, 'is_array'));
+        }
+        $decoded = json_decode((string)$value, true);
+        return is_array($decoded) ? array_values(array_filter($decoded, 'is_array')) : [];
+    }
+
+    private static function replaceRealEstateUnits(int $projectId, array $rows): void
+    {
+        Database::exec('DELETE FROM real_estate_units WHERE project_id=?', [$projectId]);
+        foreach ($rows as $index => $row) {
+            $name = trim((string)($row['unit_name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            Database::exec(
+                'INSERT INTO real_estate_units
+                 (project_id, unit_name, bhk_type, unit_type, carpet_area, builtup_area, balconies, bathrooms, furnishing, sale_price, monthly_rent, maintenance_amount, available_units, is_active, sort_order)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [
+                    $projectId, $name, $row['bhk_type'] ?? null, $row['unit_type'] ?? null,
+                    self::nullableNumber($row['carpet_area'] ?? null), self::nullableNumber($row['builtup_area'] ?? null),
+                    self::nullableNumber($row['balconies'] ?? null), self::nullableNumber($row['bathrooms'] ?? null),
+                    $row['furnishing'] ?? null, (float)($row['sale_price'] ?? 0), (float)($row['monthly_rent'] ?? 0),
+                    (float)($row['maintenance_amount'] ?? 0), (int)($row['available_units'] ?? 0),
+                    array_key_exists('is_active', $row) ? (!empty($row['is_active']) ? 1 : 0) : 1,
+                    (int)($row['sort_order'] ?? $index),
+                ]
+            );
+        }
+    }
+
+    private static function replaceRealEstateMedia(int $projectId, array $rows): void
+    {
+        Database::exec('DELETE FROM real_estate_media WHERE project_id=?', [$projectId]);
+        foreach ($rows as $index => $row) {
+            $url = trim((string)($row['media_url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            Database::exec(
+                'INSERT INTO real_estate_media (project_id, media_type, media_url, title, category, is_cover, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [
+                    $projectId, ($row['media_type'] ?? 'image') === 'video' ? 'video' : 'image', $url,
+                    $row['title'] ?? null, $row['category'] ?? null, !empty($row['is_cover']) ? 1 : 0,
+                    (int)($row['sort_order'] ?? $index),
+                ]
+            );
+        }
+    }
+
+    private static function replaceRealEstateFloorPlans(int $projectId, array $rows): void
+    {
+        Database::exec('DELETE FROM real_estate_floor_plans WHERE project_id=?', [$projectId]);
+        foreach ($rows as $index => $row) {
+            $title = trim((string)($row['title'] ?? ''));
+            $url = trim((string)($row['image_url'] ?? ''));
+            if ($title === '' || $url === '') {
+                continue;
+            }
+            Database::exec(
+                'INSERT INTO real_estate_floor_plans (project_id, unit_id, title, image_url, area_label, price_label, sort_order) VALUES (?, NULL, ?, ?, ?, ?, ?)',
+                [$projectId, $title, $url, $row['area_label'] ?? null, $row['price_label'] ?? null, (int)($row['sort_order'] ?? $index)]
+            );
+        }
+    }
+
+    private static function nullableNumber(mixed $value): int|float|null
+    {
+        return $value === null || $value === '' ? null : (float)$value;
+    }
+
+    public static function deleteRealEstateProject(int $id): void
+    {
+        Database::exec('DELETE FROM real_estate_projects WHERE id=?', [$id]);
+    }
+
+    public static function createPropertyEnquiry(array $data): int
+    {
+        $name = trim((string)($data['name'] ?? ''));
+        $phone = preg_replace('/\D+/', '', (string)($data['phone'] ?? '')) ?? '';
+        $projectId = (int)($data['project_id'] ?? 0);
+        if ($name === '' || strlen($phone) < 10 || $projectId < 1 || empty($data['consent'])) {
+            throw new InvalidArgumentException('Name, valid phone number, project, and consent are required.');
+        }
+        return Database::exec(
+            'INSERT INTO property_enquiries (project_id, unit_id, name, phone, email, requirement, message, consent, source)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+            [
+                $projectId, !empty($data['unit_id']) ? (int)$data['unit_id'] : null, $name, $phone,
+                trim((string)($data['email'] ?? '')) ?: null,
+                ($data['requirement'] ?? 'buy') === 'rent' ? 'rent' : 'buy',
+                trim((string)($data['message'] ?? '')) ?: null,
+                trim((string)($data['source'] ?? 'project_detail')) ?: 'project_detail',
+            ]
+        );
+    }
+
+    public static function listPropertyEnquiries(): array
+    {
+        return Database::query(
+            'SELECT e.*, p.project_name, p.city, p.locality, u.unit_name
+             FROM property_enquiries e
+             JOIN real_estate_projects p ON p.id=e.project_id
+             LEFT JOIN real_estate_units u ON u.id=e.unit_id
+             ORDER BY e.created_at DESC'
+        );
+    }
+
+    public static function updatePropertyEnquiryStatus(int $id, string $status): void
+    {
+        if (!in_array($status, ['new', 'contacted', 'qualified', 'closed'], true)) {
+            throw new InvalidArgumentException('Invalid enquiry status.');
+        }
+        Database::exec('UPDATE property_enquiries SET status=? WHERE id=?', [$status, $id]);
+    }
+
+    public static function normalizeUrlAliasPath(string $path): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '/';
+        }
+        $path = parse_url($path, PHP_URL_PATH) ?: $path;
+        $path = '/' . trim($path, '/');
+        return $path === '/' ? '/' : rtrim($path, '/');
+    }
+
+    public static function getUrlAliasByPath(string $path, bool $admin = false): ?array
+    {
+        try {
+            $sql = 'SELECT * FROM url_aliases WHERE path=?';
+            if (!$admin) {
+                $sql .= ' AND is_active=1';
+            }
+            return Database::one($sql, [self::normalizeUrlAliasPath($path)]);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    public static function listUrlAliases(): array
+    {
+        try {
+            return Database::query('SELECT * FROM url_aliases ORDER BY updated_at DESC, path ASC');
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    public static function getUrlAlias(int $id): ?array
+    {
+        return Database::one('SELECT * FROM url_aliases WHERE id=?', [$id]);
+    }
+
+    public static function saveUrlAlias(array $data, ?int $id = null): int
+    {
+        $path = self::normalizeUrlAliasPath((string)($data['path'] ?? ''));
+        if ($path === '') {
+            throw new InvalidArgumentException('URL path is required.');
+        }
+        $fields = [
+            'path', 'page_type', 'entity_table', 'entity_id', 'source', 'meta_title', 'meta_description',
+            'h1', 'content_html', 'image_url', 'canonical_url', 'robots', 'is_active',
+        ];
+        $values = [];
+        foreach ($fields as $field) {
+            if ($field === 'path') {
+                $values[] = $path;
+            } elseif ($field === 'entity_id') {
+                $values[] = !empty($data[$field]) ? (int)$data[$field] : null;
+            } elseif ($field === 'is_active') {
+                $values[] = !empty($data[$field]) ? 1 : 0;
+            } else {
+                $value = $data[$field] ?? null;
+                if ($field === 'page_type' && trim((string)$value) === '') {
+                    $value = 'page';
+                }
+                if ($field === 'source' && trim((string)$value) === '') {
+                    $value = 'manual';
+                }
+                $values[] = $value === '' ? null : $value;
+            }
+        }
+        if ($id) {
+            $sets = implode(', ', array_map(static fn(string $field): string => $field . '=?', $fields));
+            Database::exec('UPDATE url_aliases SET ' . $sets . ' WHERE id=?', [...$values, $id]);
+            return $id;
+        }
+        return Database::exec('INSERT INTO url_aliases (' . implode(', ', $fields) . ') VALUES (' . implode(', ', array_fill(0, count($fields), '?')) . ')', $values);
+    }
+
+    public static function deleteUrlAlias(int $id): void
+    {
+        Database::exec('DELETE FROM url_aliases WHERE id=?', [$id]);
+    }
+
+    public static function syncUrlAlias(array $data): void
+    {
+        try {
+            $path = self::normalizeUrlAliasPath((string)($data['path'] ?? ''));
+            if ($path === '') {
+                return;
+            }
+            $existing = self::getUrlAliasByPath($path, true);
+            if ($existing) {
+                $merged = $existing;
+                foreach ($data as $key => $value) {
+                    if (in_array($key, ['page_type', 'entity_table', 'entity_id', 'source', 'canonical_url', 'is_active'], true)) {
+                        $merged[$key] = $value;
+                    } elseif (($existing[$key] ?? null) === null || (string)($existing[$key] ?? '') === '') {
+                        $merged[$key] = $value;
+                    }
+                }
+                self::saveUrlAlias($merged, (int)$existing['id']);
+                return;
+            }
+            self::saveUrlAlias(array_merge(['is_active' => 1, 'source' => 'system'], $data));
+        } catch (Throwable) {
+            return;
+        }
+    }
+
+    public static function listDesignIdeaSections(bool $admin = false): array
+    {
+        $sql = 'SELECT * FROM design_idea_sections';
+        if (!$admin) {
+            $sql .= ' WHERE is_active=1';
+        }
+        $sql .= ' ORDER BY sort_order ASC, id ASC';
+        $rows = Database::query($sql);
+        foreach ($rows as &$row) {
+            $row['items_json'] = self::decodeStructuredRows($row['items_json'] ?? '[]');
+        }
+        unset($row);
+        return $rows;
+    }
+
+    public static function getDesignIdeaSection(int|string $identifier, bool $admin = false): ?array
+    {
+        $field = is_int($identifier) || ctype_digit((string)$identifier) ? 'id' : 'section_key';
+        $sql = 'SELECT * FROM design_idea_sections WHERE ' . $field . '=?';
+        if (!$admin) {
+            $sql .= ' AND is_active=1';
+        }
+        $row = Database::one($sql, [$identifier]);
+        if (!$row) {
+            return null;
+        }
+        $row['items_json'] = self::decodeStructuredRows($row['items_json'] ?? '[]');
+        return $row;
+    }
+
+    public static function saveDesignIdeaSection(array $data, ?int $id = null): int
+    {
+        $allowedTypes = ['hero_tiles', 'category_grid', 'color_grid', 'style_grid', 'unit_grid', 'trending', 'lead_form', 'tool_cards', 'content'];
+        $sectionType = trim((string)($data['section_type'] ?? 'category_grid'));
+        if (!in_array($sectionType, $allowedTypes, true)) {
+            throw new InvalidArgumentException('Invalid section type.');
+        }
+        $fields = ['section_key', 'title', 'subtitle', 'section_type', 'items_json', 'sort_order', 'is_active'];
+        $values = [];
+        foreach ($fields as $field) {
+            if ($field === 'items_json') {
+                $items = self::decodeStructuredRows($data[$field] ?? []);
+                $values[] = json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            } elseif ($field === 'is_active') {
+                $values[] = !empty($data[$field]) ? 1 : 0;
+            } elseif ($field === 'sort_order') {
+                $values[] = (int)($data[$field] ?? 0);
+            } else {
+                $value = $field === 'section_type' ? $sectionType : ($data[$field] ?? null);
+                $values[] = $value === '' ? null : $value;
+            }
+        }
+        if ($id) {
+            $sets = implode(', ', array_map(static fn(string $field): string => $field . '=?', $fields));
+            Database::exec('UPDATE design_idea_sections SET ' . $sets . ' WHERE id=?', [...$values, $id]);
+            return $id;
+        }
+        return Database::exec('INSERT INTO design_idea_sections (' . implode(', ', $fields) . ') VALUES (' . implode(', ', array_fill(0, count($fields), '?')) . ')', $values);
+    }
+
+    public static function deleteDesignIdeaSection(int $id): void
+    {
+        Database::exec('DELETE FROM design_idea_sections WHERE id=?', [$id]);
+    }
+
+    public static function designIdeaFilterOptions(): array
+    {
+        return [
+            'types' => self::distinctDesignIdeaField('type'),
+            'colors' => self::distinctDesignIdeaField('color'),
+            'cities' => self::distinctDesignIdeaField('city'),
+            'states' => self::distinctDesignIdeaField('state'),
+            'styles' => self::distinctDesignIdeaField('style'),
+            'layouts' => self::distinctDesignIdeaField('layout'),
+        ];
+    }
+
+    private static function distinctDesignIdeaField(string $field): array
+    {
+        return array_map(
+            static fn(array $row): string => (string)$row[$field],
+            Database::query('SELECT DISTINCT ' . $field . ' FROM design_ideas WHERE is_active=1 AND ' . $field . ' IS NOT NULL AND ' . $field . '<>"" ORDER BY ' . $field)
+        );
+    }
+
+    public static function listDesignIdeaAliases(bool $admin = false): array
+    {
+        $sql = 'SELECT * FROM design_idea_aliases';
+        if (!$admin) {
+            $sql .= ' WHERE is_active=1';
+        }
+        $sql .= ' ORDER BY updated_at DESC, title ASC';
+        return Database::query($sql);
+    }
+
+    public static function getDesignIdeaAlias(string|int $identifier, bool $admin = false): ?array
+    {
+        $field = is_int($identifier) || ctype_digit((string)$identifier) ? 'id' : 'slug';
+        $sql = 'SELECT * FROM design_idea_aliases WHERE ' . $field . '=?';
+        if (!$admin) {
+            $sql .= ' AND is_active=1';
+        }
+        return Database::one($sql, [$identifier]);
+    }
+
+    public static function matchDesignIdeaAliasForFilters(array $filters): ?array
+    {
+        $filterFields = [
+            'type' => 'filter_type',
+            'color' => 'filter_color',
+            'city' => 'filter_city',
+            'state' => 'filter_state',
+            'style' => 'filter_style',
+            'layout' => 'filter_layout',
+        ];
+        $selected = [];
+        foreach ($filterFields as $filterKey => $column) {
+            $value = trim((string)($filters[$filterKey] ?? ''));
+            if ($value !== '') {
+                $selected[$filterKey] = mb_strtolower($value);
+            }
+        }
+        if (!$selected) {
+            return null;
+        }
+
+        $bestAlias = null;
+        $bestScore = 0;
+        foreach (self::listDesignIdeaAliases() as $alias) {
+            $score = 0;
+            $matches = true;
+            foreach ($filterFields as $filterKey => $column) {
+                $aliasValue = trim((string)($alias[$column] ?? ''));
+                if ($aliasValue === '') {
+                    continue;
+                }
+                if (($selected[$filterKey] ?? '') !== mb_strtolower($aliasValue)) {
+                    $matches = false;
+                    break;
+                }
+                $score++;
+            }
+            if ($matches && $score > $bestScore) {
+                $bestAlias = $alias;
+                $bestScore = $score;
+            }
+        }
+
+        return $bestAlias;
+    }
+
+    public static function listDesignIdeas(array $filters = [], bool $admin = false): array
+    {
+        $where = [];
+        $params = [];
+        if (!$admin) {
+            $where[] = 'is_active=1';
+        }
+        foreach (['type', 'color', 'city', 'state', 'style', 'layout'] as $field) {
+            $value = trim((string)($filters[$field] ?? ''));
+            if ($value !== '') {
+                $where[] = $field . '=?';
+                $params[] = $value;
+            }
+        }
+        $q = trim((string)($filters['q'] ?? ''));
+        if ($q !== '') {
+            $where[] = '(name LIKE ? OR location LIKE ? OR city LIKE ? OR type LIKE ? OR color LIKE ? OR style LIKE ?)';
+            $search = '%' . $q . '%';
+            array_push($params, $search, $search, $search, $search, $search, $search);
+        }
+        $sql = 'SELECT * FROM design_ideas';
+        if ($where) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $sql .= ' ORDER BY is_featured DESC, updated_at DESC, id DESC';
+        $rows = Database::query($sql, $params);
+        foreach ($rows as &$row) {
+            $row = self::normalizeDesignIdeaRow($row);
+        }
+        unset($row);
+        return $rows;
+    }
+
+    public static function designIdeaAliasPage(string $slug): ?array
+    {
+        $alias = self::getDesignIdeaAlias($slug);
+        if (!$alias) {
+            return null;
+        }
+        $filters = array_filter([
+            'type' => $alias['filter_type'] ?? null,
+            'color' => $alias['filter_color'] ?? null,
+            'city' => $alias['filter_city'] ?? null,
+            'state' => $alias['filter_state'] ?? null,
+            'style' => $alias['filter_style'] ?? null,
+            'layout' => $alias['filter_layout'] ?? null,
+        ], static fn(mixed $value): bool => $value !== null && $value !== '');
+        return [
+            'alias' => $alias,
+            'filters' => $filters,
+            'ideas' => self::listDesignIdeas(array_merge($filters, [
+                'q' => $_GET['q'] ?? '',
+                'color' => $_GET['color'] ?? ($filters['color'] ?? ''),
+                'city' => $_GET['city'] ?? ($filters['city'] ?? ''),
+                'state' => $_GET['state'] ?? ($filters['state'] ?? ''),
+                'style' => $_GET['style'] ?? ($filters['style'] ?? ''),
+                'layout' => $_GET['layout'] ?? ($filters['layout'] ?? ''),
+            ])),
+        ];
+    }
+
+    public static function getDesignIdea(string|int $identifier, bool $admin = false): ?array
+    {
+        $field = is_int($identifier) || ctype_digit((string)$identifier) ? 'id' : 'slug';
+        $sql = 'SELECT * FROM design_ideas WHERE ' . $field . '=?';
+        if (!$admin) {
+            $sql .= ' AND is_active=1';
+        }
+        $row = Database::one($sql, [$identifier]);
+        return $row ? self::normalizeDesignIdeaRow($row) : null;
+    }
+
+    private static function normalizeDesignIdeaRow(array $row): array
+    {
+        $row['gallery_json'] = self::parseJsonArray($row['gallery_json'] ?? '[]');
+        $row['tags_json'] = self::parseJsonArray($row['tags_json'] ?? '[]');
+        return $row;
+    }
+
+    public static function saveDesignIdea(array $data, ?int $id = null): int
+    {
+        $fields = [
+            'slug', 'name', 'location', 'city', 'state', 'type', 'color', 'style', 'layout',
+            'length_ft', 'breadth_ft', 'height_ft', 'budget_min', 'budget_max',
+            'short_description', 'description', 'image_url', 'gallery_json', 'tags_json',
+            'meta_title', 'meta_description', 'is_featured', 'is_active',
+        ];
+        $values = [];
+        foreach ($fields as $field) {
+            if (in_array($field, ['gallery_json', 'tags_json'], true)) {
+                $values[] = json_encode(self::parseJsonArray($data[$field] ?? []), JSON_UNESCAPED_UNICODE);
+            } elseif (in_array($field, ['is_featured', 'is_active'], true)) {
+                $values[] = !empty($data[$field]) ? 1 : 0;
+            } else {
+                $value = $data[$field] ?? null;
+                $values[] = $value === '' ? null : $value;
+            }
+        }
+        if ($id) {
+            $sets = implode(', ', array_map(static fn(string $field): string => $field . '=?', $fields));
+            Database::exec('UPDATE design_ideas SET ' . $sets . ' WHERE id=?', [...$values, $id]);
+            self::syncDesignIdeaUrlAliases($id);
+            return $id;
+        }
+        $newId = Database::exec('INSERT INTO design_ideas (' . implode(', ', $fields) . ') VALUES (' . implode(', ', array_fill(0, count($fields), '?')) . ')', $values);
+        self::syncDesignIdeaUrlAliases($newId);
+        return $newId;
+    }
+
+    public static function syncDesignIdeaUrlAliases(int $ideaId): void
+    {
+        $idea = self::getDesignIdea($ideaId, true);
+        if (!$idea) {
+            return;
+        }
+        $detailPath = '/design-ideas/idea/' . (string)$idea['slug'];
+        self::syncUrlAlias([
+            'path' => $detailPath,
+            'page_type' => 'design_idea_detail',
+            'entity_table' => 'design_ideas',
+            'entity_id' => (int)$idea['id'],
+            'source' => 'design_idea',
+            'meta_title' => $idea['meta_title'] ?: $idea['name'] . ' | HomeInteriors360',
+            'meta_description' => $idea['meta_description'] ?: $idea['short_description'],
+            'h1' => $idea['name'],
+            'content_html' => $idea['description'],
+            'image_url' => $idea['image_url'],
+            'canonical_url' => $detailPath,
+            'is_active' => !empty($idea['is_active']) ? 1 : 0,
+        ]);
+
+        $type = trim((string)($idea['type'] ?? ''));
+        if ($type !== '') {
+            $listingSlug = slugify($type) . '-designs';
+            $existingAlias = self::getDesignIdeaAlias($listingSlug, true);
+            if (!$existingAlias) {
+                self::saveDesignIdeaAlias([
+                    'slug' => $listingSlug,
+                    'title' => $type . ' Design Ideas',
+                    'subtitle' => 'Explore ' . strtolower($type) . ' design ideas with photos, colours, layouts, dimensions and quote capture.',
+                    'hero_image' => $idea['image_url'],
+                    'intro_content' => $type . ' interiors should balance style, storage, layout, lighting, and budget. Browse references before requesting a quote.',
+                    'outro_content' => 'Shortlist ' . strtolower($type) . ' references you like and request a detailed quotation.',
+                    'filter_type' => $type,
+                    'meta_title' => $type . ' Design Ideas | HomeInteriors360',
+                    'meta_description' => 'Browse ' . strtolower($type) . ' design ideas with photos, dimensions, colours, layouts and quote capture.',
+                    'is_active' => 1,
+                ]);
+            } else {
+                self::syncDesignIdeaAliasUrl((int)$existingAlias['id']);
+            }
+        }
+    }
+
+    public static function deleteDesignIdea(int $id): void
+    {
+        Database::exec('DELETE FROM design_ideas WHERE id=?', [$id]);
+    }
+
+    public static function saveDesignIdeaAlias(array $data, ?int $id = null): int
+    {
+        $fields = [
+            'slug', 'title', 'subtitle', 'hero_image', 'intro_content', 'outro_content',
+            'filter_type', 'filter_color', 'filter_city', 'filter_state', 'filter_style', 'filter_layout',
+            'meta_title', 'meta_description', 'is_active',
+        ];
+        $values = [];
+        foreach ($fields as $field) {
+            if ($field === 'is_active') {
+                $values[] = !empty($data[$field]) ? 1 : 0;
+            } else {
+                $value = $data[$field] ?? null;
+                $values[] = $value === '' ? null : $value;
+            }
+        }
+        if ($id) {
+            $sets = implode(', ', array_map(static fn(string $field): string => $field . '=?', $fields));
+            Database::exec('UPDATE design_idea_aliases SET ' . $sets . ' WHERE id=?', [...$values, $id]);
+            self::syncDesignIdeaAliasUrl($id);
+            return $id;
+        }
+        $newId = Database::exec('INSERT INTO design_idea_aliases (' . implode(', ', $fields) . ') VALUES (' . implode(', ', array_fill(0, count($fields), '?')) . ')', $values);
+        self::syncDesignIdeaAliasUrl($newId);
+        return $newId;
+    }
+
+    public static function syncDesignIdeaAliasUrl(int $aliasId): void
+    {
+        $alias = self::getDesignIdeaAlias($aliasId, true);
+        if (!$alias) {
+            return;
+        }
+        $path = '/design-ideas/' . (string)$alias['slug'];
+        self::syncUrlAlias([
+            'path' => $path,
+            'page_type' => 'design_idea_alias',
+            'entity_table' => 'design_idea_aliases',
+            'entity_id' => (int)$alias['id'],
+            'source' => 'design_idea_alias',
+            'meta_title' => $alias['meta_title'] ?: $alias['title'] . ' | HomeInteriors360',
+            'meta_description' => $alias['meta_description'] ?: $alias['subtitle'],
+            'h1' => $alias['title'],
+            'content_html' => trim((string)($alias['intro_content'] ?? '') . "\n\n" . (string)($alias['outro_content'] ?? '')),
+            'image_url' => $alias['hero_image'],
+            'canonical_url' => $path,
+            'is_active' => !empty($alias['is_active']) ? 1 : 0,
+        ]);
+    }
+
+    public static function deleteDesignIdeaAlias(int $id): void
+    {
+        Database::exec('DELETE FROM design_idea_aliases WHERE id=?', [$id]);
+    }
+
+    public static function createDesignIdeaLead(array $data): int
+    {
+        $name = trim((string)($data['name'] ?? ''));
+        $phone = preg_replace('/\D+/', '', (string)($data['phone'] ?? '')) ?? '';
+        if ($name === '' || strlen($phone) < 10 || empty($data['consent'])) {
+            throw new InvalidArgumentException('Name, valid phone number, and consent are required.');
+        }
+        return Database::exec(
+            'INSERT INTO design_idea_leads (design_idea_id, alias_id, name, phone, email, city, requirement, budget, message, consent, source)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
+            [
+                !empty($data['design_idea_id']) ? (int)$data['design_idea_id'] : null,
+                !empty($data['alias_id']) ? (int)$data['alias_id'] : null,
+                $name,
+                $phone,
+                trim((string)($data['email'] ?? '')) ?: null,
+                trim((string)($data['city'] ?? '')) ?: null,
+                trim((string)($data['requirement'] ?? 'Design idea quote')) ?: 'Design idea quote',
+                trim((string)($data['budget'] ?? '')) ?: null,
+                trim((string)($data['message'] ?? '')) ?: null,
+                trim((string)($data['source'] ?? 'design_ideas')) ?: 'design_ideas',
+            ]
+        );
+    }
+
+    public static function listDesignIdeaLeads(): array
+    {
+        return Database::query(
+            'SELECT l.*, i.name AS idea_name, a.title AS alias_title
+             FROM design_idea_leads l
+             LEFT JOIN design_ideas i ON i.id=l.design_idea_id
+             LEFT JOIN design_idea_aliases a ON a.id=l.alias_id
+             ORDER BY l.created_at DESC'
+        );
+    }
+
+    public static function updateDesignIdeaLeadStatus(int $id, string $status): void
+    {
+        if (!in_array($status, ['new', 'contacted', 'qualified', 'closed'], true)) {
+            throw new InvalidArgumentException('Invalid lead status.');
+        }
+        Database::exec('UPDATE design_idea_leads SET status=? WHERE id=?', [$status, $id]);
     }
 }

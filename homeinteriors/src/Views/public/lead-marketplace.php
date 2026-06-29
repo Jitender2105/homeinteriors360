@@ -23,15 +23,21 @@
     </div>
 
     <div class="lead-card lead-card-flat lead-filter-card lead-market-panel">
-      <div class="hero-lead-grid lead-market-controls">
-        <label><span>Date Filter</span><select id="leadDateFilter"><option value="all_time" selected>All time</option><option value="today">Today</option><option value="last_7_days">Last 7 days</option><option value="last_30_days">Last 30 days</option><option value="custom">Custom date range</option></select></label>
-        <label><span>City</span><select id="leadCityFilter"><option value="">All cities</option></select></label>
-        <label><span>Type of Work</span><select id="leadWorkFilter"><option value="">All work types</option></select></label>
-        <a class="btn-primary hero-lead-submit" href="/lead-cart">Open Cart</a>
-        <label><span>Start Date</span><input id="leadStartDate" type="date" disabled></label>
-        <label><span>End Date</span><input id="leadEndDate" type="date" disabled></label>
+      <div class="lead-mobile-filter-bar">
+        <button type="button" class="btn-muted lead-filter-toggle" id="leadFilterToggle" aria-expanded="false" aria-controls="leadFilterDrawer">Filters</button>
+        <a class="btn-primary lead-cart-link" href="/lead-cart">Open Cart <span class="lead-cart-count">0</span></a>
       </div>
-      <div id="leadQuickFilters" class="lead-quick-filters"></div>
+      <div class="lead-filter-drawer" id="leadFilterDrawer">
+        <div class="hero-lead-grid lead-market-controls">
+          <label><span>Date Filter</span><select id="leadDateFilter"><option value="all_time" selected>All time</option><option value="today">Today</option><option value="last_7_days">Last 7 days</option><option value="last_30_days">Last 30 days</option><option value="custom">Custom date range</option></select></label>
+          <label><span>City</span><select id="leadCityFilter"><option value="">All cities</option></select></label>
+          <label><span>Type of Work</span><select id="leadWorkFilter"><option value="">All work types</option></select></label>
+          <a class="btn-primary hero-lead-submit lead-cart-link" href="/lead-cart">Open Cart <span class="lead-cart-count">0</span></a>
+          <label><span>Start Date</span><input id="leadStartDate" type="date" disabled></label>
+          <label><span>End Date</span><input id="leadEndDate" type="date" disabled></label>
+        </div>
+        <div id="leadQuickFilters" class="lead-quick-filters"></div>
+      </div>
       <div class="lead-market-toolbar">
         <div>
           <strong id="leadVisibleCount">0 packages</strong>
@@ -43,6 +49,7 @@
     </div>
   </div>
 </section>
+<a class="lead-cart-sticky lead-cart-link" href="/lead-cart">Open Cart <span class="lead-cart-count">0</span></a>
 
 <section class="section section-tight" data-reveal>
   <div class="container twin-grid">
@@ -71,6 +78,9 @@
   const sortFilter = document.getElementById('leadSort');
   const quickFilters = document.getElementById('leadQuickFilters');
   const visibleCount = document.getElementById('leadVisibleCount');
+  const filterToggle = document.getElementById('leadFilterToggle');
+  const filterDrawer = document.getElementById('leadFilterDrawer');
+  const cartCountBadges = [...document.querySelectorAll('.lead-cart-count')];
   let allItems = [];
   let cartByPackageKey = new Map();
   let quantityByBaseKey = new Map();
@@ -88,6 +98,12 @@
     start_date: item.start_date || null,
     end_date: item.end_date || null,
   });
+  const apiPackageKey = (item = {}) => JSON.stringify([
+    stableCriteria(item.criteria || {}),
+    item.date_filter || 'all_time',
+    item.start_date || null,
+    item.end_date || null,
+  ]);
   const packageKey = (item = {}) => JSON.stringify({
     criteria: stableCriteria(item.criteria || {}),
     date_filter: item.date_filter || 'all_time',
@@ -114,14 +130,11 @@
   function syncCardQuantity(card) {
     const item = selectedCartItem(card);
     const selected = selectedCountFor(item);
-    const price = priceForCount(selected);
     const selectedCount = card.querySelector('.lead-selected-count');
-    const selectedPrice = card.querySelector('.lead-selected-price');
     const addBtn = card.querySelector('.add-lead-cart');
     const removeSlot = card.querySelector('.lead-remove-slot');
-    const cartId = cartByPackageKey.get(packageKey(item));
+    const cartId = cartByPackageKey.get(apiPackageKey(item));
     if (selectedCount) selectedCount.textContent = Number(selected).toLocaleString('en-IN');
-    if (selectedPrice) selectedPrice.textContent = money(price);
     if (addBtn) {
       addBtn.disabled = Boolean(cartId);
       addBtn.textContent = cartId ? 'Added to Cart' : 'Add to Cart';
@@ -135,10 +148,20 @@
     const res = await fetch('/api/lead-cart');
     if (!res.ok) {
       cartByPackageKey = new Map();
+      updateCartCount(0);
       return;
     }
     const data = await res.json();
-    cartByPackageKey = new Map((data.items || []).map((item) => [packageKey(item), item.id]));
+    const items = data.items || [];
+    cartByPackageKey = new Map(items.map((item) => [apiPackageKey(item), item.package_id || item.id]));
+    updateCartCount(items.length);
+  }
+
+  function updateCartCount(count) {
+    cartCountBadges.forEach((badge) => {
+      badge.textContent = Number(count || 0).toLocaleString('en-IN');
+      badge.hidden = Number(count || 0) <= 0;
+    });
   }
 
   function params() {
@@ -188,6 +211,19 @@
     });
   }
 
+  function renderSampleLead(lead) {
+    return `
+      <div class="lead-sample-row">
+        <strong>${esc(lead.name || 'Sample lead')}</strong>
+        <span>${esc(lead.phone || 'Masked')}</span>
+        <span>${esc(lead.city || 'City not shared')}</span>
+        <span>${esc(lead.society_area || 'Society not shared')}</span>
+        <span>${esc(lead.requirement || 'Requirement not shared')}</span>
+        <span>${esc(lead.budget || 'Budget not shared')}</span>
+      </div>
+    `;
+  }
+
   function render(items) {
     visibleCount.textContent = `${items.length} package${items.length === 1 ? '' : 's'}`;
     sections.innerHTML = items.length ? `
@@ -196,7 +232,7 @@
           const available = Math.max(1, Number(item.lead_count || 1));
           const defaultQty = Math.max(1, Math.min(Number(quantityByBaseKey.get(basePackageKey(item)) || available), available));
           const selectedItem = { ...item, selected_count: defaultQty, lead_count: defaultQty };
-          const key = packageKey(selectedItem);
+          const key = apiPackageKey(selectedItem);
           const cartId = cartByPackageKey.get(key);
           return `
           <article class="lead-package-card lead-product-card" data-item='${esc(JSON.stringify(item))}'>
@@ -206,14 +242,29 @@
             </div>
             <h3>${esc(item.filter_name)}</h3>
             <div class="lead-package-count"><strong>${Number(item.lead_count).toLocaleString('en-IN')}</strong><span>available leads</span></div>
+            ${(item.sample_leads || []).length ? `
+              <div class="lead-sample-box">
+                <div class="lead-sample-head">
+                  <span>Sample leads</span>
+                  <em>Phone masked</em>
+                </div>
+                <div class="lead-sample-grid">
+                  <div class="lead-sample-row lead-sample-header">
+                    <strong>Name</strong>
+                    <span>Phone</span>
+                    <span>City</span>
+                    <span>Society</span>
+                    <span>Requirement</span>
+                    <span>Budget</span>
+                  </div>
+                  ${(item.sample_leads || []).slice(0, 3).map(renderSampleLead).join('')}
+                </div>
+              </div>
+            ` : ''}
             <label class="lead-quantity-control">
               <span>Quantity to buy</span>
               <input class="lead-qty-input" type="number" min="1" max="${available}" value="${defaultQty}" inputmode="numeric">
             </label>
-            <div class="lead-price-row">
-              <span>Estimated for <em class="lead-selected-count">${Number(defaultQty).toLocaleString('en-IN')}</em> leads</span>
-              <strong class="lead-selected-price">${money(priceForCount(defaultQty))}</strong>
-            </div>
             <p class="muted">Final checkout benefits are applied after login.</p>
             <div class="lead-card-actions">
               <button type="button" class="btn-primary add-lead-cart" ${cartId ? 'disabled' : ''}>${cartId ? 'Added to Cart' : 'Add to Cart'}</button>
@@ -273,6 +324,11 @@
     cityFilter.value = btn.dataset.city || '';
     hydrateFilters(allItems);
     rerender();
+  });
+  filterToggle?.addEventListener('click', () => {
+    const isOpen = filterDrawer.classList.toggle('is-open');
+    filterToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    filterToggle.textContent = isOpen ? 'Hide Filters' : 'Filters';
   });
 
   sections.addEventListener('click', async (event) => {

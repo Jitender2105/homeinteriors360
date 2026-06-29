@@ -27,6 +27,7 @@ $packages = [
   ['value' => 'Premium', 'title' => 'Premium', 'price' => 'Most selected', 'text' => 'Better finishes, richer hardware and balanced styling.'],
   ['value' => 'Luxury', 'title' => 'Luxury', 'price' => 'Statement homes', 'text' => 'Premium materials, custom detailing and elevated execution.'],
 ];
+$cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : ['Gurgaon', 'Delhi', 'Noida'];
 ?>
 
 <section class="calculator-hero">
@@ -114,11 +115,20 @@ $packages = [
         <div class="calc-contact-grid">
           <input name="name" required placeholder="<?= htmlspecialchars((string)($content['ui.name'] ?? 'Name'), ENT_QUOTES, 'UTF-8') ?>" />
           <input name="phone" required placeholder="<?= htmlspecialchars((string)($content['ui.phone'] ?? 'Phone'), ENT_QUOTES, 'UTF-8') ?>" />
-          <input name="city" required placeholder="<?= htmlspecialchars((string)($content['ui.city'] ?? 'City'), ENT_QUOTES, 'UTF-8') ?>" />
-          <input name="society_area" placeholder="<?= htmlspecialchars((string)($content['ui.society_area'] ?? 'Society / Area'), ENT_QUOTES, 'UTF-8') ?>" />
-          <input name="budget" placeholder="<?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?>" />
+          <select name="city" required>
+            <option value=""><?= htmlspecialchars((string)($content['ui.city'] ?? 'City'), ENT_QUOTES, 'UTF-8') ?></option>
+            <?php foreach ($cities as $city): ?>
+              <option value="<?= htmlspecialchars((string)$city, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$city, ENT_QUOTES, 'UTF-8') ?></option>
+            <?php endforeach; ?>
+          </select>
+          <?php require __DIR__ . '/../partials/society-field.php'; ?>
+          <select name="budget">
+            <option value=""><?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?></option>
+            <?php require __DIR__ . '/../partials/budget-options.php'; ?>
+          </select>
           <input name="requirement" placeholder="<?= htmlspecialchars((string)($content['ui.requirement'] ?? 'Requirement'), ENT_QUOTES, 'UTF-8') ?>" value="Design Cost Calculator" />
         </div>
+        <?php require __DIR__ . '/../partials/lead-consent.php'; ?>
       </div>
 
       <div class="calculator-actions">
@@ -211,7 +221,7 @@ $packages = [
       return false;
     }
     if (current === 4) {
-      return ['name', 'phone', 'city'].every((field) => form.elements[field].reportValidity());
+      return ['name', 'phone', 'city', 'lead_consent'].every((field) => form.elements[field].reportValidity());
     }
     return true;
   }
@@ -284,6 +294,7 @@ $packages = [
       society_area: fd.get('society_area'),
       budget: fd.get('budget'),
       requirement: homeSize ? `${requirementBase} | Home size: ${homeSize}` : requirementBase,
+      lead_consent: fd.get('lead_consent'),
     };
 
     submitBtn.disabled = true;

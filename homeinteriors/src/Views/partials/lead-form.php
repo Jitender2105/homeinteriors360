@@ -4,8 +4,11 @@
     <input name="name" placeholder="Full Name *" required>
     <input name="phone" placeholder="Contact Number *" required>
     <input name="email" placeholder="Email Address">
-    <input name="society_area" placeholder="Society / Area">
-    <input name="budget" placeholder="Budget">
+    <?php require __DIR__ . '/society-field.php'; ?>
+    <select name="budget">
+      <option value="">Select Budget</option>
+      <?php require __DIR__ . '/budget-options.php'; ?>
+    </select>
     <select name="work_type" required>
       <option value="">Select Project Type *</option>
       <?php foreach (($workTypes ?? []) as $w): ?>
@@ -21,6 +24,7 @@
   </div>
   <textarea name="message" rows="3" placeholder="Tell us about your vision..."></textarea>
   <?php if ($designerId): ?><input type="hidden" name="interior_designer_id" value="<?= (int)$designerId ?>"><?php endif; ?>
+  <?php require __DIR__ . '/lead-consent.php'; ?>
   <button type="submit">Request Consultation</button>
   <p id="lead-msg" class="muted"></p>
 </form>
@@ -31,6 +35,7 @@
   const msg = document.getElementById('lead-msg');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!form.reportValidity()) return;
     const data = Object.fromEntries(new FormData(form).entries());
     const res = await fetch('/api/leads', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
     const json = await res.json();

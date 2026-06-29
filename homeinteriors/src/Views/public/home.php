@@ -6,15 +6,20 @@ $heroBg = $heroAssets[0] ?? '';
 $heroBg2 = $heroAssets[1] ?? $heroBg;
 $topPros = is_array($payload['top_pros'] ?? null) ? $payload['top_pros'] : [];
 $featuredProjects = is_array($payload['featured_projects'] ?? null) ? $payload['featured_projects'] : [];
+$featuredProperties = array_slice(is_array($payload['featured_properties'] ?? null) ? $payload['featured_properties'] : [], 0, 4);
+$propertyFilters = is_array($payload['property_filters'] ?? null) ? $payload['property_filters'] : [];
 $services = is_array($payload['services'] ?? null) ? $payload['services'] : [];
 $testimonials = is_array($payload['testimonials'] ?? null) ? $payload['testimonials'] : [];
 $brands = is_array($payload['brands'] ?? null) ? $payload['brands'] : [];
 $trustPoints = is_array($payload['trust_points'] ?? null) ? $payload['trust_points'] : [];
 $uspPoints = is_array($payload['usp_points'] ?? null) ? $payload['usp_points'] : [];
-$defaultImage = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6Q82WISxpWPp5dHBTWHypFOZbRTvc0ST0xQ&s';
+$defaultImage = 'https://images.pexels.com/photos/14613699/pexels-photo-14613699.jpeg?auto=compress&cs=tinysrgb&w=1200';
 $safeImage = static function (string $url, string $fallback): string {
   $url = trim($url);
   if ($url === '' || !preg_match('~^https?://~i', $url)) {
+    return $fallback;
+  }
+  if (str_contains($url, 'encrypted-tbn0.gstatic.com') || str_contains($url, 'gstatic.com/images?q=')) {
     return $fallback;
   }
   if (str_contains($url, '1616594039964-3dbbb0bd2e8f')) {
@@ -23,42 +28,79 @@ $safeImage = static function (string $url, string $fallback): string {
   return $url;
 };
 $trustVisuals = [
-  ['title' => 'Verified Professionals', 'image' => $defaultImage],
-  ['title' => 'Transparent Pricing', 'image' => $defaultImage],
-  ['title' => 'Project Oversight', 'image' => $defaultImage],
-  ['title' => 'Reliable Handover', 'image' => $defaultImage],
+  ['title' => 'Verified Professionals', 'image' => 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=85'],
+  ['title' => 'Transparent Pricing', 'image' => 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=900&q=85'],
+  ['title' => 'Project Oversight', 'image' => 'https://images.pexels.com/photos/15124969/pexels-photo-15124969.jpeg?auto=compress&cs=tinysrgb&w=900'],
+  ['title' => 'Reliable Handover', 'image' => 'https://images.pexels.com/photos/9976128/pexels-photo-9976128.jpeg?auto=compress&cs=tinysrgb&w=900'],
 ];
 $uspVisuals = [
-  ['title' => 'Lead Marketplace', 'image' => $defaultImage],
-  ['title' => 'Profile Management', 'image' => $defaultImage],
-  ['title' => 'Brand Visibility', 'image' => $defaultImage],
-  ['title' => 'Growth Support', 'image' => $defaultImage],
+  ['title' => 'Lead Marketplace', 'image' => 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=900&q=85'],
+  ['title' => 'Profile Management', 'image' => 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=85'],
+  ['title' => 'Brand Visibility', 'image' => 'https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=900&q=85'],
+  ['title' => 'Growth Support', 'image' => 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=85'],
 ];
 $serviceFallbacks = [
-  'kitchen' => $defaultImage,
-  'wardrobe' => $defaultImage,
-  'full_home' => $defaultImage,
+  'kitchen' => 'https://images.unsplash.com/photo-1600489000022-c2086d79f9d4?auto=format&fit=crop&w=900&q=85',
+  'modular_kitchen' => 'https://images.unsplash.com/photo-1600489000022-c2086d79f9d4?auto=format&fit=crop&w=900&q=85',
+  'wardrobe' => 'https://images.pexels.com/photos/36221937/pexels-photo-36221937.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'full_home' => 'https://images.pexels.com/photos/14613699/pexels-photo-14613699.jpeg?auto=compress&cs=tinysrgb&w=1200',
+  'full_home_interiors' => 'https://images.pexels.com/photos/14613699/pexels-photo-14613699.jpeg?auto=compress&cs=tinysrgb&w=1200',
+  'living_room' => 'https://images.pexels.com/photos/9976128/pexels-photo-9976128.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'bedroom' => 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=900&q=85',
+  'renovation' => 'https://images.pexels.com/photos/15124969/pexels-photo-15124969.jpeg?auto=compress&cs=tinysrgb&w=900',
 ];
 $testimonialFallbacks = [
-  'Priya S' => $defaultImage,
-  'Vikas A' => $defaultImage,
-  'Karan M' => $defaultImage,
+  'Priya S' => 'https://images.pexels.com/photos/7031874/pexels-photo-7031874.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'Vikas A' => 'https://images.pexels.com/photos/14613699/pexels-photo-14613699.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'Karan M' => 'https://images.pexels.com/photos/9976128/pexels-photo-9976128.jpeg?auto=compress&cs=tinysrgb&w=900',
 ];
 $brandFallbacks = [
-  'Hafele' => $defaultImage,
-  'Hettich' => $defaultImage,
-  'Asian Paints' => $defaultImage,
-  'Kajaria' => $defaultImage,
+  'Hafele' => 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=900&q=85',
+  'Hettich' => 'https://images.pexels.com/photos/36221937/pexels-photo-36221937.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'Asian Paints' => 'https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=900&q=85',
+  'Kajaria' => 'https://images.pexels.com/photos/10481158/pexels-photo-10481158.jpeg?auto=compress&cs=tinysrgb&w=900',
 ];
 $editorialImages = [
-  'story' => 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1400&q=85',
-  'detail' => 'https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=1200&q=85',
+  'story' => 'https://images.pexels.com/photos/14613699/pexels-photo-14613699.jpeg?auto=compress&cs=tinysrgb&w=1400',
+  'detail' => 'https://images.pexels.com/photos/9976128/pexels-photo-9976128.jpeg?auto=compress&cs=tinysrgb&w=1200',
   'studio' => 'https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=1400&q=85',
   'materials' => 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=85',
-  'render_1' => 'https://images.unsplash.com/photo-1600210492493-0946911123ea?auto=format&fit=crop&w=1200&q=85',
+  'render_1' => 'https://images.pexels.com/photos/7031874/pexels-photo-7031874.jpeg?auto=compress&cs=tinysrgb&w=1200',
   'render_2' => 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=85',
-  'render_3' => 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1200&q=85',
+  'render_3' => 'https://images.pexels.com/photos/8135493/pexels-photo-8135493.jpeg?auto=compress&cs=tinysrgb&w=1200',
 ];
+$projectFallbacks = [
+  'kitchen' => 'https://images.pexels.com/photos/10827348/pexels-photo-10827348.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'wardrobe' => 'https://images.pexels.com/photos/36221937/pexels-photo-36221937.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'renovation' => 'https://images.pexels.com/photos/15124969/pexels-photo-15124969.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'workspace' => 'https://images.pexels.com/photos/16501689/pexels-photo-16501689.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'full_home' => 'https://images.pexels.com/photos/20116484/pexels-photo-20116484.jpeg?auto=compress&cs=tinysrgb&w=900',
+  'default' => 'https://images.pexels.com/photos/7031874/pexels-photo-7031874.jpeg?auto=compress&cs=tinysrgb&w=900',
+];
+$serviceFallbackFor = static function (string $key) use ($serviceFallbacks, $defaultImage): string {
+  $normalized = strtolower(trim(preg_replace('~[^a-z0-9]+~i', '_', $key), '_'));
+  if (isset($serviceFallbacks[$normalized])) {
+    return $serviceFallbacks[$normalized];
+  }
+  foreach ($serviceFallbacks as $fallbackKey => $fallbackImage) {
+    if ($fallbackKey !== '' && (str_contains($normalized, $fallbackKey) || str_contains($fallbackKey, $normalized))) {
+      return $fallbackImage;
+    }
+  }
+  return $defaultImage;
+};
+$projectFallbackFor = static function (array $project) use ($projectFallbacks): string {
+  $name = strtolower((string)($project['project_name'] ?? ''));
+  $workType = strtolower((string)($project['work_type'] ?? ''));
+  $haystack = $name . ' ' . $workType;
+  if (str_contains($haystack, 'kitchen')) return $projectFallbacks['kitchen'];
+  if (str_contains($name, 'renovation')) return $projectFallbacks['renovation'];
+  if (str_contains($name, 'home') || str_contains($name, 'bhk') || str_contains($name, 'villa')) return $projectFallbacks['full_home'];
+  if (str_contains($workType, 'renovation')) return $projectFallbacks['renovation'];
+  if (str_contains($haystack, 'workspace') || str_contains($haystack, 'office')) return $projectFallbacks['workspace'];
+  if (str_contains($haystack, 'wardrobe')) return $projectFallbacks['wardrobe'];
+  return $projectFallbacks['default'];
+};
 $cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : [];
 $requirements = is_array($payload['requirement_options'] ?? null) ? $payload['requirement_options'] : [];
 $processSteps = [
@@ -92,24 +134,29 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
   }
   return $candidate;
 };
+$propertyMoney = static function (float $amount): string {
+  if ($amount <= 0) return 'Price on request';
+  if ($amount >= 10000000) return '₹' . rtrim(rtrim(number_format($amount / 10000000, 2), '0'), '.') . ' Cr';
+  if ($amount >= 100000) return '₹' . rtrim(rtrim(number_format($amount / 100000, 2), '0'), '.') . ' L';
+  return '₹' . number_format($amount, 0);
+};
+$propertyHeroImage = trim((string)($featuredProperties[0]['exterior_image'] ?? $featuredProperties[0]['cover_image'] ?? ''));
+if ($propertyHeroImage === '') {
+  $propertyHeroImage = $safeImage($heroBg, $editorialImages['story']);
+}
 ?>
 
-<section class="studio-hero" style="--hero-bg:url('<?= htmlspecialchars($safeImage($heroBg, $editorialImages['story']), ENT_QUOTES, 'UTF-8') ?>');">
+<section class="studio-hero home-property-hero" style="--hero-bg:url('<?= htmlspecialchars($propertyHeroImage, ENT_QUOTES, 'UTF-8') ?>');">
   <div class="container studio-hero-inner" data-reveal>
-    <p class="eyebrow">Curated aggregators. Quiet luxury.</p>
-    <h1>Home interiors, discovered with taste and verified with discipline.</h1>
-    <p class="hero-subtitle">HomeInteriors360 brings homeowners, architects, interior designers, contractors, and premium aggregators into one calm discovery platform across Delhi NCR.</p>
-  </div>
-</section>
-
-<section class="section lead-band" data-reveal>
-  <div class="container lead-band-grid">
-    <div>
-      <p class="eyebrow eyebrow-dark">Start Your Project</p>
-      <h2><?= htmlspecialchars((string)($content['home.lead.title'] ?? 'Get Free Design Consultation'), ENT_QUOTES, 'UTF-8') ?></h2>
-      <p>Share your city, scope, locality, and budget. We will route the enquiry to the right verified professional or aggregator.</p>
-    </div>
-    <div class="lead-card lead-card-flat">
+    <p class="eyebrow">Buy. Rent. Design.</p>
+    <h1>Find your next home, then make it unmistakably yours.</h1>
+    <p class="hero-subtitle">Explore homes and residential projects for sale or rent, compare layouts and prices, and connect with verified interior professionals through one platform.</p>
+    <div class="home-hero-lead-panel">
+      <div>
+        <p class="eyebrow eyebrow-dark">Free design consultation</p>
+        <h2><?= htmlspecialchars((string)($content['home.lead.title'] ?? 'Get Free Interior Design Consultation'), ENT_QUOTES, 'UTF-8') ?></h2>
+        <p>Already own, bought, or rented a home? Share your requirement and we will connect you with the right verified interior professional.</p>
+      </div>
       <form id="heroLeadForm" class="stack-form hero-lead-form">
         <div class="hero-lead-grid">
           <label>
@@ -121,7 +168,6 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
               <?php endforeach; ?>
             </select>
           </label>
-
           <label>
             <span><?= htmlspecialchars((string)($content['home.lead.step2_label'] ?? 'Requirement'), ENT_QUOTES, 'UTF-8') ?></span>
             <select name="requirement" required>
@@ -131,32 +177,80 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
               <?php endforeach; ?>
             </select>
           </label>
-
           <label>
             <span><?= htmlspecialchars((string)($content['ui.name'] ?? 'Name'), ENT_QUOTES, 'UTF-8') ?></span>
             <input type="text" name="name" required placeholder="<?= htmlspecialchars((string)($content['ui.name'] ?? 'Name'), ENT_QUOTES, 'UTF-8') ?>" />
           </label>
-
           <label>
             <span><?= htmlspecialchars((string)($content['ui.phone'] ?? 'Phone'), ENT_QUOTES, 'UTF-8') ?></span>
             <input type="tel" name="phone" required placeholder="<?= htmlspecialchars((string)($content['ui.phone'] ?? 'Phone'), ENT_QUOTES, 'UTF-8') ?>" />
           </label>
-
-          <label>
-            <span><?= htmlspecialchars((string)($content['ui.society_area'] ?? 'Society / Area'), ENT_QUOTES, 'UTF-8') ?></span>
-            <input type="text" name="society_area" placeholder="<?= htmlspecialchars((string)($content['ui.society_area'] ?? 'Society / Area'), ENT_QUOTES, 'UTF-8') ?>" />
-          </label>
-
+          <?php require __DIR__ . '/../partials/society-field.php'; ?>
           <label>
             <span><?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?></span>
-            <input type="text" name="budget" placeholder="<?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?>" />
+            <select name="budget">
+              <option value=""><?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?></option>
+              <?php require __DIR__ . '/../partials/budget-options.php'; ?>
+            </select>
           </label>
         </div>
-
-        <button type="submit" class="btn-primary hero-lead-submit"><?= htmlspecialchars((string)($content['home.lead.submit'] ?? ''), ENT_QUOTES, 'UTF-8') ?></button>
+        <?php require __DIR__ . '/../partials/lead-consent.php'; ?>
+        <button type="submit" class="btn-primary hero-lead-submit"><?= htmlspecialchars((string)($content['home.lead.submit'] ?? 'Request Callback'), ENT_QUOTES, 'UTF-8') ?></button>
         <p class="form-message" id="heroLeadMessage"></p>
       </form>
     </div>
+    <div class="home-hero-paths">
+      <a href="/properties?listing_for=buy">Homes for sale</a>
+      <a href="/properties?listing_for=rent">Homes for rent</a>
+      <a href="/home-interior-hire-a-designer">Hire an interior designer</a>
+    </div>
+  </div>
+</section>
+
+<section class="section home-property-section" data-reveal>
+  <div class="container">
+    <div class="section-head-row">
+      <div>
+        <p class="eyebrow eyebrow-dark">Property marketplace</p>
+        <h2>Buy or rent with the details already in view.</h2>
+        <p>Compare project photos, configurations, floor plans, current prices, amenities, location advantages, and available inventory.</p>
+      </div>
+      <a class="btn-link" href="/properties">Explore all properties</a>
+    </div>
+    <form class="home-property-search" method="get" action="/properties">
+      <div class="home-property-mode">
+        <label><input type="radio" name="listing_for" value="buy" checked><span>Buy</span></label>
+        <label><input type="radio" name="listing_for" value="rent"><span>Rent</span></label>
+      </div>
+      <label class="home-property-keyword"><span>Location or project</span><input name="q" placeholder="Search project, locality, builder or city"></label>
+      <label><span>City</span><select name="city"><option value="">All cities</option><?php foreach (($propertyFilters['cities'] ?? []) as $option): ?><option><?= htmlspecialchars((string)$option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select></label>
+      <label><span>Property type</span><select name="property_type"><option value="">All property types</option><?php foreach (($propertyFilters['property_types'] ?? []) as $option): ?><option><?= htmlspecialchars((string)$option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select></label>
+      <button class="btn-primary" type="submit">Search homes</button>
+    </form>
+    <?php if ($featuredProperties): ?>
+      <div class="home-property-grid">
+        <?php foreach ($featuredProperties as $property): ?>
+          <article class="home-property-card">
+            <a class="home-property-image" href="/property/<?= htmlspecialchars((string)$property['slug'], ENT_QUOTES, 'UTF-8') ?>">
+              <img src="<?= htmlspecialchars((string)($property['cover_image'] ?: '/logo.png'), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)$property['project_name'], ENT_QUOTES, 'UTF-8') ?>" loading="lazy">
+              <span><?= ($property['listing_for'] ?? '') === 'both' ? 'BUY / RENT' : htmlspecialchars(strtoupper((string)$property['listing_for']), ENT_QUOTES, 'UTF-8') ?></span>
+            </a>
+            <div>
+              <p class="eyebrow eyebrow-dark"><?= htmlspecialchars((string)$property['property_type'], ENT_QUOTES, 'UTF-8') ?></p>
+              <h3><a href="/property/<?= htmlspecialchars((string)$property['slug'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$property['project_name'], ENT_QUOTES, 'UTF-8') ?></a></h3>
+              <p><?= htmlspecialchars(trim((string)$property['locality'] . ', ' . (string)$property['city'], ', '), ENT_QUOTES, 'UTF-8') ?></p>
+              <div class="home-property-facts">
+                <span><small>Configuration</small><?= htmlspecialchars((string)($property['configurations'] ?: 'Ask for details'), ENT_QUOTES, 'UTF-8') ?></span>
+                <span><small>Starting price</small><?= htmlspecialchars($propertyMoney((float)$property['price_min']), ENT_QUOTES, 'UTF-8') ?></span>
+              </div>
+              <a class="btn-link" href="/property/<?= htmlspecialchars((string)$property['slug'], ENT_QUOTES, 'UTF-8') ?>">View project</a>
+            </div>
+          </article>
+        <?php endforeach; ?>
+      </div>
+    <?php else: ?>
+      <div class="home-property-empty"><p>Property projects can be published from the property backend and will appear here automatically.</p><a class="btn-primary" href="/properties">Browse properties</a></div>
+    <?php endif; ?>
   </div>
 </section>
 
@@ -263,11 +357,12 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
     </div>
     <div class="cards-grid featured-project-grid">
       <?php foreach ($featuredProjects as $project): ?>
-        <?php $projectImage = $project['media_json'][0] ?? ''; ?>
+        <?php
+          $projectFallback = $projectFallbackFor((array)$project);
+          $projectImage = $projectFallback;
+        ?>
         <article class="portfolio-card project-card">
-          <?php if ($projectImage): ?>
-            <img src="<?= htmlspecialchars((string)$projectImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($project['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-          <?php endif; ?>
+          <img src="<?= htmlspecialchars((string)$projectImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($project['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= htmlspecialchars($projectFallback, ENT_QUOTES, 'UTF-8') ?>';" />
           <div>
             <p class="eyebrow eyebrow-dark"><?= htmlspecialchars((string)($project['pro_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
             <h3><?= htmlspecialchars((string)($project['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
@@ -306,9 +401,10 @@ $normalizeCopy = static function (string $value, string $fallback, array $blocke
           <div class="media-card-image-wrap">
             <?php
               $serviceKey = strtolower((string)($service['key'] ?? $service['title'] ?? ''));
-              $serviceImage = $safeImage((string)($service['image'] ?? ''), (string)($serviceFallbacks[$serviceKey] ?? reset($serviceFallbacks)));
+              $serviceFallback = $serviceFallbackFor($serviceKey);
+              $serviceImage = $safeImage((string)($service['image'] ?? ''), $serviceFallback);
             ?>
-            <img class="media-card-image" src="<?= htmlspecialchars($serviceImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= htmlspecialchars((string)($serviceFallbacks[$serviceKey] ?? reset($serviceFallbacks)), ENT_QUOTES, 'UTF-8') ?>';" />
+            <img class="media-card-image" src="<?= htmlspecialchars($serviceImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= htmlspecialchars($serviceFallback, ENT_QUOTES, 'UTF-8') ?>';" />
             <div class="media-card-overlay">
               <p class="media-card-kicker"><?= htmlspecialchars((string)($content['home.services.title'] ?? 'Services'), ENT_QUOTES, 'UTF-8') ?></p>
               <h3><?= htmlspecialchars((string)($service['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>

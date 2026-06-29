@@ -110,6 +110,7 @@ try {
             ['loc' => '/pricing-details', 'priority' => '0.9', 'changefreq' => 'weekly'],
             ['loc' => '/pricing', 'priority' => '0.75', 'changefreq' => 'weekly'],
             ['loc' => '/professionals', 'priority' => '0.8', 'changefreq' => 'weekly'],
+            ['loc' => '/properties', 'priority' => '0.9', 'changefreq' => 'daily'],
             ['loc' => '/cost-calculator', 'priority' => '0.72', 'changefreq' => 'monthly'],
             ['loc' => '/contact-us', 'priority' => '0.45', 'changefreq' => 'yearly'],
             ['loc' => '/privacy-policy', 'priority' => '0.35', 'changefreq' => 'yearly'],
@@ -120,7 +121,29 @@ try {
         foreach (array_keys($seoLeadPages) as $seoPath) {
             $urls[] = ['loc' => $seoPath, 'priority' => '0.92', 'changefreq' => 'weekly'];
         }
-        foreach (['interior-designer-in-gurgaon', 'interior-designer-in-delhi-ncr', 'architect-interior-designer-in-gurgaon', 'full-home-interior-designer-in-gurgaon', 'kitchen-interior-designer-in-gurgaon'] as $aliasPath) {
+        $directoryAliasPaths = [
+            'interior-designer',
+            'architect',
+            'architect-interior-designer',
+            'full-home-interior-designer',
+            'kitchen-interior-designer',
+            'wardrobe-interior-designer',
+            'renovation-interior-designer',
+        ];
+        foreach (array_keys($seoCityPages) as $citySlug) {
+            foreach ([
+                'interior-designer',
+                'architect',
+                'architect-interior-designer',
+                'full-home-interior-designer',
+                'kitchen-interior-designer',
+                'wardrobe-interior-designer',
+                'renovation-interior-designer',
+            ] as $baseAlias) {
+                $directoryAliasPaths[] = $baseAlias . '-in-' . $citySlug;
+            }
+        }
+        foreach (array_unique($directoryAliasPaths) as $aliasPath) {
             $urls[] = ['loc' => '/professionals/' . $aliasPath, 'priority' => '0.65', 'changefreq' => 'weekly'];
         }
         foreach (Database::query('SELECT slug, updated_at FROM pros WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 200') as $pro) {
@@ -129,6 +152,29 @@ try {
         foreach (Database::query('SELECT slug, updated_at FROM projects ORDER BY updated_at DESC LIMIT 200') as $project) {
             $urls[] = ['loc' => '/portfolio/' . $project['slug'], 'priority' => '0.5', 'changefreq' => 'monthly', 'lastmod' => substr((string)($project['updated_at'] ?? $today), 0, 10)];
         }
+        foreach (Database::query('SELECT slug, updated_at FROM real_estate_projects WHERE is_active=1 ORDER BY updated_at DESC LIMIT 500') as $project) {
+            $urls[] = ['loc' => '/property/' . $project['slug'], 'priority' => '0.72', 'changefreq' => 'weekly', 'lastmod' => substr((string)($project['updated_at'] ?? $today), 0, 10)];
+        }
+        $urls[] = ['loc' => '/design-ideas', 'priority' => '0.9', 'changefreq' => 'weekly'];
+        foreach (Database::query('SELECT slug, updated_at FROM design_idea_aliases WHERE is_active=1 ORDER BY updated_at DESC LIMIT 200') as $alias) {
+            $urls[] = ['loc' => '/design-ideas/' . $alias['slug'], 'priority' => '0.86', 'changefreq' => 'weekly', 'lastmod' => substr((string)($alias['updated_at'] ?? $today), 0, 10)];
+        }
+        foreach (Database::query('SELECT slug, updated_at FROM design_ideas WHERE is_active=1 ORDER BY updated_at DESC LIMIT 500') as $idea) {
+            $urls[] = ['loc' => '/design-ideas/idea/' . $idea['slug'], 'priority' => '0.72', 'changefreq' => 'monthly', 'lastmod' => substr((string)($idea['updated_at'] ?? $today), 0, 10)];
+        }
+        try {
+            foreach (Database::query("SELECT path, updated_at, page_type FROM url_aliases WHERE is_active=1 AND path NOT LIKE '/admin%' AND path NOT LIKE '/api%' AND COALESCE(robots, '') NOT LIKE '%noindex%' ORDER BY updated_at DESC LIMIT 2000") as $aliasUrl) {
+                $priority = str_contains((string)$aliasUrl['page_type'], 'detail') ? '0.62' : '0.82';
+                $urls[] = ['loc' => $aliasUrl['path'], 'priority' => $priority, 'changefreq' => 'weekly', 'lastmod' => substr((string)($aliasUrl['updated_at'] ?? $today), 0, 10)];
+            }
+        } catch (Throwable) {
+            // The global alias table may not exist before the migration has run.
+        }
+        $dedupedUrls = [];
+        foreach ($urls as $url) {
+            $dedupedUrls[(string)$url['loc']] = $url;
+        }
+        $urls = array_values($dedupedUrls);
 
         header('Content-Type: application/xml; charset=utf-8');
         echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
@@ -232,10 +278,85 @@ try {
         jsonResponse(['content' => $filtered]);
     }
 
+    if ($path === '/api/societies' && $method === 'GET') {
+        jsonResponse([
+            'societies' => SiteRepository::societyOptions(
+                (string)($_GET['q'] ?? ''),
+                isset($_GET['city']) ? (string)$_GET['city'] : null
+            ),
+        ]);
+    }
+
+    if ($path === '/api/property-projects' && $method === 'GET') {
+        $filters = [
+            'listing_for' => $_GET['listing_for'] ?? null,
+            'city' => $_GET['city'] ?? null,
+            'locality' => $_GET['locality'] ?? null,
+            'property_type' => $_GET['property_type'] ?? null,
+            'project_status' => $_GET['project_status'] ?? null,
+            'bhk_type' => $_GET['bhk_type'] ?? null,
+            'price_min' => $_GET['price_min'] ?? null,
+            'price_max' => $_GET['price_max'] ?? null,
+            'q' => $_GET['q'] ?? null,
+            'sort' => $_GET['sort'] ?? null,
+        ];
+        jsonResponse(['projects' => SiteRepository::listRealEstateProjects($filters)]);
+    }
+
+    if (preg_match('#^/api/property-projects/([a-z0-9-]+)$#i', $path, $match) && $method === 'GET') {
+        $project = SiteRepository::getRealEstateProject((string)$match[1]);
+        if (!$project) {
+            jsonResponse(['error' => 'Property project not found'], 404);
+        }
+        jsonResponse(['project' => $project]);
+    }
+
+    if ($path === '/api/design-ideas' && $method === 'GET') {
+        $filters = array_filter([
+            'q' => $_GET['q'] ?? null,
+            'type' => $_GET['type'] ?? null,
+            'color' => $_GET['color'] ?? null,
+            'city' => $_GET['city'] ?? null,
+            'state' => $_GET['state'] ?? null,
+            'style' => $_GET['style'] ?? null,
+            'layout' => $_GET['layout'] ?? null,
+        ], static fn(mixed $value): bool => $value !== null && $value !== '');
+        jsonResponse(['ideas' => SiteRepository::listDesignIdeas($filters)]);
+    }
+
+    if (preg_match('#^/api/design-ideas/([a-z0-9-]+)$#i', $path, $match) && $method === 'GET') {
+        $idea = SiteRepository::getDesignIdea((string)$match[1]);
+        if (!$idea) {
+            jsonResponse(['error' => 'Design idea not found'], 404);
+        }
+        jsonResponse(['idea' => $idea]);
+    }
+
+    if ($path === '/api/design-idea-leads' && $method === 'POST') {
+        try {
+            $id = SiteRepository::createDesignIdeaLead(requestJson());
+            jsonResponse(['success' => true, 'id' => $id]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/property-enquiries' && $method === 'POST') {
+        try {
+            $id = SiteRepository::createPropertyEnquiry(requestJson());
+            jsonResponse(['success' => true, 'id' => $id]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
     if ($path === '/api/leads' && $method === 'POST') {
         $body = requestData();
         if (empty($body['name']) || empty($body['phone']) || empty($body['city']) || empty($body['requirement'])) {
             jsonResponse(['error' => 'Name, phone, city and requirement are required'], 400);
+        }
+        if (empty($body['lead_consent'])) {
+            jsonResponse(['error' => 'Consent is required before submitting the enquiry.'], 400);
         }
         $leadId = SiteRepository::createLead([
             'name' => (string)$body['name'],
@@ -265,6 +386,9 @@ try {
         $estimate = SiteRepository::calculateEstimate((string)$body['floor_plan'], (string)$body['package_tier'], $body['rooms']);
 
         if (!empty($body['name']) && !empty($body['phone']) && !empty($body['city'])) {
+            if (empty($body['lead_consent'])) {
+                jsonResponse(['error' => 'Consent is required before submitting the enquiry.'], 400);
+            }
             SiteRepository::createLead([
                 'name' => (string)$body['name'],
                 'phone' => (string)$body['phone'],
@@ -314,6 +438,12 @@ try {
         if ($method === 'POST') {
             $body = requestJson();
             $item = SiteRepository::normalizeLeadCartItem($body, $firstTimeEligible);
+            foreach ($_SESSION['lead_cart'] as $cartKey => $cartItem) {
+                $normalized = SiteRepository::normalizeLeadCartItem(is_array($cartItem) ? $cartItem : [], $firstTimeEligible);
+                if (($normalized['package_id'] ?? '') === ($item['package_id'] ?? '')) {
+                    unset($_SESSION['lead_cart'][$cartKey]);
+                }
+            }
             $_SESSION['lead_cart'][$item['id']] = $item;
             try {
                 jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
@@ -329,6 +459,12 @@ try {
                 unset($_SESSION['lead_coupon']);
             } elseif ($id !== '') {
                 unset($_SESSION['lead_cart'][$id]);
+                foreach ($_SESSION['lead_cart'] as $cartKey => $cartItem) {
+                    $normalized = SiteRepository::normalizeLeadCartItem(is_array($cartItem) ? $cartItem : [], $firstTimeEligible);
+                    if (($normalized['id'] ?? '') === $id || ($normalized['package_id'] ?? '') === $id) {
+                        unset($_SESSION['lead_cart'][$cartKey]);
+                    }
+                }
             }
             try {
                 jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
@@ -642,6 +778,255 @@ try {
         }
     }
 
+    if ($path === '/api/admin/property-projects') {
+        Auth::requireAuth();
+        if ($method === 'GET') {
+            jsonResponse(['projects' => SiteRepository::listRealEstateProjects([], true)]);
+        }
+        if ($method === 'POST') {
+            $body = requestData();
+            if (empty($body['project_name']) || empty($body['slug']) || empty($body['property_type']) || empty($body['city'])) {
+                jsonResponse(['error' => 'Project name, slug, property type, and city are required'], 400);
+            }
+            $media = SiteRepository::decodeStructuredRows($body['media_json'] ?? []);
+            foreach (saveUploadedFiles($_FILES['project_images'] ?? [], 'property-projects', []) as $url) {
+                $media[] = ['media_type' => 'image', 'media_url' => $url, 'title' => $body['project_name'], 'is_cover' => $media === [] ? 1 : 0];
+            }
+            $floorPlans = SiteRepository::decodeStructuredRows($body['floor_plans_json'] ?? []);
+            foreach (saveUploadedFiles($_FILES['floor_plan_files'] ?? [], 'property-floor-plans', []) as $url) {
+                $floorPlans[] = ['title' => 'Floor plan', 'image_url' => $url];
+            }
+            $body['media_json'] = $media;
+            $body['floor_plans_json'] = $floorPlans;
+            $id = SiteRepository::saveRealEstateProject($body);
+            jsonResponse(['success' => true, 'id' => $id]);
+        }
+    }
+
+    if (preg_match('#^/api/admin/property-projects/(\\d+)$#', $path, $match)) {
+        Auth::requireAuth();
+        $id = (int)$match[1];
+        if ($method === 'GET') {
+            $project = SiteRepository::getRealEstateProject($id, true);
+            if (!$project) {
+                jsonResponse(['error' => 'Property project not found'], 404);
+            }
+            jsonResponse(['project' => $project]);
+        }
+        if ($method === 'PUT') {
+            $body = requestData();
+            if (empty($body['project_name']) || empty($body['slug']) || empty($body['property_type']) || empty($body['city'])) {
+                jsonResponse(['error' => 'Project name, slug, property type, and city are required'], 400);
+            }
+            $media = SiteRepository::decodeStructuredRows($body['media_json'] ?? []);
+            foreach (saveUploadedFiles($_FILES['project_images'] ?? [], 'property-projects', []) as $url) {
+                $media[] = ['media_type' => 'image', 'media_url' => $url, 'title' => $body['project_name'], 'is_cover' => $media === [] ? 1 : 0];
+            }
+            $floorPlans = SiteRepository::decodeStructuredRows($body['floor_plans_json'] ?? []);
+            foreach (saveUploadedFiles($_FILES['floor_plan_files'] ?? [], 'property-floor-plans', []) as $url) {
+                $floorPlans[] = ['title' => 'Floor plan', 'image_url' => $url];
+            }
+            $body['media_json'] = $media;
+            $body['floor_plans_json'] = $floorPlans;
+            SiteRepository::saveRealEstateProject($body, $id);
+            jsonResponse(['success' => true]);
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deleteRealEstateProject($id);
+            jsonResponse(['success' => true]);
+        }
+    }
+
+    if (preg_match('#^/api/admin/property-enquiries/(\\d+)/status$#', $path, $match) && $method === 'PUT') {
+        Auth::requireAuth();
+        $body = requestJson();
+        try {
+            SiteRepository::updatePropertyEnquiryStatus((int)$match[1], (string)($body['status'] ?? ''));
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/admin/url-aliases') {
+        Auth::requireAuth();
+        if ($method === 'GET') {
+            jsonResponse(['aliases' => SiteRepository::listUrlAliases()]);
+        }
+        if ($method === 'POST') {
+            $body = requestData();
+            $body['image_url'] = saveUploadedFile($_FILES['image_file'] ?? [], 'url-aliases', (string)(($body['image_url'] ?? '') ?: ($body['current_image_url'] ?? '')));
+            try {
+                $id = SiteRepository::saveUrlAlias($body);
+                jsonResponse(['success' => true, 'id' => $id]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
+    if (preg_match('#^/api/admin/url-aliases/(\\d+)$#', $path, $match)) {
+        Auth::requireAuth();
+        $id = (int)$match[1];
+        if ($method === 'GET') {
+            $alias = SiteRepository::getUrlAlias($id);
+            if (!$alias) {
+                jsonResponse(['error' => 'URL alias not found'], 404);
+            }
+            jsonResponse(['alias' => $alias]);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            $body = requestData();
+            $body['image_url'] = saveUploadedFile($_FILES['image_file'] ?? [], 'url-aliases', (string)(($body['image_url'] ?? '') ?: ($body['current_image_url'] ?? '')));
+            try {
+                SiteRepository::saveUrlAlias($body, $id);
+                jsonResponse(['success' => true]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deleteUrlAlias($id);
+            jsonResponse(['success' => true]);
+        }
+    }
+
+    if ($path === '/api/admin/design-ideas') {
+        Auth::requireAuth();
+        if ($method === 'GET') {
+            jsonResponse(['ideas' => SiteRepository::listDesignIdeas([], true)]);
+        }
+        if ($method === 'POST') {
+            $body = requestData();
+            if (empty($body['name']) || empty($body['slug']) || empty($body['type'])) {
+                jsonResponse(['error' => 'Idea name, slug, and type are required'], 400);
+            }
+            $id = SiteRepository::saveDesignIdea($body);
+            jsonResponse(['success' => true, 'id' => $id]);
+        }
+    }
+
+    if (preg_match('#^/api/admin/design-ideas/(\\d+)$#', $path, $match)) {
+        Auth::requireAuth();
+        $id = (int)$match[1];
+        if ($method === 'GET') {
+            $idea = SiteRepository::getDesignIdea($id, true);
+            if (!$idea) {
+                jsonResponse(['error' => 'Design idea not found'], 404);
+            }
+            jsonResponse(['idea' => $idea]);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            $body = requestData();
+            if (empty($body['name']) || empty($body['slug']) || empty($body['type'])) {
+                jsonResponse(['error' => 'Idea name, slug, and type are required'], 400);
+            }
+            SiteRepository::saveDesignIdea($body, $id);
+            jsonResponse(['success' => true]);
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deleteDesignIdea($id);
+            jsonResponse(['success' => true]);
+        }
+    }
+
+    if ($path === '/api/admin/design-idea-aliases') {
+        Auth::requireAuth();
+        if ($method === 'GET') {
+            jsonResponse(['aliases' => SiteRepository::listDesignIdeaAliases(true)]);
+        }
+        if ($method === 'POST') {
+            $body = requestData();
+            if (empty($body['title']) || empty($body['slug'])) {
+                jsonResponse(['error' => 'Alias title and slug are required'], 400);
+            }
+            $id = SiteRepository::saveDesignIdeaAlias($body);
+            jsonResponse(['success' => true, 'id' => $id]);
+        }
+    }
+
+    if (preg_match('#^/api/admin/design-idea-aliases/(\\d+)$#', $path, $match)) {
+        Auth::requireAuth();
+        $id = (int)$match[1];
+        if ($method === 'GET') {
+            $alias = SiteRepository::getDesignIdeaAlias($id, true);
+            if (!$alias) {
+                jsonResponse(['error' => 'Alias page not found'], 404);
+            }
+            jsonResponse(['alias' => $alias]);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            $body = requestData();
+            if (empty($body['title']) || empty($body['slug'])) {
+                jsonResponse(['error' => 'Alias title and slug are required'], 400);
+            }
+            SiteRepository::saveDesignIdeaAlias($body, $id);
+            jsonResponse(['success' => true]);
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deleteDesignIdeaAlias($id);
+            jsonResponse(['success' => true]);
+        }
+    }
+
+    if ($path === '/api/admin/design-idea-sections') {
+        Auth::requireAuth();
+        if ($method === 'GET') {
+            jsonResponse(['sections' => SiteRepository::listDesignIdeaSections(true)]);
+        }
+        if ($method === 'POST') {
+            $body = requestData();
+            if (empty($body['section_key']) || empty($body['title'])) {
+                jsonResponse(['error' => 'Section key and title are required'], 400);
+            }
+            try {
+                $id = SiteRepository::saveDesignIdeaSection($body);
+                jsonResponse(['success' => true, 'id' => $id]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
+    if (preg_match('#^/api/admin/design-idea-sections/(\\d+)$#', $path, $match)) {
+        Auth::requireAuth();
+        $id = (int)$match[1];
+        if ($method === 'GET') {
+            $section = SiteRepository::getDesignIdeaSection($id, true);
+            if (!$section) {
+                jsonResponse(['error' => 'Design idea section not found'], 404);
+            }
+            jsonResponse(['section' => $section]);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            $body = requestData();
+            if (empty($body['section_key']) || empty($body['title'])) {
+                jsonResponse(['error' => 'Section key and title are required'], 400);
+            }
+            try {
+                SiteRepository::saveDesignIdeaSection($body, $id);
+                jsonResponse(['success' => true]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deleteDesignIdeaSection($id);
+            jsonResponse(['success' => true]);
+        }
+    }
+
+    if (preg_match('#^/api/admin/design-idea-leads/(\\d+)/status$#', $path, $match) && $method === 'PUT') {
+        Auth::requireAuth();
+        $body = requestJson();
+        try {
+            SiteRepository::updateDesignIdeaLeadStatus((int)$match[1], (string)($body['status'] ?? ''));
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
     $legalPages = [
         '/contact-us' => [
             'title' => 'Contact Us',
@@ -653,7 +1038,7 @@ try {
                         'HomeInteriors360 helps homeowners discover interior professionals and helps architects, interior designers, contractors, and related service providers purchase qualified homeowner leads.',
                         [
                             'Support email: admin@homeinteriors360.com',
-                            'Support phone: +91 93158 68727',
+                            'Support phone: +91 8076945594',
                             'Website: https://homeinteriors360.com',
                             'Typical response time: within 1 to 2 business days',
                         ],
@@ -669,70 +1054,246 @@ try {
         ],
         '/privacy-policy' => [
             'title' => 'Privacy Policy',
-            'meta' => 'Privacy policy for HomeInteriors360 users, lead buyers, and payment customers.',
+            'meta' => 'DPDPA 2023 aligned privacy policy for HomeInteriors360 users, lead buyers, homeowners, professionals, and payment customers.',
+            'lastUpdated' => '5 June 2026',
             'sections' => [
                 [
-                    'title' => 'Information We Collect',
+                    'title' => 'Purpose and Applicability',
                     'body' => [
-                        'We collect information submitted through forms, account registration, lead checkout, and professional profile requests. This may include name, phone number, email address, city, society or locality, budget, project requirement, and payment-related order references.',
+                        'This Privacy Policy explains how HomeInteriors360 collects, uses, stores, shares, and protects personal data when you use HomeInteriors360.com, submit an interior design enquiry, register as a professional or lead buyer, purchase digital leads, or contact support.',
+                        'This policy is intended to align with the Digital Personal Data Protection Act, 2023 of India. In this policy, you are the Data Principal and HomeInteriors360 acts as the Data Fiduciary for personal data that we collect and process for our website, marketplace, enquiry, payment, support, and marketing activities.',
                     ],
                 ],
                 [
-                    'title' => 'How We Use Information',
+                    'title' => 'Personal Data We Collect',
                     'body' => [
+                        'We collect personal data that you provide directly, data generated when you use the website, and limited transaction information required to operate the service.',
                         [
-                            'To respond to homeowner and professional enquiries.',
-                            'To create buyer accounts and provide purchased lead access.',
-                            'To process lead package orders through Razorpay.',
-                            'To maintain platform security, prevent misuse, and improve services.',
+                            'Identity and contact details such as name, mobile number, email address, city, society name, locality, and address or project area details where provided.',
+                            'Interior requirement details such as property type, rooms, scope of work, budget range, design preferences, project timeline, uploaded information, and messages submitted through forms.',
+                            'Professional or buyer details such as company name, role, business category, service area, plan interest, buyer account information, and purchased lead package details.',
+                            'Payment and order references such as Razorpay order ID, payment ID, amount, currency, payment status, invoice or receipt references, and refund status where applicable.',
+                            'Technical and usage data such as IP address, browser, device, pages visited, cookies, analytics identifiers, source campaign, and security logs.',
                         ],
                     ],
                 ],
                 [
-                    'title' => 'Payments and Sensitive Data',
+                    'title' => 'How We Use Personal Data',
                     'body' => [
-                        'Online payments are processed by Razorpay. We do not store card numbers, UPI PINs, banking passwords, or full payment instrument details on our server.',
+                        'We process personal data only for lawful purposes connected with HomeInteriors360 services, user requests, consent, legal compliance, security, and legitimate platform operations.',
+                        [
+                            'To respond to homeowner enquiries and match users with interior designers, architects, contractors, aggregators, or other relevant service providers.',
+                            'To create and manage professional, buyer, lead marketplace, cart, checkout, and support workflows.',
+                            'To sell, deliver, and support digital lead packages and managed growth enquiries.',
+                            'To verify orders, process payments, prevent fraud, handle refunds, and maintain transaction records.',
+                            'To send service updates, promotional communication, reminders, offers, and follow-up messages by email, SMS, WhatsApp, RCS, phone call, or other communication channels where consent or applicable law permits.',
+                            'To improve the website, measure campaign performance, troubleshoot issues, secure the platform, and comply with legal, tax, audit, or regulatory requirements.',
+                        ],
                     ],
                 ],
                 [
-                    'title' => 'Data Sharing',
+                    'title' => 'Consent and Withdrawal',
                     'body' => [
-                        'We may share relevant lead information with registered buyers after a successful purchase. We may also share necessary transaction details with payment, hosting, analytics, legal, or compliance service providers where required.',
+                        'Where we rely on consent, we ask for clear consent through website forms, account flows, checkout flows, or other communication. By ticking the consent checkbox or submitting an enquiry with consent, you agree that HomeInteriors360 may process your personal data for the specified purposes and contact you through the channels mentioned in the form.',
+                        'You may withdraw consent for optional promotional communication by contacting support at admin@homeinteriors360.com or by using any unsubscribe or opt-out method provided in our messages. Withdrawal of consent will not affect processing already completed before withdrawal and may limit our ability to provide requested services, lead delivery, support, or account communication.',
+                    ],
+                ],
+                [
+                    'title' => 'Sharing and Disclosure',
+                    'body' => [
+                        'We do not sell personal data as a standalone database. We may share data where necessary to provide our services, complete transactions, meet legal obligations, or protect the platform.',
+                        [
+                            'With registered professionals, interior designers, architects, contractors, aggregators, or lead buyers where your enquiry or purchased lead access requires such sharing.',
+                            'With payment providers such as Razorpay for payment processing, order verification, refunds, fraud control, and payment support.',
+                            'With hosting, database, analytics, communication, customer support, email, SMS, WhatsApp, RCS, call, marketing, and security service providers acting as processors or service partners.',
+                            'With government, law enforcement, courts, regulators, or advisers if required by law, legal process, tax, audit, investigation, or dispute resolution.',
+                            'With a successor entity if there is a merger, acquisition, restructuring, sale of assets, or business transfer, subject to continued protection of personal data.',
+                        ],
+                    ],
+                ],
+                [
+                    'title' => 'Payments and Financial Data',
+                    'body' => [
+                        'Online payments are processed by Razorpay or other authorised payment partners. HomeInteriors360 does not store card numbers, UPI PINs, banking passwords, CVV, or full payment instrument credentials on its server.',
+                        'We store only limited payment references required for order fulfilment, payment verification, refunds, accounting, dispute handling, and compliance.',
+                    ],
+                ],
+                [
+                    'title' => 'Cookies, Analytics, and Tracking',
+                    'body' => [
+                        'We may use cookies, pixels, analytics tags, Google Tag Manager, advertising tags, and similar technologies to understand website usage, measure campaigns, improve user experience, prevent abuse, and run remarketing or promotional campaigns.',
+                        'You can control cookies through your browser settings. Disabling cookies may affect login, cart, checkout, analytics, or website functionality.',
+                    ],
+                ],
+                [
+                    'title' => 'Your Rights as a Data Principal',
+                    'body' => [
+                        'Subject to applicable law, you may request access to information about your personal data, correction of inaccurate or incomplete data, erasure of data that is no longer necessary, grievance redressal, and withdrawal of consent for consent-based processing.',
+                        [
+                            'Access: ask us for a summary of personal data being processed and relevant processing activities.',
+                            'Correction: ask us to correct inaccurate or misleading personal data.',
+                            'Completion: ask us to complete incomplete personal data where necessary for the processing purpose.',
+                            'Erasure: ask us to delete personal data when it is no longer necessary for the purpose for which it was collected, unless retention is required by law or legitimate business needs.',
+                            'Grievance: raise a privacy grievance using the contact details on this page.',
+                            'Nomination: nominate another individual to exercise your rights in case of death or incapacity, where and when this right is operational under applicable rules.',
+                        ],
+                    ],
+                ],
+                [
+                    'title' => 'Data Retention',
+                    'body' => [
+                        'We retain personal data only as long as reasonably required for the purposes described in this policy, including lead matching, buyer access, payment records, support, fraud prevention, legal compliance, tax, audit, dispute resolution, and service improvement.',
+                        'When personal data is no longer required, we will delete, anonymise, aggregate, or securely archive it, unless retention is necessary to comply with law or defend legal claims.',
+                    ],
+                ],
+                [
+                    'title' => 'Security Safeguards',
+                    'body' => [
+                        'We use reasonable technical, organisational, and contractual safeguards designed to protect personal data from unauthorised access, misuse, disclosure, alteration, loss, or destruction. These may include access controls, server-side validation, payment signature verification, HTTPS, restricted administrative access, backups, and monitoring.',
+                        'No online system is completely risk-free. Users should also keep account credentials confidential and contact us promptly if they suspect unauthorised access or misuse.',
+                    ],
+                ],
+                [
+                    'title' => 'Children and Minors',
+                    'body' => [
+                        'HomeInteriors360 services are intended for adults and business users. We do not knowingly collect personal data from children under 18 years of age. If we learn that a child has submitted personal data without appropriate consent, we will take reasonable steps to delete or restrict the data.',
+                    ],
+                ],
+                [
+                    'title' => 'Cross-Border Processing',
+                    'body' => [
+                        'Our hosting, analytics, communication, support, or payment partners may process data in India or in other countries where permitted by applicable law and platform configuration. We take reasonable steps to ensure that such processing remains connected to the purposes described in this policy and protected through appropriate safeguards.',
+                    ],
+                ],
+                [
+                    'title' => 'Grievance and Privacy Contact',
+                    'body' => [
+                        'For privacy requests, consent withdrawal, correction, erasure, or grievances, contact HomeInteriors360 support at admin@homeinteriors360.com or +91 8076945594. Please include your name, registered mobile number or email address, and a clear description of the request so we can verify and respond appropriately.',
+                        'We aim to respond to genuine privacy requests within a reasonable time. Additional verification may be required before acting on requests that affect account access, lead delivery, payment records, or third-party disclosures.',
                     ],
                 ],
             ],
         ],
         '/terms-and-conditions' => [
             'title' => 'Terms and Conditions',
-            'meta' => 'Terms and conditions for HomeInteriors360 services, lead purchases, and website use.',
+            'meta' => 'Terms and conditions for HomeInteriors360 services, lead purchases, consent, privacy, payments, and website use.',
+            'lastUpdated' => '5 June 2026',
             'sections' => [
                 [
-                    'title' => 'Use of the Website',
+                    'title' => 'Acceptance of Terms',
                     'body' => [
-                        'By using HomeInteriors360.com, submitting an enquiry, creating a buyer account, or purchasing a lead package, you agree to use the website lawfully and provide accurate information.',
+                        'By accessing HomeInteriors360.com, submitting a form, creating an account, purchasing a lead package, using the lead marketplace, or communicating with us, you agree to these Terms and Conditions, the Privacy Policy, the Cancellation and Refunds Policy, the Shipping Policy, and any additional terms shown at checkout or on the relevant page.',
+                        'If you do not agree with these terms, do not use the website or submit personal data through our forms.',
                     ],
                 ],
                 [
-                    'title' => 'Services Offered',
+                    'title' => 'About HomeInteriors360 Services',
                     'body' => [
-                        'HomeInteriors360 provides an online discovery and lead marketplace for interior design, architecture, contractor, and related home improvement services. Paid products currently include digital lead packages and managed growth enquiries for professionals.',
+                        'HomeInteriors360 provides an online discovery, enquiry, and lead marketplace for home interior design, architecture, contractor, renovation, aggregator, and related home improvement services. We are an aggregator and marketplace platform, not the final interior execution vendor unless expressly stated in a written agreement.',
+                        'Our services may include homeowner enquiry collection, designer or professional discovery, lead marketplace access, paid digital lead packages, managed growth enquiries, account support, professional profile visibility, and related digital services.',
+                    ],
+                ],
+                [
+                    'title' => 'User Responsibilities',
+                    'body' => [
+                        [
+                            'You must provide true, current, and complete information in forms, checkout, and account flows.',
+                            'You must use the website only for lawful purposes and must not misuse, scrape, attack, spam, reverse engineer, overload, or disrupt the platform.',
+                            'You must not submit another person\'s personal data without authority or consent.',
+                            'Professionals and buyers must contact leads respectfully and comply with applicable consumer protection, telecom, privacy, advertising, and data protection laws.',
+                            'You are responsible for maintaining confidentiality of login credentials and for activity under your account.',
+                        ],
+                    ],
+                ],
+                [
+                    'title' => 'Consent for Communication',
+                    'body' => [
+                        'When you tick the consent checkbox or submit a form with consent, you agree to HomeInteriors360 processing your personal data as described in the Privacy Policy and contacting you for service updates, enquiry follow-up, offers, promotions, reminders, account support, and related communication through email, SMS, WhatsApp, RCS, phone call, or other communication channels.',
+                        'You may withdraw consent for optional promotional communication by contacting support. Service, transaction, payment, legal, account, security, or lead delivery messages may still be sent where necessary to fulfil a request, comply with law, or protect the platform.',
                     ],
                 ],
                 [
                     'title' => 'Lead Purchase Terms',
                     'body' => [
                         [
-                            'Lead packages are priced according to available filters, lead count, and pricing slabs shown before checkout.',
-                            'Purchased leads are for the buyer account that completed payment and must not be resold, scraped, or misused.',
-                            'A lead is not a guaranteed conversion, sale, site visit, or project award.',
-                            'Buyers are responsible for contacting leads professionally and complying with applicable laws.',
+                            'Lead packages are priced according to available filters, lead count, buyer eligibility, and pricing slabs shown before checkout.',
+                            'Purchased leads are digital products made available to the buyer account that completed payment and must not be resold, republished, scraped, shared publicly, or misused.',
+                            'A lead is an enquiry or contact record and is not a guaranteed conversion, sale, site visit, meeting, project award, revenue, or exclusive opportunity unless expressly stated.',
+                            'Lead availability, count, quality signals, geography, budget, and filters may change based on database updates, duplicate checks, user behaviour, and operational rules.',
+                            'Buyers are responsible for professional follow-up, lawful communication, offer accuracy, customer handling, and service delivery after contacting a lead.',
                         ],
                     ],
                 ],
                 [
-                    'title' => 'Payments',
+                    'title' => 'Homeowner Enquiries and Designer Matching',
                     'body' => [
-                        'Payments are collected in INR through Razorpay. An order is considered successful only after payment confirmation and signature verification by the website.',
+                        'When a homeowner submits an enquiry, HomeInteriors360 may share relevant details with selected professionals, aggregators, service providers, or team members to help respond to the requirement. We do not guarantee that every enquiry will receive a quote, site visit, design proposal, or final service provider selection.',
+                        'Any contract, site visit, quotation, design, execution, warranty, after-sales support, or payment arrangement between a homeowner and a third-party professional is between those parties unless HomeInteriors360 is expressly made a party through a written agreement.',
+                    ],
+                ],
+                [
+                    'title' => 'Pricing, Offers, Coupons, and Taxes',
+                    'body' => [
+                        'Prices, discounts, coupons, first-time offers, lead slabs, and plan features may be updated from time to time. The final payable amount shown at checkout before payment is the applicable amount for that order.',
+                        'Coupons may have minimum order value, expiry, usage, buyer eligibility, lead count, and other conditions. HomeInteriors360 may modify, disable, or reject coupons where misuse, technical error, or ineligibility is detected.',
+                        'Taxes, payment gateway charges, invoices, and compliance records may be handled as required by applicable law and business process.',
+                    ],
+                ],
+                [
+                    'title' => 'Payments and Razorpay',
+                    'body' => [
+                        'Payments are collected in INR through Razorpay or other authorised payment partners. An order is treated as successful only after payment confirmation and successful payment signature or status verification by HomeInteriors360.',
+                        'HomeInteriors360 does not store card number, CVV, UPI PIN, banking password, or full payment credential information on its server. Payment failures, bank delays, chargebacks, refunds, and settlement timelines may be subject to payment partner and bank processes.',
+                    ],
+                ],
+                [
+                    'title' => 'Cancellations, Refunds, and Delivery',
+                    'body' => [
+                        'Digital lead package delivery, cancellation, and refund rules are explained in the Shipping Policy and Cancellation and Refunds Policy. Since lead packages are digital products, cancellation is generally unavailable once leads are delivered or made available in the buyer dashboard, except where the refund policy applies.',
+                    ],
+                ],
+                [
+                    'title' => 'Privacy and DPDPA 2023',
+                    'body' => [
+                        'Use of the website involves processing of personal data. Our Privacy Policy explains the purposes of processing, consent, withdrawal, sharing, retention, security, Data Principal rights, and grievance contact details in relation to the Digital Personal Data Protection Act, 2023.',
+                        'By using the website and submitting forms, you agree to provide accurate data and to avoid submitting personal data of another person without valid authority or consent.',
+                    ],
+                ],
+                [
+                    'title' => 'Intellectual Property',
+                    'body' => [
+                        'The website content, design, layout, logos, text, images, software, lead marketplace structure, pricing logic, and platform materials are owned by or licensed to HomeInteriors360, unless otherwise stated. You may not copy, reproduce, scrape, sell, or commercially exploit website content without written permission.',
+                    ],
+                ],
+                [
+                    'title' => 'Third-Party Services and Links',
+                    'body' => [
+                        'The website may contain links, embeds, analytics, payment tools, communication tools, or listings involving third parties. HomeInteriors360 is not responsible for third-party websites, independent professional services, third-party privacy practices, or external content that we do not control.',
+                    ],
+                ],
+                [
+                    'title' => 'Disclaimers and Limitation of Liability',
+                    'body' => [
+                        'The website and services are provided on an as-is and as-available basis. While we aim to maintain accurate information and smooth delivery, we do not warrant uninterrupted access, error-free operation, guaranteed lead conversion, guaranteed project award, guaranteed quote, or guaranteed third-party performance.',
+                        'To the maximum extent permitted by law, HomeInteriors360 will not be liable for indirect, incidental, consequential, special, punitive, or loss-of-profit damages arising from website use, lead purchase, third-party services, or communication between users and professionals.',
+                    ],
+                ],
+                [
+                    'title' => 'Suspension and Termination',
+                    'body' => [
+                        'We may suspend, restrict, or terminate access to the website, buyer account, lead dashboard, coupons, or services if we suspect fraud, payment misuse, unlawful activity, data misuse, scraping, abusive communication, policy violation, security risk, or breach of these terms.',
+                    ],
+                ],
+                [
+                    'title' => 'Governing Law and Dispute Resolution',
+                    'body' => [
+                        'These terms are governed by the laws of India. The parties will first try to resolve disputes through good-faith support escalation. Subject to applicable law, courts and authorities with jurisdiction over the business location of HomeInteriors360 will have jurisdiction for disputes arising from these terms or website use.',
+                    ],
+                ],
+                [
+                    'title' => 'Updates to Terms',
+                    'body' => [
+                        'We may update these Terms and Conditions to reflect service changes, legal requirements, payment rules, data protection obligations, or operational improvements. The updated version will be posted on this page with the latest update date. Continued use of the website after updates means you accept the updated terms.',
                     ],
                 ],
             ],
@@ -841,6 +1402,7 @@ try {
             'active' => '',
             'content' => $content,
             'legalTitle' => $page['title'],
+            'lastUpdated' => $page['lastUpdated'] ?? '28 May 2026',
             'sections' => $page['sections'],
         ]);
         exit;
@@ -960,8 +1522,8 @@ try {
     // Public pages
     if ($path === '/') {
         render('public/home', [
-            'title' => (string)SiteRepository::content('seo.home.title', 'HomeInteriors360'),
-            'metaDescription' => (string)SiteRepository::content('seo.home.description', 'Find verified architects, interior designers, and contractors for your home project.'),
+            'title' => (string)SiteRepository::content('seo.home.title', 'Buy or Rent Homes & Hire Interior Designers | HomeInteriors360'),
+            'metaDescription' => (string)SiteRepository::content('seo.home.description', 'Buy or rent homes and residential projects with photos, prices, layouts, and amenities, then hire verified interior designers for your home.'),
             'active' => 'home',
             'content' => $content,
             'payload' => SiteRepository::homepagePayload(),
@@ -1111,6 +1673,232 @@ try {
             'metaDescription' => 'Buy verified homeowner lead packages by city, society, budget, work type, and date range.',
             'active' => 'leads',
             'content' => $content,
+        ]);
+        exit;
+    }
+
+    if ($path === '/design-ideas') {
+        $urlAlias = SiteRepository::getUrlAliasByPath('/design-ideas');
+        $filters = array_filter([
+            'q' => $_GET['q'] ?? null,
+            'type' => $_GET['type'] ?? null,
+            'color' => $_GET['color'] ?? null,
+            'city' => $_GET['city'] ?? null,
+            'state' => $_GET['state'] ?? null,
+            'style' => $_GET['style'] ?? null,
+            'layout' => $_GET['layout'] ?? null,
+        ], static fn(mixed $value): bool => $value !== null && $value !== '');
+        $matchedAlias = SiteRepository::matchDesignIdeaAliasForFilters($filters);
+        if ($matchedAlias) {
+            $remainingFilters = $filters;
+            foreach ([
+                'type' => 'filter_type',
+                'color' => 'filter_color',
+                'city' => 'filter_city',
+                'state' => 'filter_state',
+                'style' => 'filter_style',
+                'layout' => 'filter_layout',
+            ] as $filterKey => $aliasKey) {
+                if (
+                    isset($remainingFilters[$filterKey])
+                    && trim((string)($matchedAlias[$aliasKey] ?? '')) !== ''
+                    && mb_strtolower((string)$remainingFilters[$filterKey]) === mb_strtolower((string)$matchedAlias[$aliasKey])
+                ) {
+                    unset($remainingFilters[$filterKey]);
+                }
+            }
+            $target = '/design-ideas/' . $matchedAlias['slug'];
+            if ($remainingFilters) {
+                $target .= '?' . http_build_query($remainingFilters);
+            }
+            header('Location: ' . $target, true, 301);
+            exit;
+        }
+        $breadcrumbSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => absoluteUrl('/')],
+                ['@type' => 'ListItem', 'position' => 2, 'name' => 'Design Ideas', 'item' => absoluteUrl('/design-ideas')],
+            ],
+        ];
+        render('public/design-ideas', [
+            'title' => (string)($urlAlias['meta_title'] ?? 'Interior Design Ideas with Photos, Colours and Quotes | HomeInteriors360'),
+            'metaDescription' => (string)($urlAlias['meta_description'] ?? 'Browse dynamic interior design ideas by room type, colour, city, style, layout, and dimensions. Save favourites and request a quotation.'),
+            'canonicalUrl' => absoluteUrl((string)($urlAlias['canonical_url'] ?: '/design-ideas')),
+            'metaRobots' => (string)($urlAlias['robots'] ?: 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'),
+            'ogImage' => !empty($urlAlias['image_url']) ? absoluteUrl((string)$urlAlias['image_url']) : null,
+            'active' => 'design-ideas',
+            'content' => $content,
+            'globalAlias' => $urlAlias,
+            'ideas' => SiteRepository::listDesignIdeas($filters),
+            'aliases' => SiteRepository::listDesignIdeaAliases(),
+            'sections' => SiteRepository::listDesignIdeaSections(),
+            'filterOptions' => SiteRepository::designIdeaFilterOptions(),
+            'activeFilters' => $filters,
+            'structuredData' => [$breadcrumbSchema],
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/design-ideas/idea/([a-z0-9-]+)$#i', $path, $match)) {
+        $idea = SiteRepository::getDesignIdea((string)$match[1]);
+        if (!$idea) {
+            http_response_code(404);
+            echo 'Design idea not found';
+            exit;
+        }
+        $urlAlias = SiteRepository::getUrlAliasByPath('/design-ideas/idea/' . (string)$idea['slug']);
+        $image = (string)($idea['image_url'] ?? '');
+        $breadcrumbSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => absoluteUrl('/')],
+                ['@type' => 'ListItem', 'position' => 2, 'name' => 'Design Ideas', 'item' => absoluteUrl('/design-ideas')],
+                ['@type' => 'ListItem', 'position' => 3, 'name' => (string)$idea['name'], 'item' => absoluteUrl('/design-ideas/idea/' . $idea['slug'])],
+            ],
+        ];
+        $creativeWorkSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'ImageGallery',
+            'name' => (string)$idea['name'],
+            'description' => (string)($idea['meta_description'] ?: $idea['short_description']),
+            'image' => array_values(array_map(static fn(string $url): string => absoluteUrl($url), array_filter(array_merge([(string)$idea['image_url']], (array)$idea['gallery_json'])))),
+            'about' => [(string)$idea['type'], (string)$idea['style'], (string)$idea['color']],
+            'contentLocation' => [
+                '@type' => 'Place',
+                'name' => trim((string)$idea['location'] . ', ' . (string)$idea['city'], ', '),
+            ],
+        ];
+        render('public/design-idea-detail', [
+            'title' => (string)($urlAlias['meta_title'] ?? ($idea['meta_title'] ?: $idea['name'] . ' | HomeInteriors360')),
+            'metaDescription' => (string)($urlAlias['meta_description'] ?? ($idea['meta_description'] ?: $idea['short_description'])),
+            'canonicalUrl' => absoluteUrl((string)($urlAlias['canonical_url'] ?: '/design-ideas/idea/' . $idea['slug'])),
+            'metaRobots' => (string)($urlAlias['robots'] ?: 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'),
+            'ogImage' => !empty($urlAlias['image_url']) ? absoluteUrl((string)$urlAlias['image_url']) : ($image !== '' ? absoluteUrl($image) : absoluteUrl('/logo.png')),
+            'active' => 'design-ideas',
+            'content' => $content,
+            'globalAlias' => $urlAlias,
+            'idea' => $idea,
+            'structuredData' => [$breadcrumbSchema, $creativeWorkSchema],
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/design-ideas/([a-z0-9-]+)$#i', $path, $match)) {
+        $page = SiteRepository::designIdeaAliasPage((string)$match[1]);
+        if (!$page) {
+            http_response_code(404);
+            echo 'Design idea page not found';
+            exit;
+        }
+        $alias = $page['alias'];
+        $urlAlias = SiteRepository::getUrlAliasByPath('/design-ideas/' . (string)$alias['slug']);
+        $activeFilters = array_filter(array_merge($page['filters'] ?? [], [
+            'q' => $_GET['q'] ?? null,
+            'type' => $_GET['type'] ?? ($page['filters']['type'] ?? null),
+            'color' => $_GET['color'] ?? ($page['filters']['color'] ?? null),
+            'city' => $_GET['city'] ?? ($page['filters']['city'] ?? null),
+            'state' => $_GET['state'] ?? ($page['filters']['state'] ?? null),
+            'style' => $_GET['style'] ?? ($page['filters']['style'] ?? null),
+            'layout' => $_GET['layout'] ?? ($page['filters']['layout'] ?? null),
+        ]), static fn(mixed $value): bool => $value !== null && $value !== '');
+        $breadcrumbSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => absoluteUrl('/')],
+                ['@type' => 'ListItem', 'position' => 2, 'name' => 'Design Ideas', 'item' => absoluteUrl('/design-ideas')],
+                ['@type' => 'ListItem', 'position' => 3, 'name' => (string)$alias['title'], 'item' => absoluteUrl('/design-ideas/' . $alias['slug'])],
+            ],
+        ];
+        render('public/design-ideas', [
+            'title' => (string)($urlAlias['meta_title'] ?? ($alias['meta_title'] ?: $alias['title'] . ' | HomeInteriors360')),
+            'metaDescription' => (string)($urlAlias['meta_description'] ?? ($alias['meta_description'] ?: $alias['subtitle'])),
+            'canonicalUrl' => absoluteUrl((string)($urlAlias['canonical_url'] ?: '/design-ideas/' . $alias['slug'])),
+            'metaRobots' => (string)($urlAlias['robots'] ?: 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'),
+            'ogImage' => !empty($urlAlias['image_url']) ? absoluteUrl((string)$urlAlias['image_url']) : (!empty($alias['hero_image']) ? absoluteUrl((string)$alias['hero_image']) : absoluteUrl('/logo.png')),
+            'active' => 'design-ideas',
+            'content' => $content,
+            'globalAlias' => $urlAlias,
+            'alias' => $alias,
+            'ideas' => $page['ideas'],
+            'aliases' => SiteRepository::listDesignIdeaAliases(),
+            'sections' => SiteRepository::listDesignIdeaSections(),
+            'filterOptions' => SiteRepository::designIdeaFilterOptions(),
+            'activeFilters' => $activeFilters,
+            'structuredData' => [$breadcrumbSchema],
+        ]);
+        exit;
+    }
+
+    if ($path === '/properties') {
+        $filters = array_filter([
+            'listing_for' => $_GET['listing_for'] ?? 'buy',
+            'city' => $_GET['city'] ?? null,
+            'locality' => $_GET['locality'] ?? null,
+            'property_type' => $_GET['property_type'] ?? null,
+            'project_status' => $_GET['project_status'] ?? null,
+            'bhk_type' => $_GET['bhk_type'] ?? null,
+            'price_min' => $_GET['price_min'] ?? null,
+            'price_max' => $_GET['price_max'] ?? null,
+            'q' => $_GET['q'] ?? null,
+            'sort' => $_GET['sort'] ?? null,
+        ], static fn(mixed $value): bool => $value !== null && $value !== '');
+        $listingFor = ($filters['listing_for'] ?? 'buy') === 'rent' ? 'rent' : 'buy';
+        render('public/property-listings', [
+            'title' => $listingFor === 'rent' ? 'Flats and Homes for Rent | HomeInteriors360' : 'Flats and Residential Projects for Sale | HomeInteriors360',
+            'metaDescription' => $listingFor === 'rent'
+                ? 'Browse residential projects and homes for rent with photos, videos, layouts, monthly rent, amenities, and location details.'
+                : 'Browse flats and residential projects for sale with photos, videos, floor plans, prices, amenities, inventory, and location details.',
+            'active' => 'properties',
+            'content' => $content,
+            'filters' => $filters,
+            'filterOptions' => SiteRepository::realEstateFilterOptions(),
+            'projects' => SiteRepository::listRealEstateProjects($filters),
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/property/([a-z0-9-]+)$#i', $path, $match)) {
+        $project = SiteRepository::getRealEstateProject((string)$match[1]);
+        if (!$project) {
+            http_response_code(404);
+            echo 'Property project not found';
+            exit;
+        }
+        $image = '';
+        foreach (($project['media'] ?? []) as $item) {
+            if (($item['media_type'] ?? 'image') === 'image') {
+                $image = (string)$item['media_url'];
+                break;
+            }
+        }
+        $structuredProject = [
+            '@context' => 'https://schema.org',
+            '@type' => 'ApartmentComplex',
+            'name' => (string)$project['project_name'],
+            'description' => (string)($project['short_description'] ?: $project['description']),
+            'address' => [
+                '@type' => 'PostalAddress',
+                'streetAddress' => (string)($project['address'] ?? ''),
+                'addressLocality' => (string)($project['locality'] ?? ''),
+                'addressRegion' => (string)($project['state'] ?? ''),
+                'postalCode' => (string)($project['pincode'] ?? ''),
+                'addressCountry' => 'IN',
+            ],
+            'image' => array_values(array_map(static fn(array $item): string => absoluteUrl((string)$item['media_url']), array_filter($project['media'] ?? [], static fn(array $item): bool => ($item['media_type'] ?? 'image') === 'image'))),
+        ];
+        render('public/property-detail', [
+            'title' => (string)($project['meta_title'] ?: $project['project_name'] . ' | Price, Floor Plans & Photos'),
+            'metaDescription' => (string)($project['meta_description'] ?: $project['short_description']),
+            'canonicalUrl' => absoluteUrl('/property/' . $project['slug']),
+            'ogImage' => $image !== '' ? absoluteUrl($image) : absoluteUrl('/logo.png'),
+            'active' => 'properties',
+            'content' => $content,
+            'project' => $project,
+            'structuredData' => [$structuredProject],
         ]);
         exit;
     }
@@ -1292,6 +2080,89 @@ try {
             'active' => 'admin',
             'content' => $content,
             'coupons' => SiteRepository::listLeadCoupons(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/property-projects') {
+        Auth::requireAuth();
+        render('admin/property-projects', [
+            'title' => 'Property Project Manager',
+            'metaDescription' => 'Manage real estate projects, units, pricing, media, floor plans, amenities, and SEO.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'projects' => SiteRepository::listRealEstateProjects([], true),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/property-enquiries') {
+        Auth::requireAuth();
+        render('admin/property-enquiries', [
+            'title' => 'Property Enquiries',
+            'metaDescription' => 'Manage buyer and tenant enquiries from real estate project pages.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'enquiries' => SiteRepository::listPropertyEnquiries(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/url-aliases') {
+        Auth::requireAuth();
+        render('admin/url-aliases', [
+            'title' => 'Global URL Alias Manager',
+            'metaDescription' => 'Manage SEO metadata, H1, rich content, image and index settings for every public URL.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'aliases' => SiteRepository::listUrlAliases(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/design-ideas') {
+        Auth::requireAuth();
+        render('admin/design-ideas', [
+            'title' => 'Design Idea Backend',
+            'metaDescription' => 'Create and manage dynamic design idea cards, media, filters, dimensions, and SEO.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'ideas' => SiteRepository::listDesignIdeas([], true),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/design-idea-aliases') {
+        Auth::requireAuth();
+        redirectTo('/admin/url-aliases');
+    }
+
+    if ($path === '/admin/design-idea-sections') {
+        Auth::requireAuth();
+        render('admin/design-idea-sections', [
+            'title' => 'Design Idea Section Backend',
+            'metaDescription' => 'Manage dynamic blocks and item grids shown on design idea pages.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'sections' => SiteRepository::listDesignIdeaSections(true),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/design-idea-leads') {
+        Auth::requireAuth();
+        render('admin/design-idea-leads', [
+            'title' => 'Design Idea Quote Leads',
+            'metaDescription' => 'Manage quote requests captured from design idea pages.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'leads' => SiteRepository::listDesignIdeaLeads(),
         ]);
         exit;
     }

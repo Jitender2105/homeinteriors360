@@ -15,6 +15,7 @@
     <aside class="lead-card lead-checkout-summary">
       <h2>Cart Total</h2>
       <div class="lead-total-lines">
+        <span>Unique Leads <strong id="cartUniqueLeads">0</strong></span>
         <span>Subtotal <strong id="cartSubtotal">₹0</strong></span>
         <span>Coupon Discount <strong id="cartDiscount">₹0</strong></span>
       </div>
@@ -42,36 +43,92 @@
 (() => {
   const wrap = document.getElementById('cartItems');
   const total = document.getElementById('cartGrandTotal');
+  const uniqueLeads = document.getElementById('cartUniqueLeads');
   const subtotal = document.getElementById('cartSubtotal');
   const discount = document.getElementById('cartDiscount');
   const firstTimeMsg = document.getElementById('firstTimeMsg');
   const msg = document.getElementById('cartMsg');
   const couponSuggestions = document.getElementById('cartCouponSuggestions');
   const couponForm = document.getElementById('couponForm');
+  const quantityTimers = new WeakMap();
   const money = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  function cartItemPayload(item, selectedCount) {
+    return {
+      filter_name: item.filter_name,
+      criteria: item.criteria || {},
+      date_filter: item.date_filter || 'all_time',
+      start_date: item.start_date || null,
+      end_date: item.end_date || null,
+      selected_count: selectedCount,
+      lead_count: selectedCount,
+    };
+  }
   async function load() {
     const res = await fetch('/api/lead-cart');
     const data = await res.json();
+    uniqueLeads.textContent = Number(data.unique_lead_count || 0).toLocaleString('en-IN');
     subtotal.textContent = money(data.subtotal || 0);
     discount.textContent = `-${money(data.discount_amount || 0)}`;
     total.textContent = money(data.grand_total || 0);
     firstTimeMsg.className = data.first_time_eligible ? 'form-message ok' : 'form-message';
     firstTimeMsg.textContent = data.first_time_eligible ? 'First-time 10 free leads benefit is currently applied.' : 'First-time free leads benefit is not applicable for this buyer.';
     wrap.innerHTML = (data.items || []).map((item) => `
-      <article class="lead-card lead-cart-item">
-        <div><p class="eyebrow eyebrow-dark">${esc(item.date_filter.replaceAll('_', ' '))}</p><h2>${esc(item.filter_name)}</h2><p class="muted">${Number(item.lead_count).toLocaleString('en-IN')} leads</p></div>
+      <article class="lead-card lead-cart-item" data-item='${esc(JSON.stringify(item))}'>
+        <div><p class="eyebrow eyebrow-dark">${esc(item.date_filter.replaceAll('_', ' '))}</p><h2>${esc(item.filter_name)}</h2><p class="muted">${Number(item.unique_lead_count || 0).toLocaleString('en-IN')} unique leads${Number(item.duplicate_count || 0) > 0 ? ` · ${Number(item.duplicate_count).toLocaleString('en-IN')} overlapping removed` : ''}</p></div>
+        <label class="lead-quantity-control lead-cart-quantity">
+          <span>No. of leads to buy</span>
+          <input class="cart-qty-input" type="number" min="1" max="${Number(item.available_lead_count || item.requested_count || 1)}" value="${Number(item.requested_count || item.selected_count || 1)}" inputmode="numeric">
+        </label>
         <div class="lead-slab-lines">${(item.pricing?.lines || []).map((line) => `<span>${esc(line.label)}: ${line.count} × ₹${line.rate} = ${money(line.amount)}</span>`).join('')}</div>
         <strong>${money(item.price_total)}</strong>
+        <button class="btn-muted update-cart-qty" type="button">Update Quantity</button>
         <button class="btn-link remove-cart" data-id="${esc(item.id)}" type="button">Remove</button>
       </article>
     `).join('') || '<div class="lead-card"><h2>Your cart is empty.</h2><p class="muted">Choose lead packages from the marketplace.</p></div>';
   }
+  async function updateCartQuantity(card) {
+    const item = JSON.parse(card.dataset.item || '{}');
+    const input = card.querySelector('.cart-qty-input');
+    const updateBtn = card.querySelector('.update-cart-qty');
+    const max = Math.max(1, Number(input.max || item.available_lead_count || item.requested_count || 1));
+    const selected = Math.max(1, Math.min(Number(input.value || 1), max));
+    input.value = selected;
+    input.disabled = true;
+    updateBtn.disabled = true;
+    updateBtn.textContent = 'Updating...';
+    const res = await fetch('/api/lead-cart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cartItemPayload(item, selected)),
+    });
+    const data = await res.json();
+    msg.className = res.ok ? 'form-message ok' : 'form-message error';
+    msg.textContent = res.ok
+      ? `Quantity updated. ${Number(data.unique_lead_count || 0).toLocaleString('en-IN')} unique leads in cart.`
+      : (data.error || 'Could not update quantity.');
+    await load();
+  }
   wrap.addEventListener('click', async (event) => {
     const btn = event.target.closest('.remove-cart');
-    if (!btn) return;
-    await fetch(`/api/lead-cart?id=${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' });
-    load();
+    const updateBtn = event.target.closest('.update-cart-qty');
+    if (!btn && !updateBtn) return;
+    if (btn) {
+      await fetch(`/api/lead-cart?id=${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' });
+      msg.className = 'form-message ok';
+      msg.textContent = 'Package removed.';
+      load();
+      return;
+    }
+    await updateCartQuantity(updateBtn.closest('.lead-cart-item'));
+  });
+  wrap.addEventListener('input', (event) => {
+    const input = event.target.closest('.cart-qty-input');
+    if (!input) return;
+    const card = input.closest('.lead-cart-item');
+    const existing = quantityTimers.get(input);
+    if (existing) clearTimeout(existing);
+    quantityTimers.set(input, setTimeout(() => updateCartQuantity(card), 500));
   });
   document.getElementById('clearCart').addEventListener('click', async () => {
     await fetch('/api/lead-cart?id=all', { method: 'DELETE' });

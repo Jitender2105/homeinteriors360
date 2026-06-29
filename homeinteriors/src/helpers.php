@@ -81,6 +81,14 @@ function slugify(string $value): string
 
 function appPublicRoot(): string
 {
+    $scriptFilename = (string)($_SERVER['SCRIPT_FILENAME'] ?? '');
+    if ($scriptFilename !== '' && is_file($scriptFilename)) {
+        $scriptDir = dirname($scriptFilename);
+        if (is_file($scriptDir . '/index.php')) {
+            return $scriptDir;
+        }
+    }
+
     $root = dirname(__DIR__);
     if (is_dir($root . '/public') && is_file($root . '/public/index.php')) {
         return $root . '/public';

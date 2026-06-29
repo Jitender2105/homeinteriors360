@@ -11,6 +11,10 @@ $footerLinks = [
   ['label' => 'Cancellation and Refunds Policy', 'href' => '/cancellation-and-refunds-policy'],
 ];
 $seoLinks = [
+  ['label' => 'Buy or Rent Property', 'href' => '/properties'],
+  ['label' => 'Interior Design Ideas', 'href' => '/design-ideas'],
+  ['label' => 'Kitchen Design Ideas', 'href' => '/design-ideas/kitchen-designs'],
+  ['label' => 'Bedroom Design Ideas', 'href' => '/design-ideas/bedroom-designs'],
   ['label' => 'Interior Design Leads', 'href' => '/interior-design-leads'],
   ['label' => 'Interior Designer Leads', 'href' => '/interior-designer-leads'],
   ['label' => 'Buy Interior Design Leads', 'href' => '/buy-interior-design-leads'],
@@ -36,6 +40,8 @@ $seoLinks = [
     <p class="footer-copy">&copy; <?= date('Y') ?> <?= htmlspecialchars($copy, ENT_QUOTES, 'UTF-8') ?></p>
   </div>
 </footer>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 (() => {
   const navToggle = document.getElementById('navToggle');
@@ -62,20 +68,107 @@ $seoLinks = [
   const nodes = document.querySelectorAll('[data-reveal]');
   if (!('IntersectionObserver' in window)) {
     nodes.forEach((el) => el.classList.add('in'));
+  } else {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+
+    nodes.forEach((el, index) => {
+      el.style.transitionDelay = `${Math.min(index * 60, 300)}ms`;
+      observer.observe(el);
+    });
+  }
+
+  const societyWidgets = document.querySelectorAll('[data-society-lookup]');
+  if (!societyWidgets.length) return;
+
+  const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+  if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+    window.jQuery('.select2-society-field').each(function initSocietySelect2() {
+      const select = window.jQuery(this);
+      const form = this.closest('form');
+      select.select2({
+        width: '100%',
+        placeholder: select.data('placeholder') || 'Select or search society',
+        allowClear: true,
+        tags: true,
+        ajax: {
+          url: '/api/societies',
+          dataType: 'json',
+          delay: 200,
+          data(params) {
+            const city = form?.querySelector('[name="city"]')?.value || '';
+            return { q: params.term || '', city };
+          },
+          processResults(data) {
+            const societies = Array.isArray(data.societies) ? data.societies : [];
+            return {
+              results: societies.map((society) => {
+                const name = String(society.name || '');
+                const city = String(society.city || '');
+                return {
+                  id: name,
+                  text: city ? `${name} (${city})` : name,
+                  societyName: name,
+                };
+              }),
+            };
+          },
+          cache: true,
+        },
+        createTag(params) {
+          const term = String(params.term || '').trim();
+          if (!term) return null;
+          return { id: term, text: `Other: ${term}`, societyName: term, newTag: true };
+        },
+        templateSelection(item) {
+          return item.societyName || item.id || item.text;
+        },
+      });
+
+      form?.addEventListener('reset', () => {
+        setTimeout(() => select.val(null).trigger('change'), 0);
+      });
+    });
     return;
   }
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('in');
-        observer.unobserve(entry.target);
-      }
-    });
-  }, { threshold: 0.15 });
 
-  nodes.forEach((el, index) => {
-    el.style.transitionDelay = `${Math.min(index * 60, 300)}ms`;
-    observer.observe(el);
+  const loadSocieties = async (term = '', city = '') => {
+    const params = new URLSearchParams();
+    if (term) params.set('q', term);
+    if (city) params.set('city', city);
+    const response = await fetch(`/api/societies?${params.toString()}`);
+    const data = response.ok ? await response.json() : { societies: [] };
+    return Array.isArray(data.societies) ? data.societies : [];
+  };
+  const renderSocietyOptions = (widget, societies) => {
+    const select = widget.querySelector('.society-select');
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">Select or search society</option>' + societies.map((society) => {
+      const name = String(society.name || '');
+      const city = String(society.city || '');
+      const label = city ? `${name} (${city})` : name;
+      return `<option value="${escapeHtml(name)}">${escapeHtml(label)}</option>`;
+    }).join('');
+    if ([...select.options].some((option) => option.value === current)) {
+      select.value = current;
+    }
+  };
+
+  societyWidgets.forEach(async (widget) => {
+    const select = widget.querySelector('.society-select');
+    const form = widget.closest('form');
+    if (!select) return;
+    const city = form?.querySelector('[name="city"]')?.value || '';
+    const societies = await loadSocieties('', city);
+    renderSocietyOptions(widget, societies);
   });
 })();
 </script>

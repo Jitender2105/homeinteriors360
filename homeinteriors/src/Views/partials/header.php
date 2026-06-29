@@ -17,7 +17,7 @@ $defaultStructuredData = [
     'logo' => absoluteUrl('/logo.png'),
     'contactPoint' => [
       '@type' => 'ContactPoint',
-      'telephone' => '+91 93158 68727',
+      'telephone' => '+91 8076945594',
       'contactType' => 'customer support',
       'areaServed' => 'IN',
       'availableLanguage' => ['en', 'hi'],
@@ -42,6 +42,8 @@ $navDirectory = (string)($content['nav.directory'] ?? 'Find Professionals');
 $navPricing = (string)($content['nav.pricing'] ?? 'Pricing');
 $navLeads = (string)($content['nav.leads'] ?? 'Buy Leads');
 $navCalculator = (string)($content['nav.calculator'] ?? 'Cost Calculator');
+$navProperties = (string)($content['nav.properties'] ?? 'Buy / Rent');
+$navDesignIdeas = (string)($content['nav.design_ideas'] ?? 'Design Ideas');
 $navAdmin = (string)($content['nav.admin'] ?? 'Admin');
 $rootPath = dirname(__DIR__, 3);
 $styleCandidates = [
@@ -79,12 +81,24 @@ foreach ($styleCandidates as $stylePath) {
   <meta name="twitter:image" content="<?= htmlspecialchars((string)$ogImage, ENT_QUOTES, 'UTF-8') ?>" />
   <link rel="icon" href="/favicon.png" />
   <link rel="apple-touch-icon" href="/favicon.png" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
   <link rel="stylesheet" href="/assets/style.css?v=<?= htmlspecialchars($styleVersion, ENT_QUOTES, 'UTF-8') ?>" />
   <?php foreach ((array)$structuredData as $schema): ?>
     <script type="application/ld+json"><?= json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
   <?php endforeach; ?>
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-TQX5N264');</script>
+  <!-- End Google Tag Manager -->
 </head>
 <body>
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TQX5N264"
+  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
   <header class="site-header">
     <div class="container nav-shell">
       <a class="brand" href="/">
@@ -94,6 +108,8 @@ foreach ($styleCandidates as $stylePath) {
       <nav class="nav-links">
         <a class="<?= $active === 'home' ? 'active' : '' ?>" href="/"><?= htmlspecialchars($navHome, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'directory' ? 'active' : '' ?>" href="/professionals"><?= htmlspecialchars($navDirectory, ENT_QUOTES, 'UTF-8') ?></a>
+        <a class="<?= $active === 'properties' ? 'active' : '' ?>" href="/properties"><?= htmlspecialchars($navProperties, ENT_QUOTES, 'UTF-8') ?></a>
+        <a class="<?= $active === 'design-ideas' ? 'active' : '' ?>" href="/design-ideas"><?= htmlspecialchars($navDesignIdeas, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'pricing' ? 'active' : '' ?>" href="/pricing"><?= htmlspecialchars($navPricing, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'leads' ? 'active' : '' ?>" href="/lead-marketplace"><?= htmlspecialchars($navLeads, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'calculator' ? 'active' : '' ?>" href="/cost-calculator"><?= htmlspecialchars($navCalculator, ENT_QUOTES, 'UTF-8') ?></a>

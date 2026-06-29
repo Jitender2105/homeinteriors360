@@ -58,8 +58,18 @@ $buyerLoggedIn = !empty($buyer);
     const res = await fetch('/api/lead-cart');
     const data = await res.json();
     const offerText = data.first_time_eligible ? 'First-time 10 free leads benefit is applied.' : 'First-time free leads benefit is not applicable for this buyer.';
-    cartWrap.innerHTML = `<div class="section-head"><h2>Checkout Summary</h2><p>Subtotal ${money(data.subtotal || 0)} · Discount -${money(data.discount_amount || 0)} · Grand total ${money(data.grand_total || 0)}</p><p class="form-message">${offerText}</p></div>` + ((data.items || []).map((item) => `<article class="lead-card lead-cart-item"><h2>${esc(item.filter_name)}</h2><p class="muted">${item.lead_count} leads</p><strong>${money(item.price_total)}</strong></article>`).join('') || '<div class="lead-card"><h2>Cart is empty.</h2><a class="btn-link" href="/lead-marketplace">Choose packages</a></div>');
+    cartWrap.innerHTML = `<div class="section-head"><h2>Checkout Summary</h2><p>${Number(data.unique_lead_count || 0).toLocaleString('en-IN')} unique leads · Subtotal ${money(data.subtotal || 0)} · Discount -${money(data.discount_amount || 0)} · Grand total ${money(data.grand_total || 0)}</p><p class="form-message">${offerText}</p></div>` + ((data.items || []).map((item) => `<article class="lead-card lead-cart-item"><h2>${esc(item.filter_name)}</h2><p class="muted">${Number(item.unique_lead_count || 0).toLocaleString('en-IN')} unique leads${Number(item.duplicate_count || 0) > 0 ? ` · ${Number(item.duplicate_count).toLocaleString('en-IN')} overlapping removed` : ''}</p><strong>${money(item.price_total)}</strong><button class="btn-link remove-checkout-cart" data-id="${esc(item.package_id || item.id)}" type="button">Remove</button></article>`).join('') || '<div class="lead-card"><h2>Cart is empty.</h2><a class="btn-link" href="/lead-marketplace">Choose packages</a></div>');
   }
+  cartWrap.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.remove-checkout-cart');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = 'Removing...';
+    const res = await fetch(`/api/lead-cart?id=${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' });
+    msg.className = res.ok ? 'form-message ok' : 'form-message error';
+    msg.textContent = res.ok ? 'Package removed from cart.' : 'Could not remove package.';
+    await renderCart();
+  });
   async function ensureBuyer(buyer) {
     const res = await fetch('/api/create-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ buyer, account_only: true }) });
     const data = await res.json();

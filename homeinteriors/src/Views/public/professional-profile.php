@@ -39,9 +39,13 @@
         <input name="name" required placeholder="<?= htmlspecialchars((string)($content['ui.name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
         <input name="phone" required placeholder="<?= htmlspecialchars((string)($content['ui.phone'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
         <input name="city" required placeholder="<?= htmlspecialchars((string)($content['ui.city'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-        <input name="society_area" placeholder="<?= htmlspecialchars((string)($content['ui.society_area'] ?? 'Society / Area'), ENT_QUOTES, 'UTF-8') ?>" />
-        <input name="budget" placeholder="<?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?>" />
+        <?php require __DIR__ . '/../partials/society-field.php'; ?>
+        <select name="budget">
+          <option value=""><?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?></option>
+          <?php require __DIR__ . '/../partials/budget-options.php'; ?>
+        </select>
         <textarea name="requirement" required placeholder="<?= htmlspecialchars((string)($content['ui.requirement'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+        <?php require __DIR__ . '/../partials/lead-consent.php'; ?>
         <button type="submit" class="btn-primary"><?= htmlspecialchars((string)($content['profile.cta'] ?? ''), ENT_QUOTES, 'UTF-8') ?></button>
         <p class="form-message" id="profileTopLeadMessage"></p>
       </form>
@@ -243,6 +247,7 @@
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!form.reportValidity()) return;
     const payload = Object.fromEntries(new FormData(form).entries());
     const response = await fetch('/api/leads', {
       method: 'POST',

@@ -8,6 +8,11 @@ DROP TABLE IF EXISTS lead_purchase_items;
 DROP TABLE IF EXISTS lead_purchases;
 DROP TABLE IF EXISTS lead_coupons;
 DROP TABLE IF EXISTS lead_buyers;
+DROP TABLE IF EXISTS property_enquiries;
+DROP TABLE IF EXISTS real_estate_floor_plans;
+DROP TABLE IF EXISTS real_estate_media;
+DROP TABLE IF EXISTS real_estate_units;
+DROP TABLE IF EXISTS real_estate_projects;
 DROP TABLE IF EXISTS projects;
 DROP TABLE IF EXISTS leads;
 DROP TABLE IF EXISTS pros;
@@ -163,6 +168,19 @@ CREATE TABLE leads (
   INDEX idx_leads_source (source)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE societies (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  city VARCHAR(120) NOT NULL DEFAULT '',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_societies_city_name (city, name),
+  INDEX idx_societies_name (name),
+  INDEX idx_societies_city (city),
+  INDEX idx_societies_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE lead_buyers (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
@@ -233,6 +251,129 @@ CREATE TABLE lead_purchase_items (
   CONSTRAINT fk_lead_purchase_items_purchase FOREIGN KEY (purchase_id) REFERENCES lead_purchases(id) ON DELETE CASCADE,
   CONSTRAINT fk_lead_purchase_items_buyer FOREIGN KEY (buyer_id) REFERENCES lead_buyers(id) ON DELETE CASCADE,
   INDEX idx_lead_purchase_items_buyer (buyer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE real_estate_projects (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  slug VARCHAR(255) NOT NULL UNIQUE,
+  project_name VARCHAR(255) NOT NULL,
+  listing_for ENUM('buy','rent','both') NOT NULL DEFAULT 'buy',
+  property_type VARCHAR(120) NOT NULL,
+  project_status VARCHAR(80) DEFAULT NULL,
+  builder_name VARCHAR(255) DEFAULT NULL,
+  rera_number VARCHAR(120) DEFAULT NULL,
+  possession_date DATE DEFAULT NULL,
+  address VARCHAR(500) DEFAULT NULL,
+  locality VARCHAR(180) DEFAULT NULL,
+  city VARCHAR(120) NOT NULL,
+  state VARCHAR(120) DEFAULT NULL,
+  pincode VARCHAR(12) DEFAULT NULL,
+  latitude DECIMAL(10,7) DEFAULT NULL,
+  longitude DECIMAL(10,7) DEFAULT NULL,
+  short_description TEXT,
+  description LONGTEXT,
+  price_min DECIMAL(14,2) NOT NULL DEFAULT 0,
+  price_max DECIMAL(14,2) NOT NULL DEFAULT 0,
+  rent_min DECIMAL(14,2) NOT NULL DEFAULT 0,
+  rent_max DECIMAL(14,2) NOT NULL DEFAULT 0,
+  price_per_sqft DECIMAL(12,2) DEFAULT NULL,
+  area_min INT DEFAULT NULL,
+  area_max INT DEFAULT NULL,
+  total_units INT DEFAULT NULL,
+  total_towers INT DEFAULT NULL,
+  total_area_acres DECIMAL(8,2) DEFAULT NULL,
+  video_url VARCHAR(500) DEFAULT NULL,
+  brochure_url VARCHAR(500) DEFAULT NULL,
+  amenities_json JSON DEFAULT NULL,
+  highlights_json JSON DEFAULT NULL,
+  nearby_json JSON DEFAULT NULL,
+  meta_title VARCHAR(255) DEFAULT NULL,
+  meta_description VARCHAR(500) DEFAULT NULL,
+  is_featured BOOLEAN NOT NULL DEFAULT FALSE,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_re_project_listing (listing_for, is_active),
+  INDEX idx_re_project_city (city, locality),
+  INDEX idx_re_project_type (property_type),
+  INDEX idx_re_project_price (price_min, price_max),
+  INDEX idx_re_project_rent (rent_min, rent_max)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE real_estate_units (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  project_id INT NOT NULL,
+  unit_name VARCHAR(180) NOT NULL,
+  bhk_type VARCHAR(80) DEFAULT NULL,
+  unit_type VARCHAR(120) DEFAULT NULL,
+  carpet_area INT DEFAULT NULL,
+  builtup_area INT DEFAULT NULL,
+  balconies INT DEFAULT NULL,
+  bathrooms INT DEFAULT NULL,
+  furnishing VARCHAR(80) DEFAULT NULL,
+  sale_price DECIMAL(14,2) NOT NULL DEFAULT 0,
+  monthly_rent DECIMAL(14,2) NOT NULL DEFAULT 0,
+  maintenance_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  available_units INT NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_re_units_project FOREIGN KEY (project_id) REFERENCES real_estate_projects(id) ON DELETE CASCADE,
+  INDEX idx_re_units_project (project_id, is_active),
+  INDEX idx_re_units_bhk (bhk_type),
+  INDEX idx_re_units_sale_price (sale_price),
+  INDEX idx_re_units_rent (monthly_rent)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE real_estate_media (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  project_id INT NOT NULL,
+  media_type ENUM('image','video') NOT NULL DEFAULT 'image',
+  media_url VARCHAR(500) NOT NULL,
+  title VARCHAR(255) DEFAULT NULL,
+  category VARCHAR(80) DEFAULT NULL,
+  is_cover BOOLEAN NOT NULL DEFAULT FALSE,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_re_media_project FOREIGN KEY (project_id) REFERENCES real_estate_projects(id) ON DELETE CASCADE,
+  INDEX idx_re_media_project (project_id, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE real_estate_floor_plans (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  project_id INT NOT NULL,
+  unit_id INT DEFAULT NULL,
+  title VARCHAR(255) NOT NULL,
+  image_url VARCHAR(500) NOT NULL,
+  area_label VARCHAR(120) DEFAULT NULL,
+  price_label VARCHAR(120) DEFAULT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_re_floor_project FOREIGN KEY (project_id) REFERENCES real_estate_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_re_floor_unit FOREIGN KEY (unit_id) REFERENCES real_estate_units(id) ON DELETE SET NULL,
+  INDEX idx_re_floor_project (project_id, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE property_enquiries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  project_id INT NOT NULL,
+  unit_id INT DEFAULT NULL,
+  name VARCHAR(255) NOT NULL,
+  phone VARCHAR(30) NOT NULL,
+  email VARCHAR(255) DEFAULT NULL,
+  requirement ENUM('buy','rent') NOT NULL DEFAULT 'buy',
+  message TEXT,
+  consent BOOLEAN NOT NULL DEFAULT FALSE,
+  source VARCHAR(80) NOT NULL DEFAULT 'project_detail',
+  status ENUM('new','contacted','qualified','closed') NOT NULL DEFAULT 'new',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_property_enquiry_project FOREIGN KEY (project_id) REFERENCES real_estate_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_property_enquiry_unit FOREIGN KEY (unit_id) REFERENCES real_estate_units(id) ON DELETE SET NULL,
+  INDEX idx_property_enquiry_project (project_id),
+  INDEX idx_property_enquiry_status (status),
+  INDEX idx_property_enquiry_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO users (username, password_hash, email, role, is_active)

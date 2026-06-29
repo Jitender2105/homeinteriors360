@@ -5,7 +5,7 @@ $pageTitle = (string)($legalTitle ?? 'Company Information');
 $lastUpdated = (string)($lastUpdated ?? '28 May 2026');
 $sections = is_array($sections ?? null) ? $sections : [];
 $contactEmail = (string)($contactEmail ?? 'admin@homeinteriors360.com');
-$contactPhone = (string)($contactPhone ?? '+91 93158 68727');
+$contactPhone = (string)($contactPhone ?? '+91 8076945594');
 ?>
 
 <section class="section legal-hero" data-reveal>
