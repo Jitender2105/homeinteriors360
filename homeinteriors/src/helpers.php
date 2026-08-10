@@ -165,6 +165,58 @@ function saveUploadedFiles(array $files, string $subdir, array $existing = []): 
     return $stored;
 }
 
+function saveProjectRequirementFiles(array $files, string $subdir = 'project-requirements'): array
+{
+    $stored = [];
+    if (empty($files) || !isset($files['error'])) {
+        return $stored;
+    }
+
+    $allowedExt = ['pdf', 'jpg', 'jpeg', 'png'];
+    $allowedMime = ['application/pdf', 'image/jpeg', 'image/png'];
+    $count = is_array($files['error']) ? count($files['error']) : 0;
+    $maxSize = 8 * 1024 * 1024;
+
+    for ($i = 0; $i < $count; $i++) {
+        $error = (int)($files['error'][$i] ?? UPLOAD_ERR_NO_FILE);
+        if ($error === UPLOAD_ERR_NO_FILE) {
+            continue;
+        }
+        if ($error !== UPLOAD_ERR_OK) {
+            throw new InvalidArgumentException('One of the uploaded files could not be processed.');
+        }
+
+        $tmpName = (string)($files['tmp_name'][$i] ?? '');
+        $original = (string)($files['name'][$i] ?? 'file');
+        $size = (int)($files['size'][$i] ?? 0);
+        if ($tmpName === '' || !is_uploaded_file($tmpName) || $size <= 0 || $size > $maxSize) {
+            throw new InvalidArgumentException('Each upload must be a valid file up to 8 MB.');
+        }
+
+        $ext = strtolower(pathinfo($original, PATHINFO_EXTENSION));
+        $mime = function_exists('mime_content_type') ? (string)mime_content_type($tmpName) : (string)($files['type'][$i] ?? '');
+        if (!in_array($ext, $allowedExt, true) || !in_array($mime, $allowedMime, true)) {
+            throw new InvalidArgumentException('Only PDF, JPG, JPEG and PNG files are allowed.');
+        }
+
+        $name = slugify(pathinfo($original, PATHINFO_FILENAME)) . '-' . bin2hex(random_bytes(6)) . '.' . $ext;
+        $dir = ensureUploadDir($subdir);
+        $target = rtrim($dir, '/') . '/' . $name;
+        if (!move_uploaded_file($tmpName, $target)) {
+            throw new InvalidArgumentException('Unable to save uploaded file.');
+        }
+
+        $stored[] = [
+            'url' => publicUploadPath($subdir, $name),
+            'original_name' => $original,
+            'mime_type' => $mime,
+            'file_size' => $size,
+        ];
+    }
+
+    return $stored;
+}
+
 function getJsonArrayField(array $data, string $key, array $fallback = []): array
 {
     if (!array_key_exists($key, $data) || $data[$key] === null || $data[$key] === '') {

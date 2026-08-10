@@ -13,7 +13,11 @@
     <div class="admin-links">
       <a class="btn-link" href="/admin/content"><?= htmlspecialchars((string)($content['admin.content.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
       <a class="btn-link" href="/admin/leads"><?= htmlspecialchars((string)($content['admin.leads.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
+      <a class="btn-link" href="/admin/quotations">Quotation Builder</a>
+      <a class="btn-link" href="/admin/quotation-rate-card">Rate Card</a>
+      <a class="btn-link" href="/admin/proposal-templates">Proposal Templates</a>
       <a class="btn-link" href="/admin/professionals">Professionals Backend</a>
+      <a class="btn-link" href="/admin/designer-accounts">Designer Login Accounts</a>
       <a class="btn-link" href="/admin/portfolios">Portfolio Backend</a>
       <a class="btn-link" href="/admin/property-projects">Property Projects</a>
       <a class="btn-link" href="/admin/property-enquiries">Property Enquiries</a>

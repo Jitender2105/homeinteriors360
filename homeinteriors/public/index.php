@@ -109,8 +109,9 @@ try {
             ['loc' => '/lead-marketplace', 'priority' => '0.95', 'changefreq' => 'daily'],
             ['loc' => '/pricing-details', 'priority' => '0.9', 'changefreq' => 'weekly'],
             ['loc' => '/pricing', 'priority' => '0.75', 'changefreq' => 'weekly'],
+            ['loc' => '/interior-designer-registration', 'priority' => '0.88', 'changefreq' => 'weekly'],
             ['loc' => '/professionals', 'priority' => '0.8', 'changefreq' => 'weekly'],
-            ['loc' => '/properties', 'priority' => '0.9', 'changefreq' => 'daily'],
+            ['loc' => '/ai-room-visualizer', 'priority' => '0.86', 'changefreq' => 'weekly'],
             ['loc' => '/cost-calculator', 'priority' => '0.72', 'changefreq' => 'monthly'],
             ['loc' => '/contact-us', 'priority' => '0.45', 'changefreq' => 'yearly'],
             ['loc' => '/privacy-policy', 'priority' => '0.35', 'changefreq' => 'yearly'],
@@ -149,11 +150,8 @@ try {
         foreach (Database::query('SELECT slug, updated_at FROM pros WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 200') as $pro) {
             $urls[] = ['loc' => '/professionals/' . $pro['slug'], 'priority' => '0.55', 'changefreq' => 'weekly', 'lastmod' => substr((string)($pro['updated_at'] ?? $today), 0, 10)];
         }
-        foreach (Database::query('SELECT slug, updated_at FROM projects ORDER BY updated_at DESC LIMIT 200') as $project) {
+        foreach (Database::query("SELECT slug, updated_at FROM projects WHERE COALESCE(moderation_status, 'APPROVED')='APPROVED' ORDER BY updated_at DESC LIMIT 200") as $project) {
             $urls[] = ['loc' => '/portfolio/' . $project['slug'], 'priority' => '0.5', 'changefreq' => 'monthly', 'lastmod' => substr((string)($project['updated_at'] ?? $today), 0, 10)];
-        }
-        foreach (Database::query('SELECT slug, updated_at FROM real_estate_projects WHERE is_active=1 ORDER BY updated_at DESC LIMIT 500') as $project) {
-            $urls[] = ['loc' => '/property/' . $project['slug'], 'priority' => '0.72', 'changefreq' => 'weekly', 'lastmod' => substr((string)($project['updated_at'] ?? $today), 0, 10)];
         }
         $urls[] = ['loc' => '/design-ideas', 'priority' => '0.9', 'changefreq' => 'weekly'];
         foreach (Database::query('SELECT slug, updated_at FROM design_idea_aliases WHERE is_active=1 ORDER BY updated_at DESC LIMIT 200') as $alias) {
@@ -163,7 +161,7 @@ try {
             $urls[] = ['loc' => '/design-ideas/idea/' . $idea['slug'], 'priority' => '0.72', 'changefreq' => 'monthly', 'lastmod' => substr((string)($idea['updated_at'] ?? $today), 0, 10)];
         }
         try {
-            foreach (Database::query("SELECT path, updated_at, page_type FROM url_aliases WHERE is_active=1 AND path NOT LIKE '/admin%' AND path NOT LIKE '/api%' AND COALESCE(robots, '') NOT LIKE '%noindex%' ORDER BY updated_at DESC LIMIT 2000") as $aliasUrl) {
+            foreach (Database::query("SELECT path, updated_at, page_type FROM url_aliases WHERE is_active=1 AND path NOT LIKE '/admin%' AND path NOT LIKE '/api%' AND path <> '/properties' AND path NOT LIKE '/property/%' AND COALESCE(robots, '') NOT LIKE '%noindex%' ORDER BY updated_at DESC LIMIT 2000") as $aliasUrl) {
                 $priority = str_contains((string)$aliasUrl['page_type'], 'detail') ? '0.62' : '0.82';
                 $urls[] = ['loc' => $aliasUrl['path'], 'priority' => $priority, 'changefreq' => 'weekly', 'lastmod' => substr((string)($aliasUrl['updated_at'] ?? $today), 0, 10)];
             }
@@ -201,6 +199,12 @@ try {
         $user = Auth::login((string)$body['username'], (string)$body['password']);
         if (!$user) {
             jsonResponse(['error' => 'Invalid credentials'], 401);
+        }
+        if (($user['role'] ?? '') === 'designer') {
+            $designerBuyer = SiteRepository::designerBuyerForUser($user);
+            if ($designerBuyer) {
+                setBuyerSession($designerBuyer);
+            }
         }
         jsonResponse(['success' => true, 'user' => $user]);
     }
@@ -341,10 +345,184 @@ try {
         }
     }
 
+    if ($path === '/api/interior-designer-registration' && $method === 'POST') {
+        try {
+            $body = requestData();
+            $body['profile_pic'] = saveUploadedFile($_FILES['profile_pic'] ?? [], 'professionals', null);
+            $body['cover_photo'] = saveUploadedFile($_FILES['cover_photo'] ?? [], 'professionals', null);
+            $result = SiteRepository::registerInteriorDesigner($body);
+            if (!empty($result['user'])) {
+                Auth::start();
+                session_regenerate_id(true);
+                $_SESSION['auth_user'] = $result['user'];
+            }
+            if (!empty($result['buyer'])) {
+                setBuyerSession($result['buyer']);
+            }
+            jsonResponse([
+                'success' => true,
+                'pro_id' => $result['pro_id'],
+                'redirect_url' => '/designer/portfolio-onboarding',
+            ]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/designer/portfolios' && $method === 'POST') {
+        $user = Auth::requireDesigner();
+        try {
+            $body = requestData();
+            $body['media_json'] = saveUploadedFiles($_FILES['media_files'] ?? [], 'portfolio', []);
+            $id = SiteRepository::createDesignerPortfolio($user, $body);
+            jsonResponse(['success' => true, 'id' => $id]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/designer-feature-registrations' && $method === 'POST') {
+        try {
+            $order = SiteRepository::createDesignerSubscriptionOrder(requestJson());
+            jsonResponse(['success' => true] + $order);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], $e->getCode() === 401 ? 401 : 500);
+        }
+    }
+
+    if ($path === '/api/designer-feature-registrations/verify' && $method === 'POST') {
+        $body = requestJson();
+        $orderId = trim((string)($body['razorpay_order_id'] ?? ''));
+        $paymentId = trim((string)($body['razorpay_payment_id'] ?? ''));
+        $signature = trim((string)($body['razorpay_signature'] ?? ''));
+        if ($orderId === '' || $paymentId === '' || $signature === '') {
+            jsonResponse(['error' => 'Missing Razorpay payment fields'], 400);
+        }
+        try {
+            $user = SiteRepository::activateDesignerSubscription($orderId, $paymentId, $signature);
+            if (!$user) {
+                jsonResponse(['error' => 'Designer account could not be activated'], 500);
+            }
+            Auth::start();
+            session_regenerate_id(true);
+            $_SESSION['auth_user'] = $user;
+            jsonResponse(['success' => true, 'redirect_url' => '/designer', 'username' => $user['username'] ?? '']);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/mobile/professional/register' && $method === 'POST') {
+        try {
+            jsonResponse(['success' => true] + SiteRepository::requestMobileProfessionalOtp(requestJson()));
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/mobile/professional/verify-otp' && $method === 'POST') {
+        try {
+            $user = SiteRepository::verifyMobileProfessionalOtp(requestJson());
+            if (!$user) {
+                jsonResponse(['error' => 'Professional account could not be verified.'], 500);
+            }
+            Auth::start();
+            session_regenerate_id(true);
+            $_SESSION['auth_user'] = $user;
+            jsonResponse([
+                'success' => true,
+                'redirect_url' => '/',
+                'user' => $user,
+            ]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/ai-room-visualizer/styles' && $method === 'GET') {
+        jsonResponse(['styles' => SiteRepository::aiVisualizerStyles()]);
+    }
+
+    if ($path === '/api/ai-room-visualizer/render' && $method === 'POST') {
+        $body = requestData();
+        $original = saveUploadedFile($_FILES['room_photo'] ?? [], 'ai-room-visualizer', null);
+        if (!$original) {
+            jsonResponse(['error' => 'Please upload a clear interior room photo.'], 400);
+        }
+        try {
+            $render = SiteRepository::createAiVisualizerRender($body, $original);
+            jsonResponse(['success' => true, 'render' => $render]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
     if ($path === '/api/property-enquiries' && $method === 'POST') {
         try {
             $id = SiteRepository::createPropertyEnquiry(requestJson());
             jsonResponse(['success' => true, 'id' => $id]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/project-requirements' && $method === 'POST') {
+        try {
+            $body = requestData();
+            $files = saveProjectRequirementFiles($_FILES['requirement_files'] ?? []);
+            $fileType = (string)($body['requirement_file_type'] ?? 'other');
+            foreach ($files as &$file) {
+                $file['file_type'] = $fileType;
+            }
+            unset($file);
+            $result = SiteRepository::createProjectRequirement($body, $files);
+            jsonResponse([
+                'success' => true,
+                'requirement_id' => $result['id'],
+                'lead_id' => $result['lead_id'],
+                'lead_quality' => $result['lead_quality'],
+                'otp_required' => true,
+                'otp_request_id' => $result['otp_request_id'],
+                'message' => 'Project requirement captured. Mobile verification can be completed once OTP delivery is connected.',
+            ]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        } catch (Throwable $e) {
+            jsonResponse(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    if (preg_match('#^/api/project-requirements/(\d+)$#', $path, $match) && ($method === 'POST' || $method === 'PUT')) {
+        try {
+            $body = requestData();
+            $files = saveProjectRequirementFiles($_FILES['requirement_files'] ?? []);
+            $fileType = (string)($body['requirement_file_type'] ?? 'other');
+            foreach ($files as &$file) {
+                $file['file_type'] = $fileType;
+            }
+            unset($file);
+            $result = SiteRepository::updateProjectRequirement((int)$match[1], $body, $files);
+            jsonResponse([
+                'success' => true,
+                'requirement_id' => $result['id'],
+                'lead_id' => $result['lead_id'],
+                'lead_quality' => $result['lead_quality'],
+                'message' => 'Thank you. Your complete project brief has been captured.',
+            ]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        } catch (Throwable $e) {
+            jsonResponse(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    if (preg_match('#^/api/project-requirements/(\d+)/verify-otp$#', $path, $match) && $method === 'POST') {
+        try {
+            $body = requestJson();
+            SiteRepository::verifyProjectRequirementOtp((int)$match[1], (string)($body['otp'] ?? ''));
+            jsonResponse(['success' => true]);
         } catch (InvalidArgumentException $e) {
             jsonResponse(['error' => $e->getMessage()], 400);
         }
@@ -629,7 +807,7 @@ try {
 
     // Admin APIs
     if ($path === '/api/admin/content') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         if ($method === 'GET') {
             jsonResponse(['items' => SiteRepository::contentList()]);
         }
@@ -644,12 +822,12 @@ try {
     }
 
     if ($path === '/api/admin/leads' && $method === 'GET') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         jsonResponse(['leads' => SiteRepository::listLeads()]);
     }
 
     if ($path === '/api/admin/leads/status' && $method === 'PUT') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $body = requestJson();
         if (empty($body['lead_id']) || empty($body['status'])) {
             jsonResponse(['error' => 'lead_id and status are required'], 400);
@@ -663,12 +841,12 @@ try {
     }
 
     if ($path === '/api/admin/pros' && $method === 'GET') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         jsonResponse(['pros' => SiteRepository::listPros([])]);
     }
 
     if ($path === '/api/admin/pros/verify' && $method === 'PUT') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $body = requestJson();
         if (empty($body['pro_id']) || !isset($body['verification_status'])) {
             jsonResponse(['error' => 'pro_id and verification_status are required'], 400);
@@ -678,7 +856,7 @@ try {
     }
 
     if ($path === '/api/admin/lead-coupons') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         if ($method === 'GET') {
             jsonResponse(['coupons' => SiteRepository::listLeadCoupons()]);
         }
@@ -690,7 +868,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/lead-coupons/(\\d+)$#', $path, $match)) {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $id = (int)$match[1];
         if ($method === 'PUT' || $method === 'POST') {
             SiteRepository::saveLeadCoupon(requestJson(), $id);
@@ -703,7 +881,7 @@ try {
     }
 
     if ($path === '/api/admin/professionals') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         if ($method === 'GET') {
             jsonResponse(['professionals' => SiteRepository::listProfessionalsForAdmin()]);
         }
@@ -720,7 +898,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/professionals/(\\d+)$#', $path, $match)) {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $id = (int)$match[1];
         if ($method === 'PUT') {
             $body = requestData();
@@ -738,8 +916,33 @@ try {
         }
     }
 
+    if ($path === '/api/admin/designer-accounts') {
+        Auth::requireAdmin();
+        if ($method === 'GET') {
+            jsonResponse(['accounts' => SiteRepository::listDesignerAccounts()]);
+        }
+        if ($method === 'POST') {
+            try {
+                $id = SiteRepository::saveDesignerAccount(requestData());
+                jsonResponse(['success' => true, 'id' => $id]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
+    if (preg_match('#^/api/admin/designer-accounts/(\\d+)$#', $path, $match) && ($method === 'PUT' || $method === 'POST')) {
+        Auth::requireAdmin();
+        try {
+            SiteRepository::saveDesignerAccount(requestData(), (int)$match[1]);
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
     if ($path === '/api/admin/portfolios') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         if ($method === 'GET') {
             $proId = isset($_GET['pro_id']) ? (int)$_GET['pro_id'] : null;
             jsonResponse([
@@ -760,7 +963,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/portfolios/(\\d+)$#', $path, $match)) {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $id = (int)$match[1];
         if ($method === 'PUT') {
             $body = requestData();
@@ -779,7 +982,7 @@ try {
     }
 
     if ($path === '/api/admin/property-projects') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         if ($method === 'GET') {
             jsonResponse(['projects' => SiteRepository::listRealEstateProjects([], true)]);
         }
@@ -804,7 +1007,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/property-projects/(\\d+)$#', $path, $match)) {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $id = (int)$match[1];
         if ($method === 'GET') {
             $project = SiteRepository::getRealEstateProject($id, true);
@@ -838,7 +1041,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/property-enquiries/(\\d+)/status$#', $path, $match) && $method === 'PUT') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $body = requestJson();
         try {
             SiteRepository::updatePropertyEnquiryStatus((int)$match[1], (string)($body['status'] ?? ''));
@@ -849,7 +1052,7 @@ try {
     }
 
     if ($path === '/api/admin/url-aliases') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         if ($method === 'GET') {
             jsonResponse(['aliases' => SiteRepository::listUrlAliases()]);
         }
@@ -866,7 +1069,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/url-aliases/(\\d+)$#', $path, $match)) {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $id = (int)$match[1];
         if ($method === 'GET') {
             $alias = SiteRepository::getUrlAlias($id);
@@ -892,7 +1095,7 @@ try {
     }
 
     if ($path === '/api/admin/design-ideas') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         if ($method === 'GET') {
             jsonResponse(['ideas' => SiteRepository::listDesignIdeas([], true)]);
         }
@@ -907,7 +1110,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/design-ideas/(\\d+)$#', $path, $match)) {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $id = (int)$match[1];
         if ($method === 'GET') {
             $idea = SiteRepository::getDesignIdea($id, true);
@@ -931,7 +1134,7 @@ try {
     }
 
     if ($path === '/api/admin/design-idea-aliases') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         if ($method === 'GET') {
             jsonResponse(['aliases' => SiteRepository::listDesignIdeaAliases(true)]);
         }
@@ -946,7 +1149,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/design-idea-aliases/(\\d+)$#', $path, $match)) {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $id = (int)$match[1];
         if ($method === 'GET') {
             $alias = SiteRepository::getDesignIdeaAlias($id, true);
@@ -970,7 +1173,7 @@ try {
     }
 
     if ($path === '/api/admin/design-idea-sections') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         if ($method === 'GET') {
             jsonResponse(['sections' => SiteRepository::listDesignIdeaSections(true)]);
         }
@@ -989,7 +1192,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/design-idea-sections/(\\d+)$#', $path, $match)) {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $id = (int)$match[1];
         if ($method === 'GET') {
             $section = SiteRepository::getDesignIdeaSection($id, true);
@@ -1017,7 +1220,7 @@ try {
     }
 
     if (preg_match('#^/api/admin/design-idea-leads/(\\d+)/status$#', $path, $match) && $method === 'PUT') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         $body = requestJson();
         try {
             SiteRepository::updateDesignIdeaLeadStatus((int)$match[1], (string)($body['status'] ?? ''));
@@ -1025,6 +1228,230 @@ try {
         } catch (InvalidArgumentException $e) {
             jsonResponse(['error' => $e->getMessage()], 400);
         }
+    }
+    if ($path === '/api/quotations') {
+        $user = Auth::requireAuth();
+        if ($method === 'GET') {
+            $filters = $_GET;
+            if (Auth::isDesigner($user)) {
+                $filters['designer_id'] = (int)($user['pro_id'] ?? 0);
+            }
+            jsonResponse(['quotations' => SiteRepository::listQuotations($filters)]);
+        }
+        if ($method === 'POST') {
+            try {
+                $body = requestData();
+                if (Auth::isDesigner($user)) {
+                    if (!SiteRepository::designerCanCreateQuotation($user)) {
+                        jsonResponse(['error' => 'Your subscription has expired. Please renew to create new quotations.'], 403);
+                    }
+                    $body['designer_id'] = (int)($user['pro_id'] ?? 0);
+                    $body['assigned_to_user_id'] = (int)$user['id'];
+                }
+                $id = SiteRepository::saveQuotation($body, null, (int)$user['id']);
+                $base = Auth::isDesigner($user) ? '/designer/quotations/' : '/admin/quotations/';
+                jsonResponse(['success' => true, 'id' => $id, 'redirect_url' => $base . $id]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
+    if (preg_match('#^/api/quotations/(\\d+)$#', $path, $match)) {
+        $user = Auth::requireAuth();
+        $id = (int)$match[1];
+        if (!SiteRepository::userCanAccessQuotation($user, $id)) {
+            jsonResponse(['error' => 'Quotation not found'], 404);
+        }
+        if ($method === 'GET') {
+            $quote = SiteRepository::getQuotation($id);
+            if (!$quote) {
+                jsonResponse(['error' => 'Quotation not found'], 404);
+            }
+            jsonResponse(['quotation' => $quote]);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            try {
+                $body = requestData();
+                if (Auth::isDesigner($user)) {
+                    $body['designer_id'] = (int)($user['pro_id'] ?? 0);
+                    $body['assigned_to_user_id'] = (int)$user['id'];
+                }
+                SiteRepository::saveQuotation($body, $id, (int)$user['id']);
+                jsonResponse(['success' => true, 'id' => $id]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deleteQuotation($id);
+            jsonResponse(['success' => true]);
+        }
+    }
+
+    if (preg_match('#^/api/quotations/(\\d+)/(duplicate|revision|send|status)$#', $path, $match) && $method === 'POST') {
+        $user = Auth::requireAuth();
+        $id = (int)$match[1];
+        $action = (string)$match[2];
+        if (!SiteRepository::userCanAccessQuotation($user, $id)) {
+            jsonResponse(['error' => 'Quotation not found'], 404);
+        }
+        try {
+            if ($action === 'duplicate' || $action === 'revision') {
+                $newId = SiteRepository::duplicateQuotation($id, (int)$user['id'], $action === 'revision');
+                $base = Auth::isDesigner($user) ? '/designer/quotations/' : '/admin/quotations/';
+                jsonResponse(['success' => true, 'id' => $newId, 'redirect_url' => $base . $newId]);
+            }
+            if ($action === 'send') {
+                SiteRepository::updateQuotationStatus($id, 'sent_to_client', (int)$user['id'], 'Proposal marked as sent');
+                $quote = SiteRepository::getQuotation($id);
+                jsonResponse([
+                    'success' => true,
+                    'proposal_url' => $quote ? absoluteUrl('/proposal/' . (string)$quote['proposal_token'] . '/pdf') : '',
+                ]);
+            }
+            $body = requestJson();
+            SiteRepository::updateQuotationStatus($id, (string)($body['status'] ?? ''), (int)$user['id'], (string)($body['notes'] ?? ''));
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if (preg_match('#^/api/quotations/(\\d+)/pdf$#', $path, $match) && $method === 'GET') {
+        $user = Auth::requireAuth();
+        if (!SiteRepository::userCanAccessQuotation($user, (int)$match[1])) {
+            http_response_code(404);
+            echo 'Quotation not found';
+            exit;
+        }
+        $quote = SiteRepository::getQuotation((int)$match[1]);
+        if (!$quote) {
+            http_response_code(404);
+            echo 'Quotation not found';
+            exit;
+        }
+        render('public/proposal-print', [
+            'title' => $quote['quote_number'] . ' Proposal PDF | HomeInteriors360',
+            'metaRobots' => 'noindex,nofollow',
+            'content' => $content,
+            'quote' => $quote,
+            'publicMode' => false,
+            'autoPrint' => true,
+        ]);
+        exit;
+    }
+
+    if ($path === '/api/rate-cards') {
+        Auth::requireAdmin();
+        if ($method === 'GET') {
+            jsonResponse(['rate_cards' => SiteRepository::quotationRateCards($_GET)]);
+        }
+        if ($method === 'POST') {
+            try {
+                $id = SiteRepository::saveQuotationRateCard(requestData());
+                jsonResponse(['success' => true, 'id' => $id]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
+    if (preg_match('#^/api/rate-cards/(\\d+)$#', $path, $match) && ($method === 'PUT' || $method === 'POST')) {
+        Auth::requireAdmin();
+        try {
+            SiteRepository::saveQuotationRateCard(requestData(), (int)$match[1]);
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/quotation-packages') {
+        Auth::requireAdmin();
+        if ($method === 'GET') {
+            jsonResponse(['packages' => SiteRepository::quotationPackages()]);
+        }
+        if ($method === 'POST') {
+            try {
+                $id = SiteRepository::saveQuotationPackage(requestData());
+                jsonResponse(['success' => true, 'id' => $id]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
+    if (preg_match('#^/api/quotation-packages/(\\d+)$#', $path, $match) && ($method === 'PUT' || $method === 'POST')) {
+        Auth::requireAdmin();
+        try {
+            SiteRepository::saveQuotationPackage(requestData(), (int)$match[1]);
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/proposal-templates') {
+        Auth::requireAdmin();
+        if ($method === 'GET') {
+            jsonResponse(['templates' => SiteRepository::proposalTemplates()]);
+        }
+        if ($method === 'POST') {
+            try {
+                $id = SiteRepository::saveProposalTemplate(requestData());
+                jsonResponse(['success' => true, 'id' => $id]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
+    if (preg_match('#^/api/proposal-templates/(\\d+)$#', $path, $match) && ($method === 'PUT' || $method === 'POST')) {
+        Auth::requireAdmin();
+        try {
+            SiteRepository::saveProposalTemplate(requestData(), (int)$match[1]);
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/quotation-settings') {
+        Auth::requireAdmin();
+        if ($method === 'GET') {
+            jsonResponse(['settings' => SiteRepository::quotationSettings()]);
+        }
+        if ($method === 'POST' || $method === 'PUT') {
+            SiteRepository::saveQuotationSettings(requestData());
+            jsonResponse(['success' => true]);
+        }
+    }
+
+    if (preg_match('#^/proposal/([a-f0-9]{32,96})(/pdf)?$#', $path, $match)) {
+        if (empty($match[2])) {
+            http_response_code(404);
+            echo '404 Not Found';
+            exit;
+        }
+        $quote = SiteRepository::publicProposalData((string)$match[1], false);
+        if (!$quote) {
+            http_response_code(404);
+            echo 'Proposal not found';
+            exit;
+        }
+        $expired = !empty($quote['valid_until']) && strtotime((string)$quote['valid_until']) < strtotime(date('Y-m-d')) && !in_array((string)$quote['status'], ['accepted', 'rejected'], true);
+        render('public/proposal-print', [
+            'title' => $quote['quote_number'] . ' Proposal | HomeInteriors360',
+            'metaDescription' => 'Client proposal from HomeInteriors360.',
+            'metaRobots' => 'noindex,nofollow',
+            'content' => $content,
+            'quote' => $quote,
+            'expired' => $expired,
+            'publicMode' => true,
+            'autoPrint' => !empty($match[2]),
+        ]);
+        exit;
     }
 
     $legalPages = [
@@ -1037,8 +1464,8 @@ try {
                     'body' => [
                         'HomeInteriors360 helps homeowners discover interior professionals and helps architects, interior designers, contractors, and related service providers purchase qualified homeowner leads.',
                         [
-                            'Support email: admin@homeinteriors360.com',
-                            'Support phone: +91 8076945594',
+                            'Support email: jitender@homeinteriors360.com',
+                            'Support phone: +91-9540573661',
                             'Website: https://homeinteriors360.com',
                             'Typical response time: within 1 to 2 business days',
                         ],
@@ -1095,7 +1522,7 @@ try {
                     'title' => 'Consent and Withdrawal',
                     'body' => [
                         'Where we rely on consent, we ask for clear consent through website forms, account flows, checkout flows, or other communication. By ticking the consent checkbox or submitting an enquiry with consent, you agree that HomeInteriors360 may process your personal data for the specified purposes and contact you through the channels mentioned in the form.',
-                        'You may withdraw consent for optional promotional communication by contacting support at admin@homeinteriors360.com or by using any unsubscribe or opt-out method provided in our messages. Withdrawal of consent will not affect processing already completed before withdrawal and may limit our ability to provide requested services, lead delivery, support, or account communication.',
+                        'You may withdraw consent for optional promotional communication by contacting support at jitender@homeinteriors360.com or by using any unsubscribe or opt-out method provided in our messages. Withdrawal of consent will not affect processing already completed before withdrawal and may limit our ability to provide requested services, lead delivery, support, or account communication.',
                     ],
                 ],
                 [
@@ -1168,7 +1595,7 @@ try {
                 [
                     'title' => 'Grievance and Privacy Contact',
                     'body' => [
-                        'For privacy requests, consent withdrawal, correction, erasure, or grievances, contact HomeInteriors360 support at admin@homeinteriors360.com or +91 8076945594. Please include your name, registered mobile number or email address, and a clear description of the request so we can verify and respond appropriately.',
+                        'For privacy requests, consent withdrawal, correction, erasure, or grievances, contact HomeInteriors360 support at jitender@homeinteriors360.com or +91-9540573661. Please include your name, registered mobile number or email address, and a clear description of the request so we can verify and respond appropriately.',
                         'We aim to respond to genuine privacy requests within a reasonable time. Additional verification may be required before acting on requests that affect account access, lead delivery, payment records, or third-party disclosures.',
                     ],
                 ],
@@ -1522,8 +1949,8 @@ try {
     // Public pages
     if ($path === '/') {
         render('public/home', [
-            'title' => (string)SiteRepository::content('seo.home.title', 'Buy or Rent Homes & Hire Interior Designers | HomeInteriors360'),
-            'metaDescription' => (string)SiteRepository::content('seo.home.description', 'Buy or rent homes and residential projects with photos, prices, layouts, and amenities, then hire verified interior designers for your home.'),
+            'title' => 'Home Interior Designers & Free Design Consultation | HomeInteriors360',
+            'metaDescription' => 'Hire interior designers across Delhi NCR, compare professionals, book free design consultation, and buy verified interior design leads from HomeInteriors360.',
             'active' => 'home',
             'content' => $content,
             'payload' => SiteRepository::homepagePayload(),
@@ -1652,6 +2079,17 @@ try {
             'metaDescription' => (string)SiteRepository::content('seo.calculator.description', 'Estimate your interior design cost in a few steps and save your lead request with HomeInteriors360.'),
             'active' => 'calculator',
             'content' => $content,
+        ]);
+        exit;
+    }
+
+    if ($path === '/ai-room-visualizer') {
+        render('public/ai-room-visualizer', [
+            'title' => 'AI Room Visualizer | Before After Interior Design Render',
+            'metaDescription' => 'Upload a room photo, choose a style, and create an AI-ready before-after interior design render brief with HomeInteriors360.',
+            'active' => 'visualizer',
+            'content' => $content,
+            'styles' => SiteRepository::aiVisualizerStyles(),
         ]);
         exit;
     }
@@ -1914,6 +2352,17 @@ try {
         exit;
     }
 
+    if ($path === '/interior-designer-registration' || $path === '/register-interior-designer') {
+        render('public/interior-designer-registration', [
+            'title' => 'Register as Interior Designer | HomeInteriors360',
+            'metaDescription' => 'Register your interior design firm, create a professional profile, upload portfolio work, and get 10 free homeowner leads on HomeInteriors360.',
+            'active' => 'pricing',
+            'content' => $content,
+            'standardOptions' => SiteRepository::professionalStandardOptions(),
+        ]);
+        exit;
+    }
+
     if ($path === '/lead-checkout') {
         render('public/lead-checkout', [
             'title' => 'Lead Checkout | HomeInteriors360',
@@ -1981,6 +2430,163 @@ try {
         exit;
     }
 
+    // Designer portal pages
+    if ($path === '/designer/login') {
+        render('designer/login', [
+            'title' => 'Designer Login | HomeInteriors360',
+            'metaDescription' => 'Secure interior designer login for leads, quotations, and proposal generator.',
+            'metaRobots' => 'noindex,nofollow',
+            'content' => $content,
+        ]);
+        exit;
+    }
+
+    if ($path === '/designer') {
+        $user = Auth::requireDesigner();
+        $designerBuyer = SiteRepository::designerBuyerForUser($user);
+        if ($designerBuyer) {
+            setBuyerSession($designerBuyer);
+        }
+        render('designer/dashboard', [
+            'title' => 'Designer Workspace | HomeInteriors360',
+            'metaDescription' => 'Designer-only workspace for assigned leads, quotations, and proposal generator.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'stats' => SiteRepository::designerDashboardStats((int)$user['pro_id']),
+            'subscription' => SiteRepository::designerSubscriptionStatus($user),
+            'profileChecklist' => SiteRepository::designerProfileChecklist((int)$user['pro_id']),
+            'buyer' => $designerBuyer,
+            'freeLeadEligible' => $designerBuyer ? SiteRepository::buyerFirstTimeLeadOfferEligible((int)$designerBuyer['id']) : false,
+        ]);
+        exit;
+    }
+
+    if ($path === '/designer/portfolio-onboarding') {
+        $user = Auth::requireDesigner();
+        render('designer/portfolio-onboarding', [
+            'title' => 'Upload Portfolio | HomeInteriors360',
+            'metaDescription' => 'Upload portfolio work for your HomeInteriors360 professional profile.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'portfolios' => SiteRepository::listPortfolioForAdmin((int)$user['pro_id']),
+            'standardOptions' => SiteRepository::professionalStandardOptions(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/designer/leads') {
+        $user = Auth::requireDesigner();
+        render('designer/leads', [
+            'title' => 'My Leads | HomeInteriors360',
+            'metaDescription' => 'Interior designer assigned leads.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'leads' => SiteRepository::listLeads(['designer_id' => (int)$user['pro_id']]),
+        ]);
+        exit;
+    }
+
+    if ($path === '/designer/quotations') {
+        $user = Auth::requireDesigner();
+        $filters = $_GET;
+        $filters['designer_id'] = (int)$user['pro_id'];
+        $designerQuotations = SiteRepository::listQuotations($filters);
+        render('admin/quotations', [
+            'title' => 'My Quotations | HomeInteriors360',
+            'metaDescription' => 'Designer quotation builder for assigned leads and proposals.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'stats' => SiteRepository::quotationStatsFromRows($designerQuotations),
+            'quotations' => $designerQuotations,
+            'packages' => SiteRepository::quotationPackages(true),
+            'professionals' => SiteRepository::professionalOptions(),
+            'portalBase' => '/designer',
+            'isDesignerPortal' => true,
+        ]);
+        exit;
+    }
+
+    if ($path === '/designer/quotations/create' || preg_match('#^/designer/quotations/(\\d+)/edit$#', $path, $designerQuoteEditMatch)) {
+        $user = Auth::requireDesigner();
+        $quote = null;
+        if (!empty($designerQuoteEditMatch[1])) {
+            $quoteId = (int)$designerQuoteEditMatch[1];
+            if (!SiteRepository::userCanAccessQuotation($user, $quoteId)) {
+                http_response_code(404);
+                echo 'Quotation not found';
+                exit;
+            }
+            $quote = SiteRepository::getQuotation($quoteId);
+        } elseif (!SiteRepository::designerCanCreateQuotation($user)) {
+            render('designer/dashboard', [
+                'title' => 'Designer Workspace | HomeInteriors360',
+                'metaDescription' => 'Designer-only workspace for assigned leads, quotations, and proposal generator.',
+                'metaRobots' => 'noindex,nofollow',
+                'active' => 'admin',
+                'content' => $content,
+                'stats' => SiteRepository::designerDashboardStats((int)$user['pro_id']),
+                'subscription' => SiteRepository::designerSubscriptionStatus($user),
+                'profileChecklist' => SiteRepository::designerProfileChecklist((int)$user['pro_id']),
+                'createBlocked' => true,
+            ]);
+            exit;
+        } elseif (!empty($_GET['lead_id'])) {
+            $leadRows = SiteRepository::listLeads(['designer_id' => (int)$user['pro_id']]);
+            $allowedLeadIds = array_map(static fn(array $lead): int => (int)$lead['id'], $leadRows);
+            if (!in_array((int)$_GET['lead_id'], $allowedLeadIds, true)) {
+                http_response_code(404);
+                echo 'Lead not found';
+                exit;
+            }
+            $quote = SiteRepository::prefillQuotationFromLead((int)$_GET['lead_id']);
+        }
+        $quote = is_array($quote) ? $quote : [];
+        $quote['designer_id'] = (int)$user['pro_id'];
+        render('admin/quotation-form', [
+            'title' => !empty($quote['id']) ? 'Edit Quotation' : 'Create Quotation',
+            'metaDescription' => 'Create or edit itemised interior quotation proposals.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'quote' => $quote,
+            'packages' => SiteRepository::quotationPackages(true),
+            'templates' => SiteRepository::proposalTemplates(true),
+            'professionals' => array_values(array_filter(SiteRepository::professionalOptions(), static fn(array $pro): bool => (int)$pro['id'] === (int)$user['pro_id'])),
+            'rateCards' => SiteRepository::quotationRateCards(['designer_id' => (int)$user['pro_id']]),
+            'settings' => SiteRepository::quotationSettings(),
+            'portalBase' => '/designer',
+            'isDesignerPortal' => true,
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/designer/quotations/(\\d+)$#', $path, $designerQuoteMatch)) {
+        $user = Auth::requireDesigner();
+        $quoteId = (int)$designerQuoteMatch[1];
+        if (!SiteRepository::userCanAccessQuotation($user, $quoteId)) {
+            http_response_code(404);
+            echo 'Quotation not found';
+            exit;
+        }
+        $quote = SiteRepository::getQuotation($quoteId);
+        render('admin/quotation-detail', [
+            'title' => $quote['quote_number'] . ' | Designer Quotation',
+            'metaDescription' => 'Designer quotation summary, proposal preview, activity, and sharing actions.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'quote' => $quote,
+            'settings' => SiteRepository::quotationSettings(),
+            'portalBase' => '/designer',
+            'isDesignerPortal' => true,
+        ]);
+        exit;
+    }
+
     // Admin pages
     if ($path === '/admin/login') {
         render('admin/login', [
@@ -1993,7 +2599,7 @@ try {
     }
 
     if ($path === '/admin') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/dashboard', [
             'title' => (string)SiteRepository::content('admin.title', 'Admin Dashboard'),
             'metaDescription' => 'Admin dashboard for HomeInteriors360 site management, leads, professionals, and content.',
@@ -2006,7 +2612,7 @@ try {
     }
 
     if ($path === '/admin/content') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/content', [
             'title' => (string)SiteRepository::content('admin.content.title', 'Content Manager'),
             'metaDescription' => 'Update homepage content, logos, SEO fields, and reusable site copy from the admin panel.',
@@ -2019,7 +2625,7 @@ try {
     }
 
     if ($path === '/admin/leads') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/leads', [
             'title' => (string)SiteRepository::content('admin.leads.title', 'Lead Tracker'),
             'metaDescription' => 'Review and update incoming leads with status tracking for the HomeInteriors360 sales team.',
@@ -2031,8 +2637,127 @@ try {
         exit;
     }
 
+    if ($path === '/admin/quotations') {
+        Auth::requireAdmin();
+        render('admin/quotations', [
+            'title' => 'Quotation Builder',
+            'metaDescription' => 'Manage quotation builder proposals, status, revisions, and client proposal links.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'stats' => SiteRepository::quotationDashboardStats(),
+            'quotations' => SiteRepository::listQuotations($_GET),
+            'packages' => SiteRepository::quotationPackages(true),
+            'professionals' => SiteRepository::professionalOptions(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/quotations/create' || preg_match('#^/admin/quotations/(\\d+)/edit$#', $path, $quoteEditMatch)) {
+        Auth::requireAdmin();
+        $quote = null;
+        if (!empty($quoteEditMatch[1])) {
+            $quote = SiteRepository::getQuotation((int)$quoteEditMatch[1]);
+            if (!$quote) {
+                http_response_code(404);
+                echo 'Quotation not found';
+                exit;
+            }
+        } elseif (!empty($_GET['lead_id'])) {
+            $quote = SiteRepository::prefillQuotationFromLead((int)$_GET['lead_id']);
+        }
+        render('admin/quotation-form', [
+            'title' => $quote && !empty($quote['id']) ? 'Edit Quotation' : 'Create Quotation',
+            'metaDescription' => 'Create or edit itemised interior quotation proposals.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'quote' => $quote,
+            'packages' => SiteRepository::quotationPackages(true),
+            'templates' => SiteRepository::proposalTemplates(true),
+            'professionals' => SiteRepository::professionalOptions(),
+            'rateCards' => SiteRepository::quotationRateCards([]),
+            'settings' => SiteRepository::quotationSettings(),
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/admin/quotations/(\\d+)$#', $path, $quoteMatch)) {
+        Auth::requireAdmin();
+        $quote = SiteRepository::getQuotation((int)$quoteMatch[1]);
+        if (!$quote) {
+            http_response_code(404);
+            echo 'Quotation not found';
+            exit;
+        }
+        render('admin/quotation-detail', [
+            'title' => $quote['quote_number'] . ' | Quotation Builder',
+            'metaDescription' => 'Quotation summary, proposal preview, activity, and sharing actions.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'quote' => $quote,
+            'settings' => SiteRepository::quotationSettings(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/quotation-rate-card') {
+        Auth::requireAdmin();
+        render('admin/quotation-rate-card', [
+            'title' => 'Quotation Rate Card',
+            'metaDescription' => 'Manage city, package, material, and category-wise quotation rates.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'rateCards' => SiteRepository::quotationRateCards($_GET),
+            'packages' => SiteRepository::quotationPackages(),
+            'professionals' => SiteRepository::professionalOptions(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/quotation-packages') {
+        Auth::requireAdmin();
+        render('admin/quotation-packages', [
+            'title' => 'Quotation Package Master',
+            'metaDescription' => 'Manage quotation packages, design support, warranty, timeline, and default margins.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'packages' => SiteRepository::quotationPackages(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/proposal-templates') {
+        Auth::requireAdmin();
+        render('admin/proposal-templates', [
+            'title' => 'Proposal Templates',
+            'metaDescription' => 'Manage proposal cover copy, inclusions, exclusions, terms, warranty, and payment schedule.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'templates' => SiteRepository::proposalTemplates(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/quotation-settings') {
+        Auth::requireAdmin();
+        render('admin/quotation-settings', [
+            'title' => 'Quotation Settings',
+            'metaDescription' => 'Manage GST, validity, fees, commission, payment schedule, WhatsApp message, and support details.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'settings' => SiteRepository::quotationSettings(),
+        ]);
+        exit;
+    }
+
     if ($path === '/admin/pros') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/pros', [
             'title' => (string)SiteRepository::content('admin.pros.title', 'Pro Verification'),
             'metaDescription' => 'Verify professionals, manage premium status, and control public listing visibility.',
@@ -2045,7 +2770,7 @@ try {
     }
 
     if ($path === '/admin/professionals') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/professionals', [
             'title' => 'Professionals Manager',
             'metaDescription' => 'Create and manage professional profiles with images, filters, pricing, and portfolio linkage.',
@@ -2053,12 +2778,27 @@ try {
             'active' => 'admin',
             'content' => $content,
             'professionals' => SiteRepository::listProfessionalsForAdmin(),
+            'standardOptions' => SiteRepository::professionalStandardOptions(),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/designer-accounts') {
+        Auth::requireAdmin();
+        render('admin/designer-accounts', [
+            'title' => 'Designer Login Accounts',
+            'metaDescription' => 'Create and manage separate quotation builder login accounts for interior designers.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'accounts' => SiteRepository::listDesignerAccounts(),
+            'professionals' => SiteRepository::professionalOptions(),
         ]);
         exit;
     }
 
     if ($path === '/admin/portfolios') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/portfolios', [
             'title' => 'Portfolio Manager',
             'metaDescription' => 'Create and manage portfolio projects, images, testimonials, and project metadata.',
@@ -2067,12 +2807,13 @@ try {
             'content' => $content,
             'portfolios' => SiteRepository::listPortfolioForAdmin(),
             'professionals' => SiteRepository::professionalOptions(),
+            'standardOptions' => SiteRepository::professionalStandardOptions(),
         ]);
         exit;
     }
 
     if ($path === '/admin/lead-coupons') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/lead-coupons', [
             'title' => 'Lead Coupon Backend',
             'metaDescription' => 'Create and manage lead marketplace coupons by slab, discount, visibility, and dates.',
@@ -2085,7 +2826,7 @@ try {
     }
 
     if ($path === '/admin/property-projects') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/property-projects', [
             'title' => 'Property Project Manager',
             'metaDescription' => 'Manage real estate projects, units, pricing, media, floor plans, amenities, and SEO.',
@@ -2098,7 +2839,7 @@ try {
     }
 
     if ($path === '/admin/property-enquiries') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/property-enquiries', [
             'title' => 'Property Enquiries',
             'metaDescription' => 'Manage buyer and tenant enquiries from real estate project pages.',
@@ -2111,7 +2852,7 @@ try {
     }
 
     if ($path === '/admin/url-aliases') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/url-aliases', [
             'title' => 'Global URL Alias Manager',
             'metaDescription' => 'Manage SEO metadata, H1, rich content, image and index settings for every public URL.',
@@ -2124,7 +2865,7 @@ try {
     }
 
     if ($path === '/admin/design-ideas') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/design-ideas', [
             'title' => 'Design Idea Backend',
             'metaDescription' => 'Create and manage dynamic design idea cards, media, filters, dimensions, and SEO.',
@@ -2137,12 +2878,12 @@ try {
     }
 
     if ($path === '/admin/design-idea-aliases') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         redirectTo('/admin/url-aliases');
     }
 
     if ($path === '/admin/design-idea-sections') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/design-idea-sections', [
             'title' => 'Design Idea Section Backend',
             'metaDescription' => 'Manage dynamic blocks and item grids shown on design idea pages.',
@@ -2155,7 +2896,7 @@ try {
     }
 
     if ($path === '/admin/design-idea-leads') {
-        Auth::requireAuth();
+        Auth::requireAdmin();
         render('admin/design-idea-leads', [
             'title' => 'Design Idea Quote Leads',
             'metaDescription' => 'Manage quote requests captured from design idea pages.',
@@ -2167,7 +2908,6 @@ try {
         exit;
     }
 
-    http_response_code(404);
     echo '404 Not Found';
 } catch (Throwable $e) {
     if (str_starts_with($path, '/api/')) {

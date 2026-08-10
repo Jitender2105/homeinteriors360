@@ -26,10 +26,12 @@ CREATE TABLE users (
   username VARCHAR(120) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   email VARCHAR(255) DEFAULT NULL,
-  role ENUM('admin','super_admin') NOT NULL DEFAULT 'admin',
+  role ENUM('admin','super_admin','designer') NOT NULL DEFAULT 'admin',
+  pro_id INT DEFAULT NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_users_pro (pro_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE pros (
@@ -378,7 +380,7 @@ CREATE TABLE property_enquiries (
 
 INSERT INTO users (username, password_hash, email, role, is_active)
 VALUES
-  ('admin', '$2y$12$Pvz8JNRFpPwoAdeEEn2/gO7ujmJNBng4yu.WFM2e3JGsw1XI8QQDa', 'admin@homeinteriors360.com', 'super_admin', 1)
+  ('admin', '$2y$12$Pvz8JNRFpPwoAdeEEn2/gO7ujmJNBng4yu.WFM2e3JGsw1XI8QQDa', 'jitender@homeinteriors360.com', 'super_admin', 1)
 ON DUPLICATE KEY UPDATE email = VALUES(email), role = VALUES(role), is_active = VALUES(is_active);
 
 INSERT INTO pros (

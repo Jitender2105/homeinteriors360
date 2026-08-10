@@ -1,13 +1,44 @@
-<?php require __DIR__ . '/../partials/header.php'; ?>
+<?php
+$verificationStatus = (string)($pro['verification_status_code'] ?? ((int)($pro['verification_status'] ?? 0) === 1 ? 'PROFESSIONAL_VERIFIED' : 'UNVERIFIED'));
+$listingTier = (string)($pro['listing_tier'] ?? (!empty($pro['is_premium']) ? 'PAID' : 'FREE'));
+$isVerified = in_array($verificationStatus, ['BUSINESS_VERIFIED', 'PROFESSIONAL_VERIFIED'], true);
+$isSponsored = $listingTier === 'SPONSORED';
+$approvedPortfolioCount = count($projects ?? []);
+require __DIR__ . '/../partials/header.php';
+?>
 
 <section class="profile-hero" style="background-image:url('<?= htmlspecialchars((string)($pro['cover_photo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>');">
   <div class="container profile-hero-inner" data-reveal>
     <img class="profile-avatar" src="<?= htmlspecialchars((string)($pro['profile_pic'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
     <div>
+      <p class="eyebrow"><?= htmlspecialchars((string)($pro['role'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
       <h1><?= htmlspecialchars((string)($pro['full_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h1>
-      <p><?= htmlspecialchars((string)($pro['specialization'] ?? $pro['role'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($pro['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-      <p><?= htmlspecialchars((string)($content['profile.work_type'] ?? 'Type of Work'), ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string)($pro['primary_work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($content['profile.work_area'] ?? 'Area of Work'), ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string)($pro['primary_work_area'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-      <p>★ <?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?><?php if ((int)($pro['verification_status'] ?? 0) === 1): ?> <span class="verify-badge"><?= htmlspecialchars((string)($content['directory.verified'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></p>
+      <div class="profile-hero-chips">
+        <span class="profile-hero-chip">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <?= htmlspecialchars((string)($pro['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+        </span>
+        <?php if (!empty($pro['primary_work_type'])): ?>
+          <span class="profile-hero-chip">
+            <?= htmlspecialchars((string)$pro['primary_work_type'], ENT_QUOTES, 'UTF-8') ?><?= !empty($pro['primary_work_area']) ? ' · ' . htmlspecialchars((string)$pro['primary_work_area'], ENT_QUOTES, 'UTF-8') : '' ?>
+          </span>
+        <?php endif; ?>
+        <?php if (!empty($pro['rating'])): ?>
+          <span class="profile-hero-chip rating">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <?= htmlspecialchars((string)$pro['rating'], ENT_QUOTES, 'UTF-8') ?> Rating
+          </span>
+        <?php endif; ?>
+        <?php if ($isVerified): ?>
+          <span class="profile-hero-chip verified">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            <?= htmlspecialchars((string)($content['directory.verified'] ?? 'Verified'), ENT_QUOTES, 'UTF-8') ?>
+          </span>
+        <?php endif; ?>
+        <?php if ($isSponsored): ?>
+          <span class="profile-hero-chip premium-chip">Sponsored</span>
+        <?php endif; ?>
+      </div>
     </div>
   </div>
 </section>
@@ -17,36 +48,53 @@
     <div class="profile-top-lead">
       <div class="profile-intro-copy">
         <h2><?= htmlspecialchars((string)($content['profile.lead.title'] ?? 'Get Project Proposal from this Professional'), ENT_QUOTES, 'UTF-8') ?></h2>
-        <p><?= htmlspecialchars((string)($pro['service_summary'] ?? $pro['profile_description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+        <?php if (!empty($pro['service_summary']) || !empty($pro['profile_description'])): ?>
+          <p class="profile-summary"><?= htmlspecialchars((string)($pro['service_summary'] ?? $pro['profile_description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+        <?php endif; ?>
         <?php if (!empty($pro['office_address']) || !empty($pro['phone']) || !empty($pro['email']) || !empty($pro['website_url'])): ?>
           <div class="chip-row profile-contact-strip">
-            <?php if (!empty($pro['office_address'])): ?><span class="chip"><?= htmlspecialchars((string)$pro['office_address'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+            <?php if (!empty($pro['office_address'])): ?><span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><?= htmlspecialchars((string)$pro['office_address'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
             <?php if (!empty($pro['phone'])): ?><span class="chip"><?= htmlspecialchars((string)$pro['phone'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
             <?php if (!empty($pro['email'])): ?><span class="chip"><?= htmlspecialchars((string)$pro['email'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
-            <?php if (!empty($pro['website_url'])): ?><a class="chip" href="<?= htmlspecialchars((string)$pro['website_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Website</a><?php endif; ?>
+            <?php if (!empty($pro['website_url'])): ?><a class="chip" href="<?= htmlspecialchars((string)$pro['website_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Website ↗</a><?php endif; ?>
           </div>
         <?php endif; ?>
-        <div class="profile-mini-stats">
-          <div class="mini-card"><strong><?= (int)($pro['years_experience'] ?? 0) ?>+</strong><span>Years</span></div>
-          <div class="mini-card"><strong><?= (int)($pro['projects_delivered'] ?? 0) ?>+</strong><span>Projects</span></div>
-          <div class="mini-card"><strong><?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?></strong><span>Rating</span></div>
-          <?php if (!empty($pro['response_time_hours'])): ?><div class="mini-card"><strong><?= (int)$pro['response_time_hours'] ?>h</strong><span>Response</span></div><?php endif; ?>
+        <div class="profile-kpi-grid">
+          <div class="profile-kpi-card">
+            <strong><?= (int)($pro['years_experience'] ?? 0) ?>+</strong>
+            <span>Years Experience</span>
+          </div>
+          <div class="profile-kpi-card">
+            <strong><?= (int)$approvedPortfolioCount ?></strong>
+            <span>Approved Portfolio</span>
+          </div>
+          <div class="profile-kpi-card kpi-rating">
+            <strong><?= htmlspecialchars((string)($pro['rating'] ?? '0'), ENT_QUOTES, 'UTF-8') ?></strong>
+            <span>Rating</span>
+          </div>
+          <?php if (!empty($pro['response_time_hours'])): ?>
+            <div class="profile-kpi-card">
+              <strong><?= (int)$pro['response_time_hours'] ?>h</strong>
+              <span>Response Time</span>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
-      <form id="profileLeadTopForm" class="stack-form top-lead-form">
+      <form id="profileLeadTopForm" class="stack-form top-lead-form profile-lead-form">
+        <p class="profile-form-heading">Send an Enquiry</p>
         <input type="hidden" name="pro_id" value="<?= (int)$pro['id'] ?>" />
         <input type="hidden" name="source" value="profile" />
-        <input name="name" required placeholder="<?= htmlspecialchars((string)($content['ui.name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-        <input name="phone" required placeholder="<?= htmlspecialchars((string)($content['ui.phone'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
-        <input name="city" required placeholder="<?= htmlspecialchars((string)($content['ui.city'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+        <input name="name" required placeholder="<?= htmlspecialchars((string)($content['ui.name'] ?? 'Your Name'), ENT_QUOTES, 'UTF-8') ?>" />
+        <input name="phone" required placeholder="<?= htmlspecialchars((string)($content['ui.phone'] ?? 'Phone Number'), ENT_QUOTES, 'UTF-8') ?>" />
+        <input name="city" required placeholder="<?= htmlspecialchars((string)($content['ui.city'] ?? 'Your City'), ENT_QUOTES, 'UTF-8') ?>" />
         <?php require __DIR__ . '/../partials/society-field.php'; ?>
         <select name="budget">
           <option value=""><?= htmlspecialchars((string)($content['ui.budget'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?></option>
           <?php require __DIR__ . '/../partials/budget-options.php'; ?>
         </select>
-        <textarea name="requirement" required placeholder="<?= htmlspecialchars((string)($content['ui.requirement'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+        <textarea name="requirement" required placeholder="<?= htmlspecialchars((string)($content['ui.requirement'] ?? 'Describe your requirement'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
         <?php require __DIR__ . '/../partials/lead-consent.php'; ?>
-        <button type="submit" class="btn-primary"><?= htmlspecialchars((string)($content['profile.cta'] ?? ''), ENT_QUOTES, 'UTF-8') ?></button>
+        <button type="submit" class="btn-primary"><?= htmlspecialchars((string)($content['profile.cta'] ?? 'Get a Proposal'), ENT_QUOTES, 'UTF-8') ?></button>
         <p class="form-message" id="profileTopLeadMessage"></p>
       </form>
     </div>
@@ -69,7 +117,10 @@
           <p><?= htmlspecialchars((string)$pro['bio'], ENT_QUOTES, 'UTF-8') ?></p>
         <?php endif; ?>
         <?php if (!empty($pro['why_work_with_me'])): ?>
-          <p><?= htmlspecialchars((string)$pro['why_work_with_me'], ENT_QUOTES, 'UTF-8') ?></p>
+          <div class="profile-why-block">
+            <p class="eyebrow" style="margin-bottom:6px">Why work with me</p>
+            <p><?= htmlspecialchars((string)$pro['why_work_with_me'], ENT_QUOTES, 'UTF-8') ?></p>
+          </div>
         <?php endif; ?>
         <?php if (!empty($pro['offerings_json'])): ?>
           <div class="chip-row profile-chip-block">
@@ -79,15 +130,16 @@
           </div>
         <?php endif; ?>
       </article>
+
       <aside class="profile-panel profile-panel-side">
         <h3>At a glance</h3>
         <div class="profile-stat-stack">
-          <?php if (!empty($pro['founded_year'])): ?><div class="mini-card"><strong><?= (int)$pro['founded_year'] ?></strong><span>Founded</span></div><?php endif; ?>
-          <?php if (!empty($pro['team_size'])): ?><div class="mini-card"><strong><?= (int)$pro['team_size'] ?>+</strong><span>Team size</span></div><?php endif; ?>
-          <?php if (!empty($pro['client_count'])): ?><div class="mini-card"><strong><?= number_format((int)$pro['client_count']) ?></strong><span>Client count</span></div><?php endif; ?>
-          <?php if (!empty($pro['consultation_fee'])): ?><div class="mini-card"><strong>₹<?= number_format((float)$pro['consultation_fee'], 0) ?></strong><span>Consultation</span></div><?php endif; ?>
-          <?php if (!empty($pro['starting_price'])): ?><div class="mini-card"><strong>₹<?= number_format((float)$pro['starting_price'], 0) ?></strong><span>Starting at</span></div><?php endif; ?>
-          <?php if (!empty($pro['office_hours'])): ?><div class="mini-card"><strong><?= htmlspecialchars((string)$pro['office_hours'], ENT_QUOTES, 'UTF-8') ?></strong><span>Office hours</span></div><?php endif; ?>
+          <?php if (!empty($pro['founded_year'])): ?><div class="mini-card profile-glance-card"><strong><?= (int)$pro['founded_year'] ?></strong><span>Founded</span></div><?php endif; ?>
+          <?php if (!empty($pro['team_size'])): ?><div class="mini-card profile-glance-card"><strong><?= (int)$pro['team_size'] ?>+</strong><span>Team size</span></div><?php endif; ?>
+          <?php if (!empty($pro['client_count'])): ?><div class="mini-card profile-glance-card"><strong><?= number_format((int)$pro['client_count']) ?></strong><span>Clients</span></div><?php endif; ?>
+          <?php if (!empty($pro['consultation_fee'])): ?><div class="mini-card profile-glance-card"><strong>₹<?= number_format((float)$pro['consultation_fee'], 0) ?></strong><span>Consultation</span></div><?php endif; ?>
+          <?php if (!empty($pro['starting_price'])): ?><div class="mini-card profile-glance-card"><strong>₹<?= number_format((float)$pro['starting_price'], 0) ?></strong><span>Starting at</span></div><?php endif; ?>
+          <?php if (!empty($pro['office_hours'])): ?><div class="mini-card profile-glance-card"><strong><?= htmlspecialchars((string)$pro['office_hours'], ENT_QUOTES, 'UTF-8') ?></strong><span>Office hours</span></div><?php endif; ?>
         </div>
         <?php if (!empty($pro['office_address']) || !empty($pro['phone']) || !empty($pro['email']) || !empty($pro['website_url']) || !empty($pro['google_business_url'])): ?>
           <div class="profile-contact-card">
@@ -97,12 +149,13 @@
               <?php if (!empty($pro['phone'])): ?><li><span>Phone</span><strong><?= htmlspecialchars((string)$pro['phone'], ENT_QUOTES, 'UTF-8') ?></strong></li><?php endif; ?>
               <?php if (!empty($pro['email'])): ?><li><span>Email</span><strong><?= htmlspecialchars((string)$pro['email'], ENT_QUOTES, 'UTF-8') ?></strong></li><?php endif; ?>
               <?php if (!empty($pro['website_url'])): ?><li><span>Website</span><strong><a href="<?= htmlspecialchars((string)$pro['website_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><?= htmlspecialchars((string)$pro['website_url'], ENT_QUOTES, 'UTF-8') ?></a></strong></li><?php endif; ?>
-              <?php if (!empty($pro['google_business_url'])): ?><li><span>Google Business</span><strong><a href="<?= htmlspecialchars((string)$pro['google_business_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Open listing</a></strong></li><?php endif; ?>
+              <?php if (!empty($pro['google_business_url'])): ?><li><span>Google</span><strong><a href="<?= htmlspecialchars((string)$pro['google_business_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Open listing ↗</a></strong></li><?php endif; ?>
             </ul>
           </div>
         <?php endif; ?>
       </aside>
     </div>
+
     <div class="profile-meta-grid profile-meta-grid-dense">
       <?php if (!empty($pro['service_areas'])): ?>
         <div class="card-lite">
@@ -170,11 +223,11 @@
     </article>
     <article class="profile-panel">
       <p class="eyebrow">Recognition</p>
-      <h2>Highlights & FAQs</h2>
+      <h2>Highlights &amp; FAQs</h2>
       <?php if (!empty($pro['awards_json'])): ?>
         <div class="chip-row profile-chip-block">
           <?php foreach (($pro['awards_json'] ?? []) as $award): ?>
-            <span class="chip"><?= htmlspecialchars((string)$award, ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="chip profile-award-chip">🏆 <?= htmlspecialchars((string)$award, ENT_QUOTES, 'UTF-8') ?></span>
           <?php endforeach; ?>
         </div>
       <?php endif; ?>
@@ -195,19 +248,28 @@
 
 <section class="section">
   <div class="container" data-reveal>
-    <h2><?= htmlspecialchars((string)($content['profile.portfolio.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
-    <div class="cards-grid">
+    <div class="profile-section-head">
+      <p class="eyebrow">Work Showcase</p>
+      <h2><?= htmlspecialchars((string)($content['profile.portfolio.title'] ?? 'Portfolio'), ENT_QUOTES, 'UTF-8') ?></h2>
+    </div>
+    <div class="cards-grid portfolio-grid-v2">
       <?php foreach ($projects as $project): ?>
-        <article class="portfolio-card">
+        <article class="portfolio-card portfolio-card-v2">
           <?php $projectImage = $project['media_json'][0] ?? ''; if ($projectImage): ?>
-            <img src="<?= htmlspecialchars((string)$projectImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($project['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+            <div class="portfolio-card-img-wrap">
+              <img src="<?= htmlspecialchars((string)$projectImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)($project['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" loading="lazy" />
+              <div class="portfolio-card-overlay">
+                <p class="portfolio-overlay-type"><?= htmlspecialchars((string)($project['work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?><?= !empty($project['area_of_work']) ? ' · ' . htmlspecialchars((string)$project['area_of_work'], ENT_QUOTES, 'UTF-8') : '' ?></p>
+                <h3><?= htmlspecialchars((string)($project['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
+              </div>
+            </div>
           <?php endif; ?>
-          <div>
+          <div class="portfolio-card-meta">
             <h3><?= htmlspecialchars((string)($project['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
-            <p><?= htmlspecialchars((string)($content['profile.amount_spent'] ?? ''), ENT_QUOTES, 'UTF-8') ?>: ₹<?= number_format((float)($project['total_cost'] ?? 0), 0) ?></p>
-            <p><?= htmlspecialchars((string)($content['profile.timeline'] ?? ''), ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string)($project['project_duration_label'] ?: ((int)$project['timeline_months'] . ' months')), ENT_QUOTES, 'UTF-8') ?></p>
-            <p><?= htmlspecialchars((string)($content['profile.work_type'] ?? 'Type of Work'), ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string)($project['work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-            <p><?= htmlspecialchars((string)($content['profile.work_area'] ?? 'Area of Work'), ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string)($project['area_of_work'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+            <div class="portfolio-meta-row">
+              <span><?= htmlspecialchars((string)($content['profile.amount_spent'] ?? 'Budget'), ENT_QUOTES, 'UTF-8') ?>: <strong>₹<?= number_format((float)($project['total_cost'] ?? 0), 0) ?></strong></span>
+              <span><?= htmlspecialchars((string)($content['profile.timeline'] ?? 'Timeline'), ENT_QUOTES, 'UTF-8') ?>: <strong><?= htmlspecialchars((string)($project['project_duration_label'] ?: ((int)$project['timeline_months'] . ' months')), ENT_QUOTES, 'UTF-8') ?></strong></span>
+            </div>
             <a class="btn-link" href="/portfolio/<?= htmlspecialchars((string)$project['slug'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($content['profile.project_details'] ?? 'View Project Details'), ENT_QUOTES, 'UTF-8') ?></a>
           </div>
         </article>
@@ -216,28 +278,45 @@
   </div>
 </section>
 
-<section class="section section-tight">
+<?php if (!empty($reviews)): ?>
+<section class="section section-tight profile-reviews-section">
   <div class="container" data-reveal>
-    <h2><?= htmlspecialchars((string)($content['profile.reviews.title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
+    <div class="profile-section-head">
+      <p class="eyebrow">Client Voices</p>
+      <h2><?= htmlspecialchars((string)($content['profile.reviews.title'] ?? 'Reviews'), ENT_QUOTES, 'UTF-8') ?></h2>
+    </div>
     <div class="cards-grid">
       <?php foreach ($reviews as $review): ?>
-        <article class="review-card">
-          <p>★ <?= (int)($review['rating'] ?? 0) ?>/5</p>
-          <p>“<?= htmlspecialchars((string)($review['review_text'] ?? ''), ENT_QUOTES, 'UTF-8') ?>”</p>
-          <p><strong><?= htmlspecialchars((string)($review['client_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong></p>
-          <p><?= htmlspecialchars((string)($review['work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string)($review['area_of_work'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-          <?php if (!empty($review['materials_highlight'])): ?><p><?= htmlspecialchars((string)$review['materials_highlight'], ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
-          <?php if ((int)($review['verified_purchase'] ?? 0) === 1): ?>
-            <span class="verify-badge"><?= htmlspecialchars((string)($content['profile.verified_purchase'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+        <?php $reviewRating = (int)($review['rating'] ?? 0); ?>
+        <article class="review-card review-card-v2">
+          <div class="review-stars-row">
+            <span class="review-stars-visual">
+              <?php for ($s = 1; $s <= 5; $s++): ?>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="<?= $s <= $reviewRating ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              <?php endfor; ?>
+            </span>
+            <span class="review-rating-num"><?= $reviewRating ?>/5</span>
+              <?php if ((int)($review['verified_purchase'] ?? 0) === 1): ?>
+	              <span class="verify-badge"><?= htmlspecialchars((string)($content['profile.verified_purchase'] ?? 'Verified Consultation'), ENT_QUOTES, 'UTF-8') ?></span>
+            <?php endif; ?>
+          </div>
+          <blockquote class="review-quote">"<?= htmlspecialchars((string)($review['review_text'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"</blockquote>
+          <div class="review-footer">
+            <strong class="review-author"><?= htmlspecialchars((string)($review['client_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+            <span class="review-work"><?= htmlspecialchars((string)($review['work_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?><?= !empty($review['area_of_work']) ? ' · ' . htmlspecialchars((string)$review['area_of_work'], ENT_QUOTES, 'UTF-8') : '' ?></span>
+          </div>
+          <?php if (!empty($review['materials_highlight'])): ?>
+            <p class="review-materials"><?= htmlspecialchars((string)$review['materials_highlight'], ENT_QUOTES, 'UTF-8') ?></p>
           <?php endif; ?>
           <?php if (!empty($review['photos_json'])): ?>
-            <div class="photo-row"><?php foreach ($review['photos_json'] as $photo): ?><img src="<?= htmlspecialchars((string)$photo, ENT_QUOTES, 'UTF-8') ?>" alt="review" /><?php endforeach; ?></div>
+            <div class="photo-row"><?php foreach ($review['photos_json'] as $photo): ?><img src="<?= htmlspecialchars((string)$photo, ENT_QUOTES, 'UTF-8') ?>" alt="review photo" /><?php endforeach; ?></div>
           <?php endif; ?>
         </article>
       <?php endforeach; ?>
     </div>
   </div>
 </section>
+<?php endif; ?>
 
 <script>
 (() => {
@@ -258,13 +337,13 @@
 
     if (response.ok) {
       msg.className = 'form-message ok';
-      msg.textContent = <?= json_encode((string)($content['home.lead.success'] ?? 'Submitted'), JSON_UNESCAPED_UNICODE) ?>;
+      msg.textContent = <?= json_encode((string)($content['home.lead.success'] ?? 'Submitted successfully!'), JSON_UNESCAPED_UNICODE) ?>;
       form.reset();
       return;
     }
 
     msg.className = 'form-message error';
-    msg.textContent = data.error || 'Failed';
+    msg.textContent = data.error || 'Failed to submit. Please try again.';
   });
 })();
 </script>

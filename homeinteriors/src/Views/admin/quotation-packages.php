@@ -1,0 +1,23 @@
+<?php require __DIR__ . '/../partials/header.php'; ?>
+<section class="section quotation-admin"><div class="container" data-reveal>
+  <div class="admin-page-head"><div><p class="eyebrow">Quotation Builder</p><h1>Package Master</h1><p class="muted-line">Manage material grade, support, warranty, timeline, fees, and margins.</p></div><a class="btn-link" href="/admin/quotations">All Quotations</a></div>
+  <nav class="quotation-subnav"><a href="/admin/quotations">All Quotations</a><a href="/admin/quotations/create">Create Quotation</a><a href="/admin/proposal-templates">Proposal Templates</a><a href="/admin/quotation-rate-card">Rate Card</a><a href="/admin/quotation-packages">Package Master</a><a href="/admin/quotation-settings">Settings</a></nav>
+  <form id="packageForm" class="admin-card quote-master-form">
+    <input type="hidden" name="id"><div class="budget-grid"><input name="name" placeholder="Package name *" required><input name="slug" placeholder="Slug"></div>
+    <textarea name="description" rows="2" placeholder="Description"></textarea>
+    <div class="budget-grid"><input name="material_grade" placeholder="Material grade"><input name="hardware_level" placeholder="Hardware level"></div>
+    <div class="budget-grid"><input name="finish_level" placeholder="Finish level"><input name="timeline_range" placeholder="Timeline range"></div>
+    <div class="budget-grid"><input name="warranty_years" type="number" placeholder="Warranty years"><input name="revision_count" type="number" placeholder="Revision count"></div>
+    <div class="budget-grid"><input name="drawings_2d_count" type="number" placeholder="2D drawings"><input name="views_3d_count" type="number" placeholder="3D views"></div>
+    <div class="budget-grid"><input name="default_margin_percentage" type="number" step="0.01" placeholder="Default margin %"><input name="default_design_fee_percentage" type="number" step="0.01" placeholder="Design fee %"></div>
+    <div class="budget-grid"><input name="default_project_management_fee_percentage" type="number" step="0.01" placeholder="PM fee %"><input name="sort_order" type="number" placeholder="Sort order"></div>
+    <input name="design_support" placeholder="Design support"><input name="supervision_level" placeholder="Supervision level">
+    <label class="switch-row"><input type="checkbox" name="is_active" value="1" checked> Active</label>
+    <div class="admin-links"><button class="btn-primary" type="submit">Save Package</button><button class="btn-muted" type="button" id="packageReset">Reset</button></div><p id="packageMsg" class="form-message"></p>
+  </form>
+  <div class="table-shell"><table><thead><tr><th>Name</th><th>Grade</th><th>Hardware</th><th>Warranty</th><th>Fees</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($packages as $package): ?><tr data-row='<?= htmlspecialchars(json_encode($package), ENT_QUOTES, 'UTF-8') ?>'><td><strong><?= htmlspecialchars((string)$package['name'], ENT_QUOTES, 'UTF-8') ?></strong><br><small><?= htmlspecialchars((string)$package['timeline_range'], ENT_QUOTES, 'UTF-8') ?></small></td><td><?= htmlspecialchars((string)$package['material_grade'], ENT_QUOTES, 'UTF-8') ?></td><td><?= htmlspecialchars((string)$package['hardware_level'], ENT_QUOTES, 'UTF-8') ?></td><td><?= (int)$package['warranty_years'] ?> years</td><td>Margin <?= number_format((float)$package['default_margin_percentage'], 1) ?>%<br>Design <?= number_format((float)$package['default_design_fee_percentage'], 1) ?>%</td><td><?= !empty($package['is_active']) ? 'Active' : 'Inactive' ?></td><td><button class="btn-link edit-master" type="button">Edit</button></td></tr><?php endforeach; ?></tbody></table></div>
+</div></section>
+<script>
+(() => { const form=document.getElementById('packageForm'), msg=document.getElementById('packageMsg'); document.querySelectorAll('.edit-master').forEach(btn=>btn.onclick=()=>{const row=JSON.parse(btn.closest('tr').dataset.row); Object.entries(row).forEach(([k,v])=>{const i=form.elements[k]; if(!i)return; if(i.type==='checkbox')i.checked=Number(v)===1; else i.value=v??'';}); scrollTo({top:0,behavior:'smooth'});}); document.getElementById('packageReset').onclick=()=>form.reset(); form.onsubmit=async e=>{e.preventDefault(); const fd=new FormData(form); const id=fd.get('id'); if(id)fd.set('_method','PUT'); const r=await fetch(id?`/api/quotation-packages/${id}`:'/api/quotation-packages',{method:'POST',body:fd}); const d=await r.json(); msg.className=`form-message ${r.ok?'ok':'error'}`; msg.textContent=r.ok?'Package saved.':(d.error||'Save failed'); if(r.ok)setTimeout(()=>location.reload(),400);}; })();
+</script>
+<?php require __DIR__ . '/../partials/footer.php'; ?>

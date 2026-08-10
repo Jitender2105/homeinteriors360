@@ -16,6 +16,7 @@ if (!defined('RAZORPAY_CURRENCY')) {
     define('RAZORPAY_CURRENCY', (string)($config['razorpay']['currency'] ?? 'INR'));
 }
 require __DIR__ . '/Database.php';
+require __DIR__ . '/QuotationCalculator.php';
 require __DIR__ . '/helpers.php';
 require __DIR__ . '/Auth.php';
 require __DIR__ . '/Repositories/SiteRepository.php';

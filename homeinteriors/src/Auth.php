@@ -75,7 +75,7 @@ final class Auth
         }
 
         $dbUser = Database::one(
-            'SELECT id, username, email, role FROM users WHERE id = ? AND is_active = 1',
+            'SELECT id, username, email, role, pro_id FROM users WHERE id = ? AND is_active = 1',
             [$uid]
         );
         if (!$dbUser) {
@@ -110,7 +110,11 @@ final class Auth
 
     public static function login(string $username, string $password): ?array
     {
-        $user = Database::one('SELECT id, username, email, role, password_hash FROM users WHERE username = ?', [$username]);
+        $login = trim($username);
+        $user = Database::one(
+            'SELECT id, username, email, role, pro_id, password_hash FROM users WHERE username = ? OR email = ? ORDER BY id DESC LIMIT 1',
+            [$login, $login]
+        );
         if (!$user || !password_verify($password, $user['password_hash'])) {
             return null;
         }
@@ -141,14 +145,52 @@ final class Auth
             if (str_starts_with($path, '/api/')) {
                 jsonResponse(['error' => 'Unauthorized'], 401);
             }
-            redirectTo('/admin/login');
+            redirectTo(str_starts_with($path, '/designer') ? '/designer/login' : '/admin/login');
+        }
+        return $user;
+    }
+
+    public static function isAdmin(?array $user = null): bool
+    {
+        $user = $user ?? self::user();
+        return in_array((string)($user['role'] ?? ''), ['admin', 'super_admin'], true);
+    }
+
+    public static function isDesigner(?array $user = null): bool
+    {
+        $user = $user ?? self::user();
+        return (string)($user['role'] ?? '') === 'designer';
+    }
+
+    public static function requireAdmin(): array
+    {
+        $user = self::requireAuth();
+        if (!self::isAdmin($user)) {
+            $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+            if (str_starts_with($path, '/api/')) {
+                jsonResponse(['error' => 'Admin access required'], 403);
+            }
+            redirectTo('/designer');
+        }
+        return $user;
+    }
+
+    public static function requireDesigner(): array
+    {
+        $user = self::requireAuth();
+        if (!self::isDesigner($user) || empty($user['pro_id'])) {
+            $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+            if (str_starts_with($path, '/api/')) {
+                jsonResponse(['error' => 'Designer access required'], 403);
+            }
+            redirectTo('/admin');
         }
         return $user;
     }
 
     public static function requireSuperAdmin(): array
     {
-        $user = self::requireAuth();
+        $user = self::requireAdmin();
         if (($user['role'] ?? 'admin') !== 'super_admin') {
             jsonResponse(['error' => 'Super admin access required'], 403);
         }

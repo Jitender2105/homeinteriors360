@@ -68,6 +68,36 @@ $leadPurchaseSteps = [
 $cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] : ['Gurgaon', 'Delhi', 'Noida'];
 ?>
 
+<section class="section designer-feature-band" id="designer-quotation-builder" data-reveal>
+  <div class="container designer-feature-grid">
+    <div>
+      <p class="eyebrow eyebrow-dark">Designer software offer</p>
+      <h1>Quotation Builder + Proposal Generator for interior designers.</h1>
+      <p>Create fast itemised quotations, branded proposal PDFs, revision tracking, and payment milestones from one designer-only dashboard.</p>
+      <div class="feature-price-row"><span class="mrp">₹2,999/month</span><strong>₹399/month</strong><em>87% off launch offer</em></div>
+      <ul class="benefit-list">
+        <li>Designer login separate from main admin.</li>
+        <li>Access only your assigned leads and your own quotations.</li>
+        <li>Generate proposal PDF, share on WhatsApp, and track client actions.</li>
+        <li>Best fit for studios that quote full homes, kitchens, wardrobes, renovation, ceiling, painting, furniture, and lighting work.</li>
+      </ul>
+    </div>
+    <form class="designer-feature-form" data-designer-feature-form>
+      <h2>Register for ₹399/month</h2>
+      <input name="name" required placeholder="Name">
+      <input name="phone" required placeholder="Phone">
+      <input name="email" type="email" placeholder="Email">
+      <input name="company_name" placeholder="Studio / company name">
+      <input name="city" placeholder="City">
+      <input name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="Create password for designer login">
+      <textarea name="message" rows="3" placeholder="How many quotations do you create per month?"></textarea>
+      <label class="lead-consent"><input type="checkbox" name="consent" value="1" required checked><span>I agree to the Privacy Policy and Terms & Conditions and consent to be contacted by phone, SMS, email, WhatsApp or RCS.</span></label>
+      <button class="btn-primary" type="submit">Claim launch offer</button>
+      <p class="form-message"></p>
+    </form>
+  </div>
+</section>
+
 <section class="section pricing-plans-first" data-reveal>
   <div class="container">
     <div class="section-head">
@@ -272,6 +302,80 @@ $cities = is_array($payload['city_options'] ?? null) ? $payload['city_options'] 
 
 <script>
 (() => {
+  const loadRazorpay = () => new Promise((resolve, reject) => {
+    if (window.Razorpay) return resolve();
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('Unable to load Razorpay checkout.'));
+    document.head.appendChild(script);
+  });
+
+  document.querySelectorAll('[data-designer-feature-form]').forEach((featureForm) => {
+    featureForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!featureForm.reportValidity()) return;
+      const message = featureForm.querySelector('.form-message');
+      const submit = featureForm.querySelector('button[type="submit"]');
+      const payload = Object.fromEntries(new FormData(featureForm).entries());
+      message.className = 'form-message';
+      message.textContent = 'Creating secure Razorpay checkout...';
+      if (submit) submit.disabled = true;
+      const response = await fetch('/api/designer-feature-registrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        message.className = 'form-message error';
+        message.textContent = data.error || 'Registration failed.';
+        if (submit) submit.disabled = false;
+        return;
+      }
+      try {
+        await loadRazorpay();
+        const checkout = new Razorpay({
+          key: data.key_id,
+          amount: data.amount,
+          currency: data.currency || 'INR',
+          name: 'HomeInteriors360',
+          description: 'Quotation Builder + Proposal Generator',
+          order_id: data.order_id,
+          prefill: { name: payload.name || '', email: payload.email || '', contact: payload.phone || '' },
+          handler: async (payment) => {
+            const verify = await fetch('/api/designer-feature-registrations/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payment),
+            });
+            const result = await verify.json();
+            if (verify.ok) {
+              message.className = 'form-message ok';
+              message.textContent = 'Payment successful. Opening your proposal builder...';
+              window.location.href = result.redirect_url || '/designer';
+              return;
+            }
+            message.className = 'form-message error';
+            message.textContent = result.error || 'Payment verification failed.';
+            if (submit) submit.disabled = false;
+          },
+          modal: { ondismiss: () => { message.className = 'form-message error'; message.textContent = 'Payment cancelled.'; if (submit) submit.disabled = false; } },
+        });
+        checkout.on('payment.failed', (response) => {
+          message.className = 'form-message error';
+          message.textContent = response.error?.description || 'Payment failed.';
+          if (submit) submit.disabled = false;
+        });
+        checkout.open();
+      } catch (error) {
+        message.className = 'form-message error';
+        message.textContent = error.message || 'Unable to open Razorpay checkout.';
+        if (submit) submit.disabled = false;
+      }
+    });
+  });
+
   const form = document.getElementById('pricingLeadForm');
   const message = document.getElementById('pricingLeadMessage');
   const buttons = document.querySelectorAll('.pricing-select');

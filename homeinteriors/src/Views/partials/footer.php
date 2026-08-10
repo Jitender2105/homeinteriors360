@@ -11,14 +11,16 @@ $footerLinks = [
   ['label' => 'Cancellation and Refunds Policy', 'href' => '/cancellation-and-refunds-policy'],
 ];
 $seoLinks = [
-  ['label' => 'Buy or Rent Property', 'href' => '/properties'],
   ['label' => 'Interior Design Ideas', 'href' => '/design-ideas'],
+  ['label' => 'AI Room Visualizer', 'href' => '/ai-room-visualizer'],
   ['label' => 'Kitchen Design Ideas', 'href' => '/design-ideas/kitchen-designs'],
   ['label' => 'Bedroom Design Ideas', 'href' => '/design-ideas/bedroom-designs'],
   ['label' => 'Interior Design Leads', 'href' => '/interior-design-leads'],
   ['label' => 'Interior Designer Leads', 'href' => '/interior-designer-leads'],
+  ['label' => 'Register as Interior Designer', 'href' => '/interior-designer-registration'],
   ['label' => 'Buy Interior Design Leads', 'href' => '/buy-interior-design-leads'],
   ['label' => 'Interior Leads Provider in India', 'href' => '/interior-leads-provider-india'],
+  ['label' => 'Quotation Builder for Interior Designers', 'href' => '/pricing#designer-quotation-builder'],
   ['label' => 'Interior Designer Leads in Delhi NCR', 'href' => '/interior-designer-leads-delhi-ncr'],
   ['label' => 'Interior Designer Leads in Gurgaon', 'href' => '/interior-designer-leads-gurgaon'],
 ];
@@ -81,6 +83,20 @@ $seoLinks = [
     nodes.forEach((el, index) => {
       el.style.transitionDelay = `${Math.min(index * 60, 300)}ms`;
       observer.observe(el);
+    });
+  }
+
+  if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+    window.jQuery('.standard-multi-select').each(function initStandardMultiSelect2() {
+      const select = window.jQuery(this);
+      if (select.data('select2')) return;
+      const label = this.closest('.standard-select-label')?.querySelector('span')?.textContent || 'Select options';
+      select.select2({
+        width: '100%',
+        placeholder: label,
+        closeOnSelect: false,
+        allowClear: true,
+      });
     });
   }
 

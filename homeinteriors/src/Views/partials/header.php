@@ -17,7 +17,7 @@ $defaultStructuredData = [
     'logo' => absoluteUrl('/logo.png'),
     'contactPoint' => [
       '@type' => 'ContactPoint',
-      'telephone' => '+91 8076945594',
+      'telephone' => '+91-9540573661',
       'contactType' => 'customer support',
       'areaServed' => 'IN',
       'availableLanguage' => ['en', 'hi'],
@@ -42,8 +42,8 @@ $navDirectory = (string)($content['nav.directory'] ?? 'Find Professionals');
 $navPricing = (string)($content['nav.pricing'] ?? 'Pricing');
 $navLeads = (string)($content['nav.leads'] ?? 'Buy Leads');
 $navCalculator = (string)($content['nav.calculator'] ?? 'Cost Calculator');
-$navProperties = (string)($content['nav.properties'] ?? 'Buy / Rent');
 $navDesignIdeas = (string)($content['nav.design_ideas'] ?? 'Design Ideas');
+$navVisualizer = (string)($content['nav.visualizer'] ?? 'AI Visualizer');
 $navAdmin = (string)($content['nav.admin'] ?? 'Admin');
 $rootPath = dirname(__DIR__, 3);
 $styleCandidates = [
@@ -79,10 +79,21 @@ foreach ($styleCandidates as $stylePath) {
   <meta name="twitter:title" content="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>" />
   <meta name="twitter:description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8') ?>" />
   <meta name="twitter:image" content="<?= htmlspecialchars((string)$ogImage, ENT_QUOTES, 'UTF-8') ?>" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="HomeInteriors360" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/favicon.png" />
   <link rel="apple-touch-icon" href="/favicon.png" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
   <link rel="stylesheet" href="/assets/style.css?v=<?= htmlspecialchars($styleVersion, ENT_QUOTES, 'UTF-8') ?>" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js').catch(() => {}));
+    }
+  </script>
   <?php foreach ((array)$structuredData as $schema): ?>
     <script type="application/ld+json"><?= json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
   <?php endforeach; ?>
@@ -99,6 +110,12 @@ foreach ($styleCandidates as $stylePath) {
   <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TQX5N264"
   height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <!-- End Google Tag Manager (noscript) -->
+  <div class="designer-top-strip">
+    <div class="container designer-top-strip-inner">
+      <span>Register now as interior designer, get professional portfolio and 10 free leads.</span>
+      <a href="/interior-designer-registration">Register Now</a>
+    </div>
+  </div>
   <header class="site-header">
     <div class="container nav-shell">
       <a class="brand" href="/">
@@ -108,12 +125,13 @@ foreach ($styleCandidates as $stylePath) {
       <nav class="nav-links">
         <a class="<?= $active === 'home' ? 'active' : '' ?>" href="/"><?= htmlspecialchars($navHome, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'directory' ? 'active' : '' ?>" href="/professionals"><?= htmlspecialchars($navDirectory, ENT_QUOTES, 'UTF-8') ?></a>
-        <a class="<?= $active === 'properties' ? 'active' : '' ?>" href="/properties"><?= htmlspecialchars($navProperties, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'design-ideas' ? 'active' : '' ?>" href="/design-ideas"><?= htmlspecialchars($navDesignIdeas, ENT_QUOTES, 'UTF-8') ?></a>
+        <a class="<?= $active === 'visualizer' ? 'active' : '' ?>" href="/ai-room-visualizer"><?= htmlspecialchars($navVisualizer, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'pricing' ? 'active' : '' ?>" href="/pricing"><?= htmlspecialchars($navPricing, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'leads' ? 'active' : '' ?>" href="/lead-marketplace"><?= htmlspecialchars($navLeads, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'calculator' ? 'active' : '' ?>" href="/cost-calculator"><?= htmlspecialchars($navCalculator, ENT_QUOTES, 'UTF-8') ?></a>
         <a class="<?= $active === 'admin' ? 'active' : '' ?>" href="/admin"><?= htmlspecialchars($navAdmin, ENT_QUOTES, 'UTF-8') ?></a>
+        <a class="nav-designer-register <?= canonicalPath((string)($_SERVER['REQUEST_URI'] ?? '/')) === '/interior-designer-registration' ? 'active' : '' ?>" href="/interior-designer-registration">Register as Designer</a>
         <a class="nav-cta <?= canonicalPath((string)($_SERVER['REQUEST_URI'] ?? '/')) === '/home-interior-hire-a-designer' ? 'active' : '' ?>" href="/home-interior-hire-a-designer">Hire a Designer</a>
       </nav>
     </div>

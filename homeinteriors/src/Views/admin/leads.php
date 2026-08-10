@@ -17,6 +17,7 @@
             <th>Pro</th>
             <th>Status</th>
             <th>Estimate</th>
+            <th>Quotation</th>
             <th>Date</th>
           </tr>
         </thead>
@@ -40,6 +41,7 @@
                 </select>
               </td>
               <td><?= $lead['estimate'] !== null ? '₹' . number_format((float)$lead['estimate'], 0) : '' ?></td>
+              <td><a class="btn-link" href="/admin/quotations/create?lead_id=<?= (int)$lead['id'] ?>">Create Quotation</a><a class="btn-link" href="/admin/quotations?q=<?= urlencode((string)$lead['phone']) ?>">View Quotations</a></td>
               <td><?= htmlspecialchars((string)$lead['created_at'], ENT_QUOTES, 'UTF-8') ?></td>
             </tr>
           <?php endforeach; ?>

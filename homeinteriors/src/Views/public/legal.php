@@ -4,8 +4,8 @@ require __DIR__ . '/../partials/header.php';
 $pageTitle = (string)($legalTitle ?? 'Company Information');
 $lastUpdated = (string)($lastUpdated ?? '28 May 2026');
 $sections = is_array($sections ?? null) ? $sections : [];
-$contactEmail = (string)($contactEmail ?? 'admin@homeinteriors360.com');
-$contactPhone = (string)($contactPhone ?? '+91 8076945594');
+$contactEmail = (string)($contactEmail ?? 'jitender@homeinteriors360.com');
+$contactPhone = (string)($contactPhone ?? '+91-9540573661');
 ?>
 
 <section class="section legal-hero" data-reveal>
