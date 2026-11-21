@@ -4,7 +4,168 @@ declare(strict_types=1);
 
 final class SiteRepository
 {
+    public const SINGLE_LEAD_PRICE = 199.00;
+    public const LEAD_PRICE_TIERS = [199.00, 399.00, 599.00, 799.00, 999.00];
+    public const MAX_BUYERS_PER_LEAD = 3;
+
     private static ?array $contentCache = null;
+    private static array $tableColumnCache = [];
+
+    /**
+     * Public launch markets for the interior-design landing page. Keep this list
+     * intentionally small: it is an editorial service area, not a blanket rule
+     * that makes every home-service category available in every city.
+     */
+    private const FEATURED_INTERIOR_DESIGN_CITIES = ['Mumbai', 'Pune', 'Chennai', 'Bangalore', 'Hyderabad'];
+
+    public static function boqTemplates(): array
+    {
+        return [
+            ['key' => '1bhk', 'name' => '1 BHK', 'area' => 550, 'rooms' => ['Living room', 'Modular kitchen', 'Master bedroom']],
+            ['key' => '2bhk', 'name' => '2 BHK', 'area' => 850, 'rooms' => ['Living room', 'Modular kitchen', 'Master bedroom', 'Bedroom 2']],
+            ['key' => '3bhk', 'name' => '3 BHK', 'area' => 1200, 'rooms' => ['Living room', 'Modular kitchen', 'Master bedroom', 'Bedroom 2', 'Bedroom 3']],
+            ['key' => '4bhk', 'name' => '4 BHK', 'area' => 1650, 'rooms' => ['Living room', 'Dining area', 'Modular kitchen', 'Master bedroom', 'Bedroom 2', 'Bedroom 3', 'Guest bedroom']],
+            ['key' => 'kitchen', 'name' => 'Modular kitchen', 'area' => 110, 'rooms' => ['Modular kitchen']],
+            ['key' => 'wardrobe', 'name' => 'Wardrobe', 'area' => 80, 'rooms' => ['Master bedroom']],
+            ['key' => 'false-ceiling', 'name' => 'False ceiling', 'area' => 350, 'rooms' => ['Living room']],
+            ['key' => 'blank', 'name' => 'Blank BOQ', 'area' => 0, 'rooms' => []],
+        ];
+    }
+
+    public static function createAnonymousBoqDraft(array $data): array
+    {
+        $templateKey = strtolower(trim((string)($data['template_key'] ?? '')));
+        $template = null;
+        foreach (self::boqTemplates() as $candidate) {
+            if ($candidate['key'] === $templateKey) {
+                $template = $candidate;
+                break;
+            }
+        }
+        $city = trim((string)($data['city'] ?? ''));
+        $tier = trim((string)($data['quality_tier'] ?? ''));
+        if (!$template || $city === '' || !in_array($tier, ['Economy', 'Standard', 'Premium', 'Luxury'], true)) {
+            throw new InvalidArgumentException('Choose a template, city, and quality tier to start your BOQ.');
+        }
+        $area = max(0, (float)($data['carpet_area'] ?? 0));
+        $scale = !empty($template['area']) && $area > 0 ? $area / (float)$template['area'] : 1;
+        $packages = self::quotationPackages(true);
+        $packageId = 0;
+        foreach ($packages as $package) {
+            if (strcasecmp((string)$package['material_grade'], $tier) === 0 || strcasecmp((string)$package['name'], $tier) === 0) {
+                $packageId = (int)$package['id'];
+                break;
+            }
+        }
+        $rates = self::quotationRateCards(['city' => $city, 'package_id' => $packageId]);
+        $byCategory = [];
+        foreach ($rates as $rate) {
+            $byCategory[strtolower((string)$rate['category'])] ??= $rate;
+        }
+        $defaultItems = self::boqTemplateItems($templateKey, $template['rooms'], $byCategory, $scale);
+        $draft = [
+            'template_key' => $templateKey,
+            'template_name' => $template['name'],
+            'city' => $city,
+            'quality_tier' => $tier,
+            'carpet_area' => $area ?: null,
+            'client_name' => '',
+            'client_phone' => '',
+            'client_email' => '',
+            'site_address' => '',
+            'property_type' => 'Apartment',
+            'bhk' => strtoupper(str_replace('bhk', 'BHK', $templateKey)),
+            'project_stage' => 'New construction',
+            'quote_date' => date('Y-m-d'),
+            'valid_until' => date('Y-m-d', strtotime('+15 days')),
+            'items' => $defaultItems,
+            'discount_amount' => 0,
+            'discount_percentage' => 0,
+            'gst_percentage' => 18,
+            'payment_schedule' => [['label' => 'Booking amount', 'percentage' => 10], ['label' => 'Design sign-off', 'percentage' => 40], ['label' => 'Material delivery', 'percentage' => 40], ['label' => 'Handover', 'percentage' => 10]],
+        ];
+        $draft['totals'] = QuotationCalculator::calculateQuote($draft, $defaultItems, self::quotationSettings());
+        $token = bin2hex(random_bytes(24));
+        $sessionToken = self::boqAnonymousSessionToken();
+        Database::exec('INSERT INTO boq_anonymous_drafts (public_token, session_token, template_key, city, quality_tier, carpet_area, draft_json, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))', [$token, $sessionToken, $templateKey, $city, $tier, $area ?: null, json_encode($draft, JSON_UNESCAPED_UNICODE),]);
+        self::trackBoqEvent('quote_created_anon', $token, ['template' => $templateKey, 'city' => $city, 'tier' => $tier]);
+        return ['token' => $token, 'draft' => $draft];
+    }
+
+    public static function getAnonymousBoqDraft(string $token): ?array
+    {
+        $row = Database::one('SELECT * FROM boq_anonymous_drafts WHERE public_token=? AND expires_at>NOW()', [$token]);
+        if (!$row || !hash_equals((string)$row['session_token'], self::boqAnonymousSessionToken(false))) {
+            return null;
+        }
+        $draft = json_decode((string)$row['draft_json'], true);
+        return is_array($draft) ? ['token' => $token, 'draft' => $draft] : null;
+    }
+
+    public static function saveAnonymousBoqDraft(string $token, array $data): array
+    {
+        $stored = self::getAnonymousBoqDraft($token);
+        if (!$stored) {
+            throw new InvalidArgumentException('This sample BOQ is unavailable. Please start a new one.');
+        }
+        $draft = array_merge($stored['draft'], array_intersect_key($data, array_flip(['client_name', 'client_phone', 'client_email', 'site_address', 'property_type', 'bhk', 'carpet_area', 'project_stage', 'quote_date', 'valid_until', 'discount_amount', 'discount_percentage', 'gst_percentage', 'payment_schedule', 'items'])));
+        $items = self::decodeStructuredRows($draft['items'] ?? []);
+        if ($items === []) {
+            throw new InvalidArgumentException('Add at least one BOQ item.');
+        }
+        $draft['totals'] = QuotationCalculator::calculateQuote($draft, $items, self::quotationSettings());
+        Database::exec('UPDATE boq_anonymous_drafts SET draft_json=? WHERE public_token=?', [json_encode($draft, JSON_UNESCAPED_UNICODE), $token]);
+        self::trackBoqEvent('boq_draft_saved', $token, ['items' => count($items)]);
+        return ['token' => $token, 'draft' => $draft];
+    }
+
+    public static function trackBoqEvent(string $event, ?string $token = null, array $properties = []): void
+    {
+        try {
+            Database::exec('INSERT INTO boq_funnel_events (anonymous_token, event_name, properties_json) VALUES (?, ?, ?)', [$token, $event, json_encode($properties, JSON_UNESCAPED_UNICODE)]);
+        } catch (Throwable) {
+        }
+    }
+
+    private static function boqAnonymousSessionToken(bool $create = true): string
+    {
+        $token = (string)($_COOKIE['boq_anon_session'] ?? '');
+        if (preg_match('/^[a-f0-9]{48}$/', $token)) {
+            return $token;
+        }
+        if (!$create) {
+            return '';
+        }
+        $token = bin2hex(random_bytes(24));
+        setcookie('boq_anon_session', $token, ['expires' => time() + 30 * 86400, 'path' => '/', 'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'), 'httponly' => true, 'samesite' => 'Lax']);
+        $_COOKIE['boq_anon_session'] = $token;
+        return $token;
+    }
+
+    private static function boqTemplateItems(string $templateKey, array $rooms, array $rates, float $scale): array
+    {
+        $map = [
+            'Living room' => [['TV unit', 'TV unit'], ['False ceiling', 'False ceiling']],
+            'Dining area' => [['Crockery unit', 'Crockery unit']],
+            'Modular kitchen' => [['Modular kitchen', 'Modular kitchen']],
+            'Master bedroom' => [['Wardrobe', 'Wardrobe'], ['Bed with storage', 'Bed with storage']],
+            'Bedroom 2' => [['Wardrobe', 'Wardrobe'], ['Bed with storage', 'Bed with storage']],
+            'Bedroom 3' => [['Wardrobe', 'Wardrobe'], ['Bed with storage', 'Bed with storage']],
+            'Guest bedroom' => [['Wardrobe', 'Wardrobe'], ['Bed with storage', 'Bed with storage']],
+        ];
+        if ($templateKey === 'wardrobe') $map = ['Master bedroom' => [['Wardrobe', 'Wardrobe']]];
+        if ($templateKey === 'false-ceiling') $map = ['Living room' => [['False ceiling', 'False ceiling']]];
+        $items = [];
+        foreach ($rooms as $room) {
+            foreach ($map[$room] ?? [] as [$category, $fallback]) {
+                $rate = $rates[strtolower($category)] ?? [];
+                $areaDriven = str_contains(strtolower((string)($rate['unit_type'] ?? '')), 'sq ft');
+                $quantity = $areaDriven ? max(1, round(100 * $scale, 2)) : ($category === 'Modular kitchen' ? max(8, round(10 * $scale, 2)) : 1);
+                $items[] = ['room_name' => $room, 'category' => $category, 'item_name' => $rate['item_name'] ?? $fallback, 'specification' => trim(implode(' · ', array_filter([$rate['material'] ?? '', $rate['finish'] ?? '', $rate['brand'] ?? '']))), 'unit_type' => $rate['unit_type'] ?? 'Per unit', 'quantity' => $quantity, 'rate' => (float)($rate['client_selling_rate'] ?? $rate['base_rate'] ?? 0), 'vendor_cost' => (float)($rate['vendor_cost'] ?? 0), 'gst_percentage' => (float)($rate['gst_percentage'] ?? 18), 'include_in_proposal' => 1];
+            }
+        }
+        return $items;
+    }
 
     private static function professionalSelectSql(string $alias = 'pros'): string
     {
@@ -82,7 +243,11 @@ final class SiteRepository
     {
         return [
             'roles' => ['Architect', 'Designer', 'Contractor'],
-            'cities' => ['Gurgaon', 'Delhi', 'Noida', 'Greater Noida', 'Ghaziabad', 'Faridabad'],
+            'cities' => [
+                'Gurgaon', 'Delhi', 'Noida', 'Greater Noida', 'Ghaziabad', 'Faridabad',
+                'Mumbai', 'Pune', 'Bengaluru', 'Hyderabad', 'Chennai', 'Ahmedabad',
+                'Kolkata', 'Jaipur', 'Lucknow', 'Chandigarh', 'Kochi', 'Indore',
+            ],
             'service_regions' => ['Delhi NCR', 'Gurgaon', 'Delhi', 'Noida', 'Greater Noida', 'Ghaziabad', 'Faridabad', 'Manesar', 'Sohna Road', 'Dwarka Expressway'],
             'work_types' => ['Full Home Interior', 'Modular Kitchen', 'Wardrobe', 'Renovation', 'False Ceiling', 'Painting', 'Lighting', 'Furniture', 'Bathroom', 'Pooja Room', 'Office Interiors', 'Commercial Interiors', 'Turnkey Interiors', 'Civil Work'],
             'specializations' => ['Residential Interiors', 'Luxury Interiors', 'Modular Interiors', 'Budget Interiors', 'Space Planning', '3D Design', 'Renovation', 'Kitchen Specialist', 'Wardrobe Specialist', 'Furniture Design', 'Turnkey Execution', 'Vaastu Interior Planning'],
@@ -98,6 +263,437 @@ final class SiteRepository
             'portfolio_moderation_statuses' => ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'],
             'portfolio_verification_statuses' => ['UNVERIFIED', 'ADMIN_REVIEWED', 'CLIENT_CONFIRMED', 'PROFESSIONAL_VERIFIED'],
         ];
+    }
+
+    public static function homeServiceCities(): array
+    {
+        return [
+            'Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Ahmedabad', 'Kolkata', 'Surat', 'Pune', 'Jaipur',
+            'Lucknow', 'Kanpur', 'Nagpur', 'Indore', 'Thane', 'Bhopal', 'Visakhapatnam', 'Pimpri-Chinchwad', 'Patna', 'Vadodara',
+            'Ghaziabad', 'Ludhiana', 'Agra', 'Nashik', 'Faridabad', 'Meerut', 'Rajkot', 'Kalyan-Dombivli', 'Vasai-Virar', 'Varanasi',
+            'Srinagar', 'Chhatrapati Sambhajinagar', 'Dhanbad', 'Amritsar', 'Navi Mumbai', 'Prayagraj', 'Howrah', 'Ranchi', 'Jabalpur', 'Gwalior',
+            'Coimbatore', 'Vijayawada', 'Jodhpur', 'Madurai', 'Raipur', 'Kota', 'Chandigarh', 'Guwahati', 'Solapur', 'Hubli-Dharwad',
+            'Gurgaon', 'Noida', 'Greater Noida',
+        ];
+    }
+
+    public static function homeServiceCatalog(bool $includeInactive = false): array
+    {
+        if (!self::tableExists('home_service_nodes')) {
+            return [];
+        }
+        $where = $includeInactive ? '' : ' WHERE is_active=1';
+        $rows = Database::query('SELECT * FROM home_service_nodes' . $where . ' ORDER BY sort_order, name');
+        $byParent = [];
+        foreach ($rows as $row) {
+            $byParent[(int)($row['parent_id'] ?? 0)][] = $row;
+        }
+        $catalog = [];
+        foreach ($byParent[0] ?? [] as $category) {
+            $category['children'] = $byParent[(int)$category['id']] ?? [];
+            $catalog[] = $category;
+        }
+        return $catalog;
+    }
+
+    public static function homeServiceByPath(string $categorySlug, string $serviceSlug): ?array
+    {
+        if (!self::tableExists('home_service_nodes')) {
+            return null;
+        }
+        $service = Database::one(
+            'SELECT s.*, c.name AS category_name, c.slug AS category_slug, c.short_description AS category_description
+             FROM home_service_nodes s
+             JOIN home_service_nodes c ON c.id=s.parent_id AND c.node_type="category"
+             WHERE c.slug=? AND s.slug=? AND s.node_type="service" AND c.is_active=1 AND s.is_active=1 LIMIT 1',
+            [$categorySlug, $serviceSlug]
+        );
+        return $service ?: null;
+    }
+
+    public static function homeServiceBySlug(string $serviceSlug): ?array
+    {
+        if (!self::tableExists('home_service_nodes')) {
+            return null;
+        }
+        return Database::one(
+            'SELECT s.*, c.name AS category_name, c.slug AS category_slug, c.short_description AS category_description
+             FROM home_service_nodes s
+             JOIN home_service_nodes c ON c.id=s.parent_id AND c.node_type="category"
+             WHERE s.slug=? AND s.node_type="service" AND c.is_active=1 AND s.is_active=1 LIMIT 1',
+            [$serviceSlug]
+        ) ?: null;
+    }
+
+    /**
+     * Server-rendered editorial copy for the public service landing pages.
+     * It uses the catalogue record so a service can be renamed or moved without
+     * duplicating copy across templates.
+     */
+    public static function homeServiceEditorialContent(array $service, string $city = ''): array
+    {
+        $name = trim((string)($service['name'] ?? 'Home service'));
+        $nameLower = mb_strtolower($name);
+        $category = trim((string)($service['category_name'] ?? 'Home services'));
+        $cityGuides = [
+            'Gurgaon' => ['Golf Course Road, Sohna Road, Dwarka Expressway and New Gurgaon', 'society access, possession timelines and vendor coordination'],
+            'Delhi' => ['South Delhi, West Delhi, Dwarka, Rohini and East Delhi', 'parking, building access and work-hour approvals'],
+            'Noida' => ['Noida Expressway, Sector 50, Sector 74, Sector 137 and Noida Extension', 'tower access, lift timing and apartment handover schedules'],
+            'Greater Noida' => ['Greater Noida West, Pari Chowk, Knowledge Park and nearby sectors', 'new-home possession dates and society access'],
+            'Ghaziabad' => ['Indirapuram, Vaishali, Raj Nagar Extension and Crossings Republik', 'community approvals, lift access and staged execution'],
+            'Faridabad' => ['Greater Faridabad, Sector 75, Surajkund and nearby localities', 'site access, material delivery and phased planning'],
+            'Mumbai' => ['Andheri, Powai, Thane, Navi Mumbai and South Mumbai', 'building permissions, lift bookings and compact-space planning'],
+            'Pune' => ['Kharadi, Wakad, Baner, Hinjewadi and Viman Nagar', 'society approvals, possession schedules and contractor access'],
+            'Chennai' => ['OMR, Anna Nagar, Velachery, Adyar and Porur', 'apartment access, ventilation needs and material delivery timing'],
+            'Bangalore' => ['Whitefield, Sarjapur Road, Electronic City, HSR Layout and North Bangalore', 'community approval processes, site access and scheduling'],
+            'Hyderabad' => ['Gachibowli, Kondapur, Hitech City, Kukatpally and Manikonda', 'tower access, new-possession handover and work timing'],
+        ];
+        $cityGuide = $cityGuides[$city] ?? [$city !== '' ? 'nearby localities' : 'Delhi NCR', 'site access and work scheduling'];
+        $location = $city !== '' ? $city . ' including ' . $cityGuide[0] : 'Delhi NCR';
+        $scope = trim((string)($service['short_description'] ?? ''));
+        $priceGuidance = match ((string)($service['category_slug'] ?? '')) {
+            'design-and-construction' => 'For planned design and execution work, budgets commonly begin around Rs 50,000 for focused scopes and can extend beyond Rs 10 lakh for larger, material-led projects.',
+            'home-improvement' => 'For improvement work, compact jobs may start around Rs 15,000, while full-room upgrades, waterproofing or material-heavy work can move into several lakhs.',
+            'repair-and-maintenance' => 'For repair and maintenance, a visit or minor repair is often a few hundred to a few thousand rupees; replacement parts, installation work and emergency timing can change the final amount.',
+            'cleaning-and-protection' => 'For cleaning and protection services, pricing usually depends on home size, condition, access, equipment, chemicals and whether the requirement is one-time or recurring.',
+            'moving-and-household-support' => 'For moving and household support, pricing depends on distance, workforce, packing material, floor access, schedule and the level of responsibility requested.',
+            default => 'Pricing depends on the scope, materials, workforce, site condition and timing required for the work.',
+        };
+        $serviceFocus = match ((string)($service['slug'] ?? '')) {
+            'interior-design' => 'For interior design, prepare your room list, approximate carpet area, possession date and preferred finish level before requesting quotes.',
+            'electricians' => 'For electrical work, note the issue, the number of points, fixture type, access restrictions and whether the work is repair, installation or inspection.',
+            'plumbers' => 'For plumbing, explain whether the requirement is a leak, blockage, fitting replacement, installation or a larger bathroom or kitchen upgrade.',
+            'painting' => 'For painting, include the approximate area, interior or exterior surfaces, repair requirements, paint preference and target completion date.',
+            'home-cleaning' => 'For home cleaning, mention the BHK size, occupancy, furnishing level, last deep-clean date and whether you need move-in, move-out or occupied-home cleaning.',
+            'packers-movers' => 'For moving, list the origin, destination, home size, lift availability, packing expectation and the date on which the move needs to happen.',
+            default => 'A clear description, photographs where appropriate, preferred visit date and locality details help professionals assess the work before they call.',
+        };
+
+        return [
+            'heading' => 'About ' . $name . ($city !== '' ? ' in ' . $city : ''),
+            'paragraphs' => [
+                $name . ' is a practical part of maintaining, improving or completing a home. ' . ($scope !== '' ? $scope . ' ' : '') . 'Homeowners in ' . $location . ' usually compare providers on response time, clarity of scope, workmanship, materials or spare parts, and the ability to work around society access and household schedules. ' . $serviceFocus,
+                'The ' . $nameLower . ' market is highly local. In ' . ($city !== '' ? $city : 'Delhi NCR') . ', practical planning often includes ' . $cityGuide[1] . '. A provider who understands parking, lift rules, visitor approvals, working hours and common building conditions can plan a more useful visit. Ask for the exact work included, exclusions, warranty or revisit terms, estimated turnaround and any site-preparation needed before confirming. A written scope is particularly useful when the job involves multiple trades, custom materials or phased work.',
+                'Cost should be compared against the scope rather than treated as a single headline number. ' . $priceGuidance . ' The most reliable comparison is a like-for-like quote that identifies labour, materials, brand or grade, transport, disposal, taxes and any optional add-ons. If a site visit is required, confirm whether its fee is adjusted against the final work order.',
+                'HomeInteriors360 makes the first step simpler by collecting the details relevant to ' . $nameLower . ' and routing the enquiry by city and locality. You can share your requirement once, review suitable responses and decide whom to contact without committing to a job. Before confirming, compare scope, expected timing, material or parts assumptions, payment milestones and post-service support in writing for complete clarity. Final pricing, availability, service terms and execution are agreed directly with the professional you select, so you stay in control of the decision.',
+            ],
+        ];
+    }
+
+    public static function homeServiceForm(int $serviceId): array
+    {
+        if (!self::tableExists('home_service_form_versions')) {
+            return ['version' => null, 'questions' => []];
+        }
+        $version = Database::one('SELECT * FROM home_service_form_versions WHERE service_id=? AND is_published=1 ORDER BY version_no DESC LIMIT 1', [$serviceId]);
+        if (!$version) {
+            return ['version' => null, 'questions' => []];
+        }
+        $questions = Database::query('SELECT * FROM home_service_form_questions WHERE form_version_id=? ORDER BY sort_order, id', [(int)$version['id']]);
+        foreach ($questions as &$question) {
+            $options = json_decode((string)($question['options_json'] ?? ''), true);
+            $question['options'] = is_array($options) ? $options : [];
+        }
+        unset($question);
+        return ['version' => $version, 'questions' => $questions];
+    }
+
+    public static function homeServiceAvailableInCity(int $serviceId, string $city): bool
+    {
+        if (self::tableExists('home_service_availability') && Database::one('SELECT id FROM home_service_availability WHERE service_id=? AND city=? AND is_active=1 LIMIT 1', [$serviceId, $city]) !== null) {
+            return true;
+        }
+        return self::isFeaturedInteriorDesignCity($serviceId, $city);
+    }
+
+    /** @return array<int, string> */
+    public static function homeServiceAvailableCities(int $serviceId): array
+    {
+        $cities = [];
+        if (self::tableExists('home_service_availability')) {
+            $cities = array_map(
+                static fn(array $row): string => (string)$row['city'],
+                Database::query('SELECT city FROM home_service_availability WHERE service_id=? AND is_active=1 ORDER BY city', [$serviceId])
+            );
+        }
+        if (self::isFeaturedInteriorDesignCity($serviceId, self::FEATURED_INTERIOR_DESIGN_CITIES[0])) {
+            $cities = [...$cities, ...self::FEATURED_INTERIOR_DESIGN_CITIES];
+        }
+        return array_values(array_unique($cities));
+    }
+
+    /** @return array<int, string> */
+    public static function homeServiceAvailableCitiesForSlug(string $serviceSlug): array
+    {
+        $cities = [];
+        if (self::tableExists('home_service_availability')) {
+            $cities = array_map(
+                static fn(array $row): string => (string)$row['city'],
+                Database::query(
+                    'SELECT a.city FROM home_service_availability a JOIN home_service_nodes s ON s.id=a.service_id WHERE s.slug=? AND s.node_type="service" AND s.is_active=1 AND a.is_active=1 ORDER BY a.city',
+                    [$serviceSlug]
+                )
+            );
+        }
+        if ($serviceSlug === 'interior-design') {
+            $cities = [...$cities, ...self::FEATURED_INTERIOR_DESIGN_CITIES];
+        }
+        return array_values(array_unique($cities));
+    }
+
+    public static function homeServiceProfessionals(int $serviceId, string $city): array
+    {
+        if (!self::tableExists('home_service_provider_services')) {
+            return [];
+        }
+        $rows = Database::query(
+            'SELECT p.id, p.full_name, p.slug, p.profile_pic, p.role, p.city, p.rating, p.years_experience, p.profile_description,
+                    COUNT(r.id) AS review_count
+             FROM home_service_provider_services ps
+             JOIN pros p ON p.id=ps.pro_id AND p.is_active=1
+             LEFT JOIN reviews r ON r.pro_id=p.id
+             LEFT JOIN home_service_provider_coverage pc ON pc.pro_id=p.id AND pc.service_id=ps.service_id AND pc.city=?
+             WHERE ps.service_id=? AND ps.approval_status="approved" AND (p.city=? OR pc.id IS NOT NULL)
+             GROUP BY p.id ORDER BY p.verification_status DESC, p.rating DESC, p.updated_at DESC LIMIT 12',
+            [$city, $serviceId, $city]
+        );
+        return $rows;
+    }
+
+    public static function createHomeServiceEnquiry(array $data): array
+    {
+        if (!self::tableExists('home_service_enquiries')) {
+            throw new InvalidArgumentException('Home services are not configured yet. Please run the latest migration.');
+        }
+        $serviceId = (int)($data['service_id'] ?? 0);
+        $formVersionId = (int)($data['form_version_id'] ?? 0);
+        $service = Database::one('SELECT * FROM home_service_nodes WHERE id=? AND node_type="service" AND is_active=1', [$serviceId]);
+        if (!$service || $formVersionId <= 0) {
+            throw new InvalidArgumentException('Choose an active home service.');
+        }
+        $version = Database::one('SELECT id FROM home_service_form_versions WHERE id=? AND service_id=? AND is_published=1', [$formVersionId, $serviceId]);
+        if (!$version) {
+            throw new InvalidArgumentException('This service form is no longer available. Please refresh and try again.');
+        }
+        $name = trim((string)($data['name'] ?? ''));
+        $phone = self::normalizeLeadMobile((string)($data['phone'] ?? ''));
+        $email = trim((string)($data['email'] ?? ''));
+        $city = trim((string)($data['city'] ?? ''));
+        $locality = trim((string)($data['locality'] ?? ''));
+        if ($name === '' || $phone === '' || !in_array($city, self::homeServiceCities(), true)) {
+            throw new InvalidArgumentException('Name, a valid mobile number, and city are required.');
+        }
+        if (empty($data['provider_contact_consent'])) {
+            throw new InvalidArgumentException('Consent is required to share your requirement with suitable service professionals.');
+        }
+        if (!self::homeServiceAvailableInCity($serviceId, $city)) {
+            throw new InvalidArgumentException('This service is not live in the selected city yet.');
+        }
+        $answers = is_array($data['answers'] ?? null) ? $data['answers'] : [];
+        $form = self::homeServiceForm($serviceId);
+        $questionsByKey = [];
+        foreach ($form['questions'] as $question) {
+            $questionsByKey[(string)$question['field_key']] = $question;
+            if (!empty($question['is_required']) && trim((string)($answers[(string)$question['field_key']] ?? '')) === '') {
+                throw new InvalidArgumentException((string)$question['label'] . ' is required.');
+            }
+        }
+        $duplicate = Database::one(
+            'SELECT id FROM home_service_enquiries WHERE phone=? AND service_id=? AND city=? AND status IN ("open","matched") AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) ORDER BY id DESC LIMIT 1',
+            [$phone, $serviceId, $city]
+        );
+        if ($duplicate) {
+            return ['id' => (int)$duplicate['id'], 'duplicate' => true];
+        }
+        $budget = trim((string)($answers['budget_range'] ?? $data['budget_range'] ?? ''));
+        $description = trim((string)($answers['scope'] ?? $answers['issue'] ?? $answers['household_details'] ?? $data['description'] ?? ''));
+        $legacyLeadId = self::createLead([
+            'name' => $name,
+            'phone' => $phone,
+            'city' => $city,
+            'society_area' => $locality,
+            'budget' => $budget,
+            'requirement' => $service['name'] . ($description !== '' ? ': ' . $description : ''),
+            'plan_type' => 'Home Service',
+            'source' => 'homepage',
+            'status' => 'new',
+        ]);
+        $preferredAt = trim((string)($answers['preferred_date'] ?? $answers['schedule'] ?? $data['preferred_at'] ?? ''));
+        $enquiryId = Database::exec(
+            'INSERT INTO home_service_enquiries (lead_id, service_id, form_version_id, name, phone, email, city, locality, pincode, preferred_at, description, status, max_buyers, expires_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL 72 HOUR))',
+            [$legacyLeadId, $serviceId, $formVersionId, $name, $phone, $email !== '' ? $email : null, $city, $locality !== '' ? $locality : null, trim((string)($data['pincode'] ?? '')) ?: null, $preferredAt !== '' ? $preferredAt : null, $description !== '' ? $description : null, 'open', self::MAX_BUYERS_PER_LEAD]
+        );
+        foreach ($questionsByKey as $key => $question) {
+            if (!array_key_exists($key, $answers) || trim((string)$answers[$key]) === '') {
+                continue;
+            }
+            Database::exec('INSERT INTO home_service_enquiry_answers (enquiry_id, question_id, value_json) VALUES (?,?,?)', [$enquiryId, (int)$question['id'], json_encode(['value' => $answers[$key]], JSON_UNESCAPED_UNICODE)]);
+        }
+        Database::exec('INSERT INTO home_service_consents (enquiry_id, purpose, consent_text_version, granted_at) VALUES (?,?,?,NOW())', [$enquiryId, 'provider_contact', 'home-services-v1']);
+        if (!empty($data['marketing_consent'])) {
+            Database::exec('INSERT INTO home_service_consents (enquiry_id, purpose, consent_text_version, granted_at) VALUES (?,?,?,NOW())', [$enquiryId, 'marketing', 'home-services-v1']);
+        }
+        return ['id' => $enquiryId, 'duplicate' => false, 'lead_id' => $legacyLeadId];
+    }
+
+    public static function homeServiceAdminRows(): array
+    {
+        if (!self::tableExists('home_service_nodes')) {
+            return [];
+        }
+        return Database::query(
+            'SELECT s.*, p.name AS parent_name, COUNT(DISTINCT f.id) AS form_versions, COUNT(DISTINCT a.id) AS active_cities
+             FROM home_service_nodes s
+             LEFT JOIN home_service_nodes p ON p.id=s.parent_id
+             LEFT JOIN home_service_form_versions f ON f.service_id=s.id AND f.is_published=1
+             LEFT JOIN home_service_availability a ON a.service_id=s.id AND a.is_active=1
+             GROUP BY s.id ORDER BY COALESCE(p.sort_order, s.sort_order), s.sort_order, s.name'
+        );
+    }
+
+    public static function saveHomeServiceNode(array $data): int
+    {
+        $id = (int)($data['id'] ?? 0);
+        $name = trim((string)($data['name'] ?? ''));
+        $type = trim((string)($data['node_type'] ?? 'service'));
+        $parentId = (int)($data['parent_id'] ?? 0);
+        if ($name === '' || !in_array($type, ['category', 'subcategory', 'service'], true)) {
+            throw new InvalidArgumentException('Service name and a valid node type are required.');
+        }
+        if ($type === 'category') {
+            $parentId = 0;
+        } elseif ($parentId <= 0) {
+            throw new InvalidArgumentException('Select a parent category for this service.');
+        }
+        $slug = slugify((string)($data['slug'] ?? $name));
+        if ($slug === '') {
+            throw new InvalidArgumentException('A valid service slug is required.');
+        }
+        $parentValue = $parentId > 0 ? $parentId : null;
+        $values = [$parentValue, $type, $name, $slug, trim((string)($data['short_description'] ?? '')) ?: null, trim((string)($data['icon_key'] ?? '')) ?: null, !empty($data['is_active']) ? 1 : 0, (int)($data['sort_order'] ?? 0)];
+        if ($id > 0) {
+            Database::exec('UPDATE home_service_nodes SET parent_id=?, node_type=?, name=?, slug=?, short_description=?, icon_key=?, is_active=?, sort_order=?, updated_at=NOW() WHERE id=?', [...$values, $id]);
+            return $id;
+        }
+        return Database::exec('INSERT INTO home_service_nodes (parent_id,node_type,name,slug,short_description,icon_key,is_active,sort_order) VALUES (?,?,?,?,?,?,?,?)', $values);
+    }
+
+    public static function saveHomeServiceFormQuestions(int $serviceId, array $questions): void
+    {
+        if ($serviceId <= 0) {
+            throw new InvalidArgumentException('Select a service first.');
+        }
+        $service = Database::one('SELECT id FROM home_service_nodes WHERE id=? AND node_type="service"', [$serviceId]);
+        if (!$service) {
+            throw new InvalidArgumentException('Service not found.');
+        }
+        $version = Database::one('SELECT * FROM home_service_form_versions WHERE service_id=? AND is_published=1 ORDER BY version_no DESC LIMIT 1', [$serviceId]);
+        $nextVersion = $version ? (int)$version['version_no'] + 1 : 1;
+        $versionId = Database::exec('INSERT INTO home_service_form_versions (service_id,version_no,is_published,published_at) VALUES (?,?,1,NOW())', [$serviceId, $nextVersion]);
+        foreach (array_values($questions) as $index => $question) {
+            $key = slugify(str_replace('_', '-', (string)($question['key'] ?? $question['field_key'] ?? '')));
+            $key = str_replace('-', '_', $key);
+            $label = trim((string)($question['label'] ?? ''));
+            $type = (string)($question['type'] ?? $question['field_type'] ?? 'text');
+            if ($key === '' || $label === '' || !in_array($type, ['text', 'textarea', 'select', 'radio', 'date', 'number', 'boolean'], true)) {
+                continue;
+            }
+            $options = $question['options'] ?? [];
+            if (is_string($options)) {
+                $options = array_values(array_filter(array_map('trim', explode(',', $options))));
+            }
+            Database::exec('INSERT INTO home_service_form_questions (form_version_id,field_key,label,field_type,is_required,options_json,sort_order) VALUES (?,?,?,?,?,?,?)', [$versionId, $key, $label, $type, !empty($question['required']) ? 1 : 0, $options !== [] ? json_encode($options, JSON_UNESCAPED_UNICODE) : null, $index + 1]);
+        }
+        if ($version) {
+            Database::exec('UPDATE home_service_form_versions SET is_published=0 WHERE id=?', [(int)$version['id']]);
+        }
+    }
+
+    public static function homeServiceIndexablePaths(): array
+    {
+        if (!self::tableExists('home_service_nodes') || !self::tableExists('home_service_availability')) {
+            return [];
+        }
+        $paths = ['/home-services'];
+        // Every active service has a useful canonical hub page. City pages remain
+        // restricted to the places with an approved provider mapping below.
+        foreach (Database::query(
+            'SELECT c.slug AS category_slug, s.slug AS service_slug, COALESCE(s.updated_at,s.created_at) AS updated_at
+             FROM home_service_nodes s
+             JOIN home_service_nodes c ON c.id=s.parent_id AND c.node_type="category" AND c.is_active=1
+             WHERE s.node_type="service" AND s.is_active=1
+             ORDER BY c.sort_order, s.sort_order'
+        ) as $service) {
+            $paths[] = [
+                'path' => '/services/' . $service['category_slug'] . '/' . $service['service_slug'],
+                // The Home Cleaning hub received an editorial relaunch after its
+                // catalogue record was created; let the sitemap use this release's
+                // timestamp instead of publishing a stale database date.
+                'updated_at' => $service['service_slug'] === 'home-cleaning' ? null : ($service['updated_at'] ?? null),
+            ];
+        }
+        $rows = Database::query(
+            'SELECT c.slug AS category_slug, s.slug AS service_slug, a.city, GREATEST(COALESCE(s.updated_at,s.created_at), COALESCE(a.updated_at,a.created_at)) AS updated_at
+             FROM home_service_nodes s
+             JOIN home_service_nodes c ON c.id=s.parent_id AND c.node_type="category" AND c.is_active=1
+             JOIN home_service_availability a ON a.service_id=s.id AND a.is_active=1
+             WHERE s.node_type="service" AND s.is_active=1
+               AND EXISTS (
+                    SELECT 1
+                    FROM home_service_provider_services ps
+                    JOIN pros p ON p.id=ps.pro_id AND p.is_active=1
+                    LEFT JOIN home_service_provider_coverage pc
+                        ON pc.pro_id=p.id AND pc.service_id=ps.service_id AND pc.city=a.city
+                    WHERE ps.service_id=s.id
+                      AND ps.approval_status="approved"
+                      AND (p.city=a.city OR pc.id IS NOT NULL)
+               )
+             ORDER BY c.sort_order, s.sort_order, a.city'
+        );
+        foreach ($rows as $row) {
+            $paths[] = [
+                'city_path' => '/' . slugify((string)$row['city']) . '/' . $row['service_slug'],
+                'updated_at' => $row['updated_at'] ?? null,
+            ];
+        }
+        $interiorDesign = Database::one(
+            'SELECT c.slug AS category_slug, s.slug AS service_slug, s.updated_at
+             FROM home_service_nodes s
+             JOIN home_service_nodes c ON c.id=s.parent_id AND c.node_type="category" AND c.is_active=1
+             WHERE s.node_type="service" AND s.is_active=1 AND s.slug="interior-design" LIMIT 1'
+        );
+        if ($interiorDesign) {
+            $paths[] = [
+                'city_path' => '/mumbai/interior-design',
+                'updated_at' => $interiorDesign['updated_at'] ?? null,
+            ];
+            foreach (array_slice(self::FEATURED_INTERIOR_DESIGN_CITIES, 1) as $city) {
+                $paths[] = [
+                    'city_path' => '/' . slugify($city) . '/interior-design',
+                    'updated_at' => $interiorDesign['updated_at'] ?? null,
+                ];
+            }
+            // Curated locality pages are child hubs of the live interior-design
+            // city pages. They have server-rendered content, canonical URLs and
+            // breadcrumbs, so emit every approved locality route in the sitemap.
+            foreach (LocationLandingCatalog::allLocalities() as $locality) {
+                $paths[] = [
+                    'locality_path' => '/' . $locality['city_slug'] . '/interior-design/' . $locality['slug'],
+                    'updated_at' => $interiorDesign['updated_at'] ?? null,
+                ];
+            }
+        }
+        return $paths;
+    }
+
+    private static function isFeaturedInteriorDesignCity(int $serviceId, string $city): bool
+    {
+        if (!in_array(trim($city), self::FEATURED_INTERIOR_DESIGN_CITIES, true) || !self::tableExists('home_service_nodes')) {
+            return false;
+        }
+        $service = Database::one('SELECT id FROM home_service_nodes WHERE slug="interior-design" AND node_type="service" AND is_active=1 LIMIT 1');
+        return $service !== null && (int)$service['id'] === $serviceId;
     }
 
     public static function allContent(): array
@@ -336,6 +932,8 @@ final class SiteRepository
 
         foreach ($pros as &$pro) {
             $pro['portfolio_previews'] = $grouped[(int)$pro['id']] ?? [];
+            $pro['offerings_json'] = self::parseJsonArray($pro['offerings_json'] ?? '[]');
+            $pro['design_styles_json'] = self::parseJsonArray($pro['design_styles_json'] ?? '[]');
         }
         unset($pro);
 
@@ -398,7 +996,8 @@ final class SiteRepository
         $sql = "SELECT pros.id, pros.full_name, pros.slug, pros.role, pros.profile_description, pros.specialization, pros.profile_pic, pros.cover_photo,
                        pros.verification_status, pros.verification_status_code, pros.is_premium, pros.listing_tier, pros.accepting_leads,
                        pros.rating, pros.years_experience, pros.starting_price, pros.min_project_value, pros.max_project_value,
-                       pros.city, pros.primary_work_type, pros.primary_work_area,
+                       pros.city, pros.office_address, pros.primary_work_type, pros.primary_work_area, pros.response_time_hours,
+                       pros.offerings_json, pros.design_styles_json,
                        COALESCE(NULLIF(pros.projects_delivered,0), prj.project_count, 0) AS projects_delivered
                 FROM pros
                 LEFT JOIN (
@@ -460,6 +1059,50 @@ final class SiteRepository
         return [
             'projects' => $projects,
             'reviews' => $reviews,
+        ];
+    }
+
+    /** Server-rendered profile guide for crawlable professional pages. */
+    public static function professionalEditorialContent(array $pro, array $profileData = []): array
+    {
+        $name = trim((string)($pro['full_name'] ?? 'This professional'));
+        $city = trim((string)($pro['city'] ?? 'Delhi NCR')) ?: 'Delhi NCR';
+        $role = trim((string)($pro['role'] ?? 'interior professional')) ?: 'interior professional';
+        $workType = trim((string)($pro['primary_work_type'] ?? $pro['specialization'] ?? 'home interiors')) ?: 'home interiors';
+        $areas = array_slice(self::parseJsonArray($pro['service_areas'] ?? []), 0, 4);
+        $offerings = array_slice(self::parseJsonArray($pro['offerings_json'] ?? []), 0, 5);
+        $styles = array_slice(self::parseJsonArray($pro['design_styles_json'] ?? []), 0, 3);
+        $materials = array_slice(self::parseJsonArray($pro['materials_json'] ?? []), 0, 4);
+        $projects = array_slice((array)($profileData['projects'] ?? []), 0, 3);
+        $years = (int)($pro['years_experience'] ?? 0);
+        $projectCount = (int)($pro['projects_delivered'] ?? 0);
+        $startingPrice = (float)($pro['starting_price'] ?? 0);
+        $areaPhrase = $areas !== [] ? implode(', ', $areas) : $city . ' and nearby Delhi NCR localities';
+        $offeringPhrase = $offerings !== [] ? implode(', ', $offerings) : $workType;
+        $stylePhrase = $styles !== [] ? implode(', ', $styles) : 'the homeowner\'s preferred design direction';
+        $materialPhrase = $materials !== [] ? implode(', ', $materials) : 'the materials and finishes agreed during planning';
+        $experiencePhrase = $years >= 1 && $years <= 70
+            ? $years . '+ years of listed experience'
+            : 'a detailed public professional profile';
+        $projectPhrase = $projectCount > 0
+            ? number_format($projectCount) . ' delivered projects listed on the profile'
+            : (count($projects) > 0 ? count($projects) . ' portfolio project' . (count($projects) === 1 ? '' : 's') . ' currently visible' : 'the portfolio information currently available');
+        $pricePhrase = $startingPrice > 0
+            ? 'The profile shows a starting price of Rs ' . number_format($startingPrice, 0) . ', while the final estimate should be based on the measured scope and selected specifications.'
+            : 'Pricing should be requested against a written scope so room count, materials, civil changes, lighting, appliances and site conditions are compared on a like-for-like basis.';
+        $portfolioNames = array_values(array_filter(array_map(static fn(array $project): string => trim((string)($project['project_name'] ?? '')), $projects)));
+        $portfolioPhrase = $portfolioNames !== []
+            ? 'Visible portfolio work includes ' . implode(', ', $portfolioNames) . '.'
+            : 'Review the available portfolio, service information and consultation response before making a decision.';
+
+        return [
+            'heading' => 'About ' . $name . ' for ' . $workType . ' in ' . $city,
+            'paragraphs' => [
+                $name . ' is listed on HomeInteriors360 as a ' . $role . ' serving ' . $areaPhrase . '. The profile is designed to help homeowners understand the professional\'s stated focus before they begin a consultation. For a ' . $workType . ' project, the most useful first conversation covers the property type, room list, possession stage, preferred completion date, budget comfort and the decisions that need specialist input. This gives both sides a practical starting point instead of a generic enquiry.',
+                'The services shown for ' . $name . ' include ' . $offeringPhrase . '. Homeowners can use the profile to shortlist a professional when the project needs experience across planning, design coordination, modular work, renovation or execution. Ask for a room-wise scope, drawings or visual references where relevant, and clarity on what will be handled by the core team versus specialist vendors. The listed design direction includes ' . $stylePhrase . ', while material discussions can cover ' . $materialPhrase . ' according to the final project brief.',
+                'This profile presents ' . $experiencePhrase . ' and ' . $projectPhrase . '. ' . $portfolioPhrase . ' Portfolio images, work descriptions and project context are useful signals, but every home has different measurements, site conditions and approval requirements. Before appointing any professional, confirm the measurement process, design revisions, project timeline, supervision model, warranty terms, payment milestones and change-request procedure in writing. This is especially important for renovation and multi-room work where one decision can affect several trades.',
+                $pricePhrase . ' HomeInteriors360 lets you send one structured requirement to ' . $name . ' with your city, locality, budget and project need already included. You can then compare the response with your priorities and decide whether to proceed with a consultation. Availability, exact scope, commercial terms and execution remain a direct agreement between you and the professional, keeping the final choice transparent and homeowner-led.',
+            ],
         ];
     }
 
@@ -880,6 +1523,51 @@ final class SiteRepository
         );
     }
 
+    /** Full, flat account and linked-profile export for the Designer Accounts backend. */
+    public static function designerAccountsForExport(): array
+    {
+        $columns = static function (string $table): array {
+            if (!self::tableExists($table)) {
+                return [];
+            }
+            return array_values(array_filter(array_map(
+                static fn(array $row): string => (string)($row['Field'] ?? ''),
+                Database::query('SHOW COLUMNS FROM `' . $table . '`')
+            )));
+        };
+
+        $accountColumns = array_values(array_filter($columns('users'), static fn(string $column): bool => !in_array($column, ['password_hash', 'reset_token', 'token_hash'], true)));
+        $professionalColumns = $columns('pros');
+        $extendedColumns = $columns('professional_extended_details');
+        $selects = [];
+        foreach ($accountColumns as $column) {
+            $selects[] = 'u.`' . $column . '` AS `account_' . $column . '`';
+        }
+        foreach ($professionalColumns as $column) {
+            $selects[] = 'p.`' . $column . '` AS `professional_' . $column . '`';
+        }
+        foreach ($extendedColumns as $column) {
+            $selects[] = 'ped.`' . $column . '` AS `profile_' . $column . '`';
+        }
+        $selects[] = '(SELECT COUNT(*) FROM projects prj WHERE prj.pro_id=u.pro_id) AS portfolio_project_count';
+        $join = $extendedColumns ? ' LEFT JOIN professional_extended_details ped ON ped.pro_id=u.pro_id' : '';
+        return Database::query(
+            'SELECT ' . implode(', ', $selects) . ' FROM users u LEFT JOIN pros p ON p.id=u.pro_id' . $join . " WHERE u.role='designer' ORDER BY u.updated_at DESC, u.id DESC"
+        );
+    }
+
+    public static function designerAccountDetail(int $id): ?array
+    {
+        $account = Database::one("SELECT id, username, email, role, pro_id, is_active, created_at, updated_at FROM users WHERE id=? AND role='designer' LIMIT 1", [$id]);
+        if (!$account) {
+            return null;
+        }
+        return [
+            'account' => $account,
+            'professional' => !empty($account['pro_id']) ? Database::one('SELECT * FROM pros WHERE id=? LIMIT 1', [(int)$account['pro_id']]) : null,
+        ];
+    }
+
     public static function saveDesignerAccount(array $data, ?int $id = null): int
     {
         $username = trim((string)($data['username'] ?? ''));
@@ -917,28 +1605,50 @@ final class SiteRepository
             }
             $values[] = $id;
             Database::exec('UPDATE users SET ' . implode(', ', $sets) . ', updated_at=NOW() WHERE id=?', $values);
+            self::updateDesignerProfessionalVisibility($proId, $data);
             return $id;
         }
 
         if (strlen($password) < 8) {
             throw new InvalidArgumentException('Password must be at least 8 characters.');
         }
-        return Database::exec(
+        $userId = Database::exec(
             "INSERT INTO users (username, password_hash, email, role, pro_id, is_active) VALUES (?, ?, ?, 'designer', ?, ?)",
             [$username, password_hash($password, PASSWORD_DEFAULT), $email !== '' ? $email : null, $proId, $isActive]
         );
+        self::updateDesignerProfessionalVisibility($proId, $data);
+        return $userId;
+    }
+
+    private static function updateDesignerProfessionalVisibility(int $proId, array $data): void
+    {
+        if (!array_key_exists('profile_visible', $data) && !array_key_exists('profile_accepting_leads', $data)) {
+            return;
+        }
+        $professional = Database::one('SELECT is_active, accepting_leads FROM pros WHERE id=? LIMIT 1', [$proId]);
+        if (!$professional) {
+            return;
+        }
+        $visible = array_key_exists('profile_visible', $data) ? (!empty($data['profile_visible']) ? 1 : 0) : (int)$professional['is_active'];
+        $acceptingLeads = array_key_exists('profile_accepting_leads', $data) ? (!empty($data['profile_accepting_leads']) ? 1 : 0) : (int)($professional['accepting_leads'] ?? 1);
+        Database::exec('UPDATE pros SET is_active=?, accepting_leads=?, updated_at=NOW() WHERE id=?', [$visible, $acceptingLeads, $proId]);
+        self::syncProfessionalUrlAlias($proId);
     }
 
     public static function registerInteriorDesigner(array $data): array
     {
-        $name = trim((string)($data['full_name'] ?? $data['name'] ?? ''));
-        $email = strtolower(trim((string)($data['email'] ?? '')));
+        $googleIdentity = is_array($data['_google_identity'] ?? null) ? $data['_google_identity'] : null;
+        $name = trim((string)($data['full_name'] ?? $data['name'] ?? ($googleIdentity['name'] ?? '')));
+        $email = strtolower(trim((string)($googleIdentity['email'] ?? $data['email'] ?? '')));
         $phone = preg_replace('/\D+/', '', (string)($data['phone'] ?? '')) ?? '';
         $password = (string)($data['password'] ?? '');
-        if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($phone) < 10 || strlen($password) < 8) {
+        if ($googleIdentity) {
+            $password = bin2hex(random_bytes(24));
+        }
+        if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($phone) < 10 || (!$googleIdentity && strlen($password) < 8)) {
             throw new InvalidArgumentException('Name, valid email, 10 digit mobile, and minimum 8 character password are required.');
         }
-        if (Database::one('SELECT id FROM users WHERE email=? OR username=?', [$email, $email])) {
+        if (Database::one('SELECT id FROM users WHERE email=? OR username=? OR google_subject=?', [$email, $email, $googleIdentity['sub'] ?? null])) {
             throw new InvalidArgumentException('A designer login already exists for this email.');
         }
 
@@ -958,8 +1668,8 @@ final class SiteRepository
         ]);
         $proId = self::createProfessional($profileData);
         $userId = Database::exec(
-            "INSERT INTO users (username, password_hash, email, role, pro_id, is_active) VALUES (?, ?, ?, 'designer', ?, 1)",
-            [$email, password_hash($password, PASSWORD_DEFAULT), $email, $proId]
+            "INSERT INTO users (username, password_hash, email, google_subject, role, pro_id, is_active) VALUES (?, ?, ?, ?, 'designer', ?, 1)",
+            [$email, password_hash($password, PASSWORD_DEFAULT), $email, $googleIdentity['sub'] ?? null, $proId]
         );
         $buyer = self::createOrLoginDesignerBuyer([
             'name' => $name,
@@ -967,12 +1677,77 @@ final class SiteRepository
             'phone' => $phone,
             'password' => $password,
         ]);
+        self::grantDesignerOnboardingLeadBenefit($userId, $proId, (int)($buyer['id'] ?? 0));
 
+	        return [
+	            'pro_id' => $proId,
+	            'user_id' => $userId,
+	            'buyer' => $buyer,
+	            'user' => Database::one('SELECT id, username, email, role, pro_id FROM users WHERE id=?', [$userId]) ?: [],
+	        ];
+	    }
+
+    public static function updateInteriorDesignerRegistrationStep(int $proId, array $data): array
+    {
+        $pro = Database::one('SELECT * FROM pros WHERE id=?', [$proId]);
+        if (!$pro) {
+            throw new InvalidArgumentException('Designer profile was not found.');
+        }
+        $email = strtolower(trim((string)($data['email'] ?? $pro['email'] ?? '')));
+        $phone = preg_replace('/\D+/', '', (string)($data['phone'] ?? $pro['phone'] ?? '')) ?? '';
+        if ($email === '' || strcasecmp($email, (string)($pro['email'] ?? '')) !== 0 || substr($phone, -10) !== substr((string)($pro['phone'] ?? ''), -10)) {
+            throw new InvalidArgumentException('Designer profile verification failed. Please restart registration.');
+        }
+
+        $scalarFields = [
+            'office_address', 'city', 'primary_work_area', 'years_experience', 'primary_work_type', 'specialization',
+            'projects_delivered', 'response_time_hours', 'starting_price', 'consultation_fee', 'min_project_value',
+            'max_project_value', 'founded_year', 'team_size', 'client_count', 'office_hours', 'website_url',
+            'google_business_url', 'service_summary', 'profile_description', 'bio', 'why_work_with_me',
+        ];
+        $sets = [];
+        $values = [];
+        foreach ($scalarFields as $field) {
+            if (array_key_exists($field, $data)) {
+                $sets[] = $field . '=?';
+                $values[] = $data[$field] === '' ? null : $data[$field];
+            }
+        }
+
+        foreach (['profile_pic', 'cover_photo'] as $imageField) {
+            if (!empty($data[$imageField])) {
+                $sets[] = $imageField . '=?';
+                $values[] = $data[$imageField];
+            }
+        }
+
+        foreach (['service_areas', 'materials_json', 'offerings_json', 'design_styles_json', 'languages_json', 'certifications_json'] as $jsonField) {
+            if (array_key_exists($jsonField, $data)) {
+                $sets[] = $jsonField . '=?';
+                $values[] = json_encode(self::parseJsonArray($data[$jsonField]), JSON_UNESCAPED_UNICODE);
+            }
+        }
+
+        foreach (['process_steps_json', 'awards_json', 'faq_json'] as $linesField) {
+            if (array_key_exists($linesField, $data)) {
+                $sets[] = $linesField . '=?';
+                $values[] = json_encode(self::parseTextLines($data[$linesField]), JSON_UNESCAPED_UNICODE);
+            }
+        }
+
+        if ($sets !== []) {
+            $values[] = $proId;
+            Database::exec('UPDATE pros SET ' . implode(', ', $sets) . ', verification_status=0, verification_status_code="UNVERIFIED", listing_tier="FREE", is_active=0, updated_at=NOW() WHERE id=?', $values);
+            self::syncProfessionalUrlAlias($proId);
+        }
+
+        $user = Database::one('SELECT id, username, email, role, pro_id FROM users WHERE pro_id=? AND role="designer" ORDER BY id DESC LIMIT 1', [$proId]) ?: [];
+        $buyer = $email !== '' ? self::designerBuyerForUser(['email' => $email]) : null;
         return [
             'pro_id' => $proId,
-            'user_id' => $userId,
+            'user_id' => (int)($user['id'] ?? 0),
+            'user' => $user,
             'buyer' => $buyer,
-            'user' => Database::one('SELECT id, username, email, role, pro_id FROM users WHERE id=?', [$userId]) ?: [],
         ];
     }
 
@@ -992,13 +1767,120 @@ final class SiteRepository
         return self::createPortfolio($data);
     }
 
+    public static function designerProfessional(int $proId): ?array
+    {
+        return $proId > 0 ? Database::one('SELECT * FROM pros WHERE id=? LIMIT 1', [$proId]) : null;
+    }
+
+    /**
+     * A designer may maintain their public business information, but platform
+     * moderation, listing visibility, commercial tiers and client ratings stay
+     * controlled by the admin workflow.
+     */
+    public static function updateDesignerProfessional(int $proId, array $data): void
+    {
+        $current = self::designerProfessional($proId);
+        if (!$current) {
+            throw new InvalidArgumentException('Professional profile not found.');
+        }
+        if (array_key_exists('full_name', $data) && trim((string)$data['full_name']) === '') {
+            throw new InvalidArgumentException('Firm or designer name is required.');
+        }
+
+        $editable = [
+            'full_name', 'profile_pic', 'cover_photo', 'role', 'profile_description', 'specialization', 'primary_work_type', 'primary_work_area',
+            'years_experience', 'projects_delivered', 'starting_price', 'min_project_value', 'max_project_value', 'consultation_fee', 'city',
+            'office_address', 'phone', 'email', 'website_url', 'google_business_url', 'founded_year', 'team_size', 'office_hours', 'client_count',
+            'service_summary', 'service_areas', 'materials_json', 'design_styles_json', 'languages_json', 'certifications_json', 'process_steps_json',
+            'awards_json', 'faq_json', 'response_time_hours', 'bio', 'why_work_with_me', 'offerings_json',
+        ];
+        $merged = $current;
+        foreach ($editable as $field) {
+            if (array_key_exists($field, $data)) {
+                $merged[$field] = $data[$field];
+            }
+        }
+
+        // Preserve fields controlled only by HomeInteriors360 administration.
+        $merged['slug'] = (string)$current['slug'];
+        $merged['rating'] = $current['rating'] ?? 0;
+        $merged['verification_status'] = $current['verification_status'] ?? 0;
+        $merged['verification_status_code'] = $current['verification_status_code'] ?? 'UNVERIFIED';
+        $merged['is_premium'] = $current['is_premium'] ?? 0;
+        $merged['listing_tier'] = $current['listing_tier'] ?? 'FREE';
+        $merged['accepting_leads'] = $current['accepting_leads'] ?? 1;
+        $merged['suspension_reason'] = $current['suspension_reason'] ?? null;
+        $merged['verification_notes'] = $current['verification_notes'] ?? null;
+        $merged['is_active'] = $current['is_active'] ?? 0;
+        self::updateProfessional($proId, $merged);
+    }
+
+    public static function designerPortfolio(int $proId, int $portfolioId): ?array
+    {
+        return Database::one('SELECT * FROM projects WHERE id=? AND pro_id=? LIMIT 1', [$portfolioId, $proId]);
+    }
+
+    public static function updateDesignerPortfolio(int $proId, int $portfolioId, array $data): void
+    {
+        $current = self::designerPortfolio($proId, $portfolioId);
+        if (!$current) {
+            throw new InvalidArgumentException('Portfolio work was not found.');
+        }
+        $editable = [
+            'project_name', 'project_description', 'total_cost', 'bhk_type', 'year_completed', 'timeline_months', 'project_duration_label',
+            'location', 'work_type', 'area_of_work', 'materials_json', 'media_json', 'video_url', 'design_style', 'team_size', 'warranty_years',
+        ];
+        $merged = $current;
+        foreach ($editable as $field) {
+            if (array_key_exists($field, $data)) {
+                $merged[$field] = $data[$field];
+            }
+        }
+        $merged['pro_id'] = $proId;
+        $merged['slug'] = (string)$current['slug'];
+        $merged['testimonial_client_name'] = $current['testimonial_client_name'] ?? null;
+        $merged['testimonial_text'] = $current['testimonial_text'] ?? null;
+        $merged['testimonial_rating'] = $current['testimonial_rating'] ?? null;
+        $merged['moderation_status'] = 'SUBMITTED';
+        $merged['project_verification_status'] = $current['project_verification_status'] ?? 'UNVERIFIED';
+        $merged['is_featured'] = $current['is_featured'] ?? 0;
+        $merged['moderation_notes'] = $current['moderation_notes'] ?? null;
+        self::updatePortfolio($portfolioId, $merged);
+    }
+
+    public static function deleteDesignerPortfolio(int $proId, int $portfolioId): void
+    {
+        if (!self::designerPortfolio($proId, $portfolioId)) {
+            throw new InvalidArgumentException('Portfolio work was not found.');
+        }
+        Database::exec('DELETE FROM projects WHERE id=? AND pro_id=?', [$portfolioId, $proId]);
+        try {
+            Database::exec('UPDATE url_aliases SET is_active=0, updated_at=NOW() WHERE entity_table="projects" AND entity_id=?', [$portfolioId]);
+        } catch (Throwable) {
+            // Older installations may not yet have the global alias table.
+        }
+    }
+
     public static function designerBuyerForUser(array $user): ?array
     {
         $email = strtolower(trim((string)($user['email'] ?? '')));
-        if ($email === '') {
-            return null;
+        if ($email !== '') {
+            $buyer = Database::one('SELECT * FROM lead_buyers WHERE LOWER(email)=? AND is_active=1 ORDER BY id DESC LIMIT 1', [$email]);
+            if ($buyer) {
+                return $buyer;
+            }
         }
-        return Database::one('SELECT * FROM lead_buyers WHERE email=? AND is_active=1 ORDER BY id DESC LIMIT 1', [$email]);
+
+        $proId = (int)($user['pro_id'] ?? 0);
+        if ($proId > 0) {
+            $pro = Database::one('SELECT phone FROM pros WHERE id=?', [$proId]);
+            $phone = preg_replace('/\D+/', '', (string)($pro['phone'] ?? '')) ?? '';
+            if (strlen($phone) >= 10) {
+                return Database::one('SELECT * FROM lead_buyers WHERE phone=? AND is_active=1 ORDER BY id DESC LIMIT 1', [$phone]);
+            }
+        }
+
+        return null;
     }
 
     public static function createOrLoginDesignerBuyer(array $data): array
@@ -1043,11 +1925,14 @@ final class SiteRepository
         $roomCosts = [
             'Living Room' => 90000,
             'Kitchen' => 140000,
+            'Wardrobe' => 95000,
             'Master Bedroom' => 110000,
             'Bedroom 2' => 90000,
             'Bedroom 3' => 90000,
             'Bathroom' => 60000,
             'Pooja Unit' => 35000,
+            'False Ceiling' => 70000,
+            'Painting' => 45000,
         ];
 
         $base = $planBase[$floorPlan] ?? $planBase['2BHK'];
@@ -1063,12 +1948,25 @@ final class SiteRepository
 
     public static function createLead(array $data): int
     {
-        return Database::exec(
-            'INSERT INTO leads (name, phone, city, society_area, budget, requirement, pro_id, plan_type, source, status, floor_plan, package_tier, rooms_json, estimate)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        $phone = self::normalizeLeadMobile((string)($data['phone'] ?? ''));
+        if ($phone === '') {
+            throw new InvalidArgumentException('A valid 10-digit mobile number is required.');
+        }
+
+        $existingLeadId = self::leadIdForMobile($phone);
+        if ($existingLeadId !== null) {
+            self::persistLeadPrice($existingLeadId);
+            self::syncLeadToSingleLeadSale($existingLeadId);
+            return $existingLeadId;
+        }
+
+        $leadId = Database::exec(
+            'INSERT INTO leads (name, phone, phone_normalized, city, society_area, budget, requirement, pro_id, plan_type, source, status, floor_plan, package_tier, rooms_json, estimate)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $data['name'],
-                $data['phone'],
+                $phone,
+                $phone,
                 $data['city'],
                 $data['society_area'] ?? null,
                 $data['budget'] ?? null,
@@ -1083,6 +1981,156 @@ final class SiteRepository
                 isset($data['estimate']) ? (float)$data['estimate'] : null,
             ]
         );
+        self::persistLeadPrice($leadId);
+        self::syncLeadToSingleLeadSale($leadId);
+        return $leadId;
+    }
+
+    /**
+     * Calculates a fixed sell price from lead quality. The score deliberately uses
+     * only information that is actually captured on the homeowner lead.
+     */
+    public static function leadPriceForLead(array $lead): array
+    {
+        $score = 0;
+        $city = mb_strtolower(trim((string)($lead['city'] ?? '')));
+        $topTierCities = [
+            'gurgaon', 'gurugram', 'delhi', 'new delhi', 'noida', 'greater noida',
+            'hyderabad', 'pune', 'mumbai', 'navi mumbai', 'bengaluru', 'bangalore',
+            'chennai', 'ahmedabad', 'kolkata', 'faridabad', 'ghaziabad',
+        ];
+        $locationScore = in_array($city, $topTierCities, true) ? 1 : 0;
+        $score += $locationScore;
+
+        $budget = self::budgetToRupees((string)($lead['budget'] ?? ''));
+        $budgetScore = $budget >= 2000000 ? 2 : ($budget >= 1000000 ? 1 : 0);
+        $score += $budgetScore;
+
+        $coreFields = ['city', 'society_area', 'requirement', 'budget'];
+        $filledCoreFields = 0;
+        foreach ($coreFields as $field) {
+            if (trim((string)($lead[$field] ?? '')) !== '') {
+                $filledCoreFields++;
+            }
+        }
+        $detailScore = $filledCoreFields === 4 ? 2 : ($filledCoreFields === 3 ? 1 : 0);
+        $score += $detailScore;
+
+        $extraFields = 0;
+        foreach (['plan_type', 'floor_plan', 'package_tier', 'estimate'] as $field) {
+            if (trim((string)($lead[$field] ?? '')) !== '') {
+                $extraFields++;
+            }
+        }
+        if (!empty($lead['rooms_json']) && $lead['rooms_json'] !== '[]') {
+            $extraFields++;
+        }
+        $extraScore = $extraFields >= 2 ? 1 : 0;
+        $score += $extraScore;
+
+        $tierIndex = min(count(self::LEAD_PRICE_TIERS) - 1, max(0, $score));
+        return [
+            'amount' => self::LEAD_PRICE_TIERS[$tierIndex],
+            'score' => $score,
+            'tier_index' => $tierIndex,
+            'factors' => [
+                'top_tier_city' => $locationScore,
+                'budget' => $budgetScore,
+                'completed_core_fields' => $detailScore,
+                'additional_project_details' => $extraScore,
+                'filled_core_fields' => $filledCoreFields,
+            ],
+        ];
+    }
+
+    private static function storedLeadPrice(array $lead): float
+    {
+        $stored = (float)($lead['lead_price'] ?? 0);
+        return in_array($stored, self::LEAD_PRICE_TIERS, true)
+            ? $stored
+            : (float)self::leadPriceForLead($lead)['amount'];
+    }
+
+    /** Stores the calculated price and keeps an existing single-lead listing aligned. */
+    public static function persistLeadPrice(int $leadId): void
+    {
+        if ($leadId <= 0 || !self::tableHasColumn('leads', 'lead_price')) {
+            return;
+        }
+        $lead = Database::one('SELECT * FROM leads WHERE id=?', [$leadId]);
+        if (!$lead) {
+            return;
+        }
+        $price = self::leadPriceForLead($lead);
+        Database::exec('UPDATE leads SET lead_price=?, updated_at=NOW() WHERE id=?', [(float)$price['amount'], $leadId]);
+        // A single-lead sale can have an admin-set commercial price. Keep it stable once listed.
+    }
+
+    /**
+     * Saves each homeowner chatbot answer in the primary leads table. Drafts remain
+     * non-saleable until the visitor has supplied the required details and consent.
+     */
+    public static function saveChatbotLeadProgress(array $data): array
+    {
+        $token = trim((string)($data['chat_session_token'] ?? ''));
+        if (!preg_match('/^[a-zA-Z0-9-]{20,64}$/', $token)) {
+            throw new InvalidArgumentException('Your chat session has expired. Please reopen the consultation chat.');
+        }
+
+        $draftPlanType = 'chatbot:' . $token;
+        $lead = Database::one('SELECT * FROM leads WHERE plan_type=? ORDER BY id DESC LIMIT 1', [$draftPlanType]);
+        $name = trim((string)($data['name'] ?? ($lead['name'] ?? '')));
+        $phoneRaw = trim((string)($data['phone'] ?? ''));
+        $phone = self::normalizeLeadMobile($phoneRaw);
+        $city = trim((string)($data['city'] ?? ($lead['city'] ?? '')));
+        $society = trim((string)($data['society_area'] ?? ($lead['society_area'] ?? '')));
+        $budget = trim((string)($data['budget'] ?? ($lead['budget'] ?? '')));
+        $requirement = trim((string)($data['requirement'] ?? ($lead['requirement'] ?? '')));
+        $hasConsent = !empty($data['lead_consent']);
+        $isComplete = $name !== '' && $phone !== '' && $city !== '' && $requirement !== '' && $hasConsent;
+
+        $name = $name !== '' ? $name : 'Chatbot visitor';
+        $city = $city !== '' ? $city : 'Pending';
+        $requirement = $requirement !== '' ? $requirement : 'Home Interior Consultation';
+        $storedPhone = $phone !== '' ? $phone : ('chatbot-' . substr(hash('sha256', $token), 0, 16));
+        $status = $isComplete ? 'new' : 'contacted';
+        $existingLeadId = $phone !== '' ? self::leadIdForMobile($phone) : null;
+        $phoneNormalizedForDraft = $phone !== '' && ($existingLeadId === null || (int)($lead['id'] ?? 0) === $existingLeadId) ? $phone : null;
+
+        if ($isComplete && $existingLeadId !== null && (int)($lead['id'] ?? 0) !== $existingLeadId) {
+                Database::exec(
+                    'UPDATE leads SET name=?, city=?, society_area=?, budget=?, requirement=?, plan_type=?, status=?, updated_at=NOW() WHERE id=?',
+                    [$name, $city, $society ?: null, $budget ?: null, $requirement, $isComplete ? 'home_interior_designer_matching' : $draftPlanType, $status, $existingLeadId]
+                );
+                if ($lead) {
+                    Database::exec('DELETE FROM leads WHERE id=? AND plan_type=?', [(int)$lead['id'], $draftPlanType]);
+                }
+                if ($isComplete) {
+                    self::persistLeadPrice($existingLeadId);
+                    self::syncLeadToSingleLeadSale($existingLeadId);
+                }
+                return ['lead_id' => $existingLeadId, 'complete' => $isComplete];
+        }
+
+        if ($lead) {
+            Database::exec(
+                'UPDATE leads SET name=?, phone=?, phone_normalized=?, city=?, society_area=?, budget=?, requirement=?, plan_type=?, status=?, updated_at=NOW() WHERE id=?',
+                [$name, $storedPhone, $phoneNormalizedForDraft, $city, $society ?: null, $budget ?: null, $requirement, $isComplete ? 'home_interior_designer_matching' : $draftPlanType, $status, (int)$lead['id']]
+            );
+            $leadId = (int)$lead['id'];
+        } else {
+            $leadId = Database::exec(
+                'INSERT INTO leads (name, phone, phone_normalized, city, society_area, budget, requirement, plan_type, source, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, "homepage", ?)',
+                [$name, $storedPhone, $phoneNormalizedForDraft, $city, $society ?: null, $budget ?: null, $requirement, $isComplete ? 'home_interior_designer_matching' : $draftPlanType, $status]
+            );
+        }
+
+        if ($isComplete) {
+            self::persistLeadPrice($leadId);
+            self::syncLeadToSingleLeadSale($leadId);
+        }
+        return ['lead_id' => $leadId, 'complete' => $isComplete];
     }
 
     public static function createProjectRequirement(array $data, array $files = []): array
@@ -1655,22 +2703,448 @@ final class SiteRepository
     {
         $where = [];
         $params = [];
-        if (!empty($filters['designer_id'])) {
+        $hasProId = self::tableHasColumn('leads', 'pro_id');
+        if (!empty($filters['designer_id']) && $hasProId) {
             $where[] = 'l.pro_id = ?';
             $params[] = (int)$filters['designer_id'];
         }
-        $sql = 'SELECT l.*, p.full_name AS pro_name
-                FROM leads l
-                LEFT JOIN pros p ON p.id = l.pro_id';
+        $leadColumns = [
+            'id', 'name', 'phone', 'city', 'society_area', 'budget', 'requirement', 'plan_type',
+            'source', 'status', 'estimate', 'created_at',
+        ];
+        $detectedLeadColumns = array_filter($leadColumns, static fn(string $column): bool => self::tableHasColumn('leads', $column));
+        $selects = [];
+        foreach ($leadColumns as $column) {
+            if (in_array($column, $detectedLeadColumns, true)) {
+                $selects[] = 'l.`' . $column . '`';
+            } else {
+                $selects[] = 'NULL AS `' . $column . '`';
+            }
+        }
+        if (!$detectedLeadColumns) {
+            $selects = ['l.*'];
+        }
+        $selects[] = $hasProId && self::tableExists('pros') && self::tableHasColumn('pros', 'full_name')
+            ? 'p.full_name AS pro_name'
+            : 'NULL AS pro_name';
+        $sql = 'SELECT ' . implode(', ', $selects) . ' FROM leads l';
+        if ($hasProId && self::tableExists('pros')) {
+            $sql .= ' LEFT JOIN pros p ON p.id = l.pro_id';
+        }
         if ($where) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
         }
-        return Database::query($sql . ' ORDER BY l.created_at DESC LIMIT 500', $params);
+        $orderColumn = self::tableHasColumn('leads', 'created_at') ? 'l.created_at' : 'l.id';
+        $limit = max(25, min(10000, (int)($filters['limit'] ?? 100)));
+        return Database::query($sql . ' ORDER BY ' . $orderColumn . ' DESC LIMIT ' . $limit, $params);
+    }
+
+    /** Public-safe, newest lead snapshots for lead-generation landing pages. */
+    public static function recentPublicLeadPreviews(string $market = 'Delhi NCR', int $limit = 10): array
+    {
+        $limit = max(1, min(10, $limit));
+        $marketKey = mb_strtolower(trim($market));
+        $ncrCities = ['delhi', 'new delhi', 'gurgaon', 'gurugram', 'noida', 'greater noida', 'faridabad', 'ghaziabad'];
+        $sales = array_filter(self::listSingleLeadSales(false), static function (array $sale) use ($marketKey, $ncrCities): bool {
+            $city = mb_strtolower(trim((string)($sale['lead']['city'] ?? '')));
+            if (in_array($marketKey, ['delhi ncr', 'ncr'], true)) {
+                return in_array($city, $ncrCities, true);
+            }
+            return $marketKey === '' || $city === $marketKey;
+        });
+
+        return array_map(static fn(array $sale): array => [
+            'name' => trim((string)($sale['lead']['name'] ?? 'Homeowner enquiry')) ?: 'Homeowner enquiry',
+            'phone' => (string)($sale['lead']['phone'] ?? 'Masked'),
+            'city' => self::singleLeadCityLabel((string)($sale['lead']['city'] ?? 'Delhi NCR')),
+            'society_area' => trim((string)($sale['lead']['society_area'] ?? '')),
+            'budget' => trim((string)($sale['lead']['budget'] ?? '')),
+            'requirement' => trim((string)($sale['lead']['requirement'] ?? 'Interior design requirement')),
+            'created_at' => (string)($sale['created_at'] ?? ''),
+            'slug' => (string)($sale['slug'] ?? ''),
+        ], array_slice(array_values($sales), 0, $limit));
     }
 
     public static function updateLeadStatus(int $leadId, string $status): void
     {
         Database::exec('UPDATE leads SET status = ?, updated_at = NOW() WHERE id = ?', [$status, $leadId]);
+    }
+
+    public static function leadUploadSampleRows(): array
+    {
+        return [
+            ['Name', 'Phone', 'City', 'Society / Area', 'Budget', 'Requirement', 'Plan Type', 'Source', 'Status', 'Floor Plan', 'Package Tier', 'Estimate'],
+            ['Rohit Sharma', '9810012345', 'Gurgaon', 'DLF Phase 5', '10 lakh', 'Full home interiors for 3BHK apartment', 'uploaded', 'homepage', 'new', '3BHK', 'Premium', '850000'],
+            ['Neha Gupta', '9876543210', 'Noida', 'Sector 137', '5 lakh', 'Modular kitchen and wardrobes', 'uploaded', 'homepage', 'new', '2BHK', 'Essential', '420000'],
+            ['Amit Verma', '9955511122', 'Delhi', 'Vasant Kunj', '25 lakh', 'Luxury villa renovation with false ceiling and lighting', 'uploaded', 'homepage', 'new', '4BHK', 'Luxury', '1800000'],
+        ];
+    }
+
+    public static function leadUploadSampleXlsx(): string
+    {
+        return self::buildSimpleXlsx(self::leadUploadSampleRows());
+    }
+
+    /** Returns an admin-safe Excel workbook for the requested backend dataset. */
+    public static function adminExportXlsx(string $resource): string
+    {
+        $resource = strtolower(trim($resource));
+        $records = match ($resource) {
+            'leads' => self::listLeads(['limit' => 10000]),
+            'professionals' => self::listProfessionalsForAdmin(),
+            'professional-verification' => self::listPros([]),
+            'designer-accounts' => self::designerAccountsForExport(),
+            'quotations' => self::listQuotations([]),
+            'rate-cards' => self::quotationRateCards([]),
+            'quotation-packages' => self::quotationPackages(),
+            'proposal-templates' => self::proposalTemplates(),
+            'portfolios' => self::listPortfolioForAdmin(),
+            'single-lead-sales' => self::listSingleLeadSales(true),
+            'property-projects' => self::listRealEstateProjects([], true),
+            'property-enquiries' => self::listPropertyEnquiries(),
+            'designer-contact-queries' => self::listDesignerContactQueries(),
+            'articles' => self::listArticles([], true),
+            'content' => self::contentList(),
+            'url-aliases' => self::listUrlAliases(),
+            'design-ideas' => self::listDesignIdeas([], true),
+            'design-idea-sections' => self::listDesignIdeaSections(true),
+            'design-idea-leads' => self::listDesignIdeaLeads(),
+            'lead-coupons' => self::listLeadCoupons(),
+            'checkout-recovery' => self::abandonedCheckouts('all'),
+            'site-search' => self::siteSearchAnalyticsRows(),
+            default => throw new InvalidArgumentException('Unsupported admin export.'),
+        };
+
+        return self::buildSimpleXlsx(self::adminExportRows($records), substr(str_replace('-', ' ', $resource), 0, 31));
+    }
+
+    private static function adminExportRows(array $records): array
+    {
+        if (!$records) {
+            return [['No records available']];
+        }
+        $columns = [];
+        $normalized = [];
+        foreach ($records as $record) {
+            $line = [];
+            foreach ((array)$record as $key => $value) {
+                if (in_array((string)$key, ['password_hash', 'reset_token', 'token_hash'], true)) {
+                    continue;
+                }
+                $line[(string)$key] = is_array($value) || is_object($value)
+                    ? (string)json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                    : (string)($value ?? '');
+                $columns[(string)$key] = true;
+            }
+            $normalized[] = $line;
+        }
+        $headers = array_keys($columns);
+        $rows = [array_map(static fn(string $header): string => ucwords(str_replace('_', ' ', $header)), $headers)];
+        foreach ($normalized as $line) {
+            $rows[] = array_map(static fn(string $header): string => $line[$header] ?? '', $headers);
+        }
+        return $rows;
+    }
+
+    public static function importLeadsFromUploadedFile(array $file): array
+    {
+        if (empty($file['tmp_name']) || !is_uploaded_file((string)$file['tmp_name'])) {
+            throw new InvalidArgumentException('Please upload a valid Excel or CSV file.');
+        }
+
+        $name = strtolower((string)($file['name'] ?? ''));
+        $extension = pathinfo($name, PATHINFO_EXTENSION);
+        if (!in_array($extension, ['xlsx', 'csv'], true)) {
+            throw new InvalidArgumentException('Only .xlsx and .csv files are supported.');
+        }
+
+        $rows = $extension === 'xlsx'
+            ? self::parseSimpleXlsx((string)$file['tmp_name'])
+            : self::parseCsvRows((string)$file['tmp_name']);
+        if (count($rows) < 2) {
+            throw new InvalidArgumentException('The uploaded file does not contain lead rows.');
+        }
+
+        $headers = array_map(static fn($value): string => self::normalizeLeadUploadHeader((string)$value), $rows[0]);
+        $created = 0;
+        $skipped = 0;
+        $errors = [];
+
+        foreach (array_slice($rows, 1) as $index => $row) {
+            $lineNumber = $index + 2;
+            if (!array_filter($row, static fn($value): bool => trim((string)$value) !== '')) {
+                continue;
+            }
+            $data = [];
+            foreach ($headers as $position => $key) {
+                if ($key !== '') {
+                    $data[$key] = trim((string)($row[$position] ?? ''));
+                }
+            }
+
+            $lead = [
+                'name' => $data['name'] ?? '',
+                'phone' => self::normalizeLeadMobile((string)($data['phone'] ?? $data['mobile'] ?? '')),
+                'city' => $data['city'] ?? '',
+                'society_area' => $data['society_area'] ?? $data['society'] ?? $data['locality'] ?? '',
+                'budget' => $data['budget'] ?? '',
+                'requirement' => $data['requirement'] ?? $data['requirement_type'] ?? '',
+                'plan_type' => $data['plan_type'] ?? 'uploaded',
+                'source' => self::normalizeLeadSource((string)($data['source'] ?? 'homepage')),
+                'status' => self::normalizeLeadStatus((string)($data['status'] ?? 'new')),
+                'floor_plan' => self::normalizeFloorPlan((string)($data['floor_plan'] ?? $data['bhk'] ?? '')),
+                'package_tier' => self::normalizePackageTier((string)($data['package_tier'] ?? '')),
+                'estimate' => self::numericOrNull((string)($data['estimate'] ?? '')),
+            ];
+
+            $missing = [];
+            foreach (['name', 'phone', 'city', 'requirement'] as $required) {
+                if (trim((string)$lead[$required]) === '') {
+                    $missing[] = str_replace('_', ' ', $required);
+                }
+            }
+            if ($missing) {
+                $skipped++;
+                $errors[] = 'Row ' . $lineNumber . ': missing ' . implode(', ', $missing) . '.';
+                continue;
+            }
+
+            if (self::leadIdForMobile((string)$lead['phone']) !== null) {
+                self::syncLeadToSingleLeadSale((int)self::leadIdForMobile((string)$lead['phone']));
+                $skipped++;
+                $errors[] = 'Row ' . $lineNumber . ': duplicate mobile number skipped.';
+                continue;
+            }
+
+            self::insertLeadImportRow($lead);
+            $created++;
+        }
+
+        return [
+            'created' => $created,
+            'skipped' => $skipped,
+            'errors' => array_slice($errors, 0, 30),
+        ];
+    }
+
+    private static function insertLeadImportRow(array $lead): int
+    {
+        $lead['phone'] = self::normalizeLeadMobile((string)($lead['phone'] ?? ''));
+        if ($lead['phone'] === '') {
+            throw new InvalidArgumentException('A valid 10-digit mobile number is required.');
+        }
+        $lead['phone_normalized'] = $lead['phone'];
+        $fields = [];
+        $values = [];
+        foreach ($lead as $field => $value) {
+            if (self::tableHasColumn('leads', $field) && $value !== null && $value !== '') {
+                $fields[] = '`' . $field . '`';
+                $values[] = $value;
+            }
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($fields), '?'));
+        $leadId = Database::exec('INSERT INTO leads (' . implode(', ', $fields) . ') VALUES (' . $placeholders . ')', $values);
+        self::persistLeadPrice($leadId);
+        self::syncLeadToSingleLeadSale($leadId);
+        return $leadId;
+    }
+
+    private static function normalizeLeadMobile(string $value): string
+    {
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        if (strlen($digits) > 10) {
+            $digits = substr($digits, -10);
+        }
+
+        return strlen($digits) === 10 ? $digits : '';
+    }
+
+    private static function leadIdForMobile(string $phone): ?int
+    {
+        if ($phone === '') {
+            return null;
+        }
+
+        $column = self::tableHasColumn('leads', 'phone_normalized') ? 'phone_normalized' : 'phone';
+        $row = Database::one('SELECT id FROM leads WHERE `' . $column . '` = ? LIMIT 1', [$phone]);
+        return $row ? (int)$row['id'] : null;
+    }
+
+    private static function normalizeLeadUploadHeader(string $value): string
+    {
+        $key = strtolower(trim($value));
+        $key = preg_replace('/[^a-z0-9]+/', '_', $key) ?? '';
+        $key = trim($key, '_');
+        return [
+            'mobile_number' => 'phone',
+            'mobile' => 'phone',
+            'society_area' => 'society_area',
+            'society_project_name' => 'society_area',
+            'society_name' => 'society_area',
+            'area' => 'society_area',
+            'locality' => 'society_area',
+            'requirement_type' => 'requirement',
+            'work_type' => 'requirement',
+            'bhk' => 'floor_plan',
+            'estimate_amount' => 'estimate',
+        ][$key] ?? $key;
+    }
+
+    private static function normalizeLeadSource(string $source): string
+    {
+        $source = strtolower(trim($source));
+        return in_array($source, ['homepage', 'profile', 'calculator', 'pricing'], true) ? $source : 'homepage';
+    }
+
+    private static function normalizeLeadStatus(string $status): string
+    {
+        $status = strtolower(trim($status));
+        return in_array($status, ['new', 'contacted', 'converted'], true) ? $status : 'new';
+    }
+
+    private static function normalizeFloorPlan(string $value): ?string
+    {
+        $value = strtoupper(trim($value));
+        if ($value !== '' && !str_ends_with($value, 'BHK') && preg_match('/^[1-4]$/', $value)) {
+            $value .= 'BHK';
+        }
+        return in_array($value, ['1BHK', '2BHK', '3BHK', '4BHK'], true) ? $value : null;
+    }
+
+    private static function normalizePackageTier(string $value): ?string
+    {
+        $value = ucwords(strtolower(trim($value)));
+        return in_array($value, ['Essential', 'Premium', 'Luxury'], true) ? $value : null;
+    }
+
+    private static function numericOrNull(string $value): ?float
+    {
+        $clean = preg_replace('/[^\d.]/', '', $value) ?? '';
+        return $clean === '' ? null : (float)$clean;
+    }
+
+    private static function parseCsvRows(string $path): array
+    {
+        $handle = fopen($path, 'r');
+        if (!$handle) {
+            throw new InvalidArgumentException('Unable to read CSV file.');
+        }
+        $rows = [];
+        while (($row = fgetcsv($handle)) !== false) {
+            $rows[] = array_map(static fn($value): string => trim((string)$value), $row);
+        }
+        fclose($handle);
+        return $rows;
+    }
+
+    private static function parseSimpleXlsx(string $path): array
+    {
+        if (!class_exists('ZipArchive')) {
+            throw new RuntimeException('XLSX import requires the PHP Zip extension. Please upload CSV if Zip is unavailable.');
+        }
+        $zip = new ZipArchive();
+        if ($zip->open($path) !== true) {
+            throw new InvalidArgumentException('Unable to open Excel file.');
+        }
+        $sharedStrings = [];
+        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($sharedXml !== false) {
+            $xml = simplexml_load_string($sharedXml);
+            if ($xml) {
+                foreach ($xml->si as $si) {
+                    $sharedStrings[] = trim((string)($si->t ?? ''));
+                }
+            }
+        }
+        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        if ($sheetXml === false) {
+            throw new InvalidArgumentException('Excel file must contain a first worksheet.');
+        }
+        $xml = simplexml_load_string($sheetXml);
+        if (!$xml) {
+            throw new InvalidArgumentException('Unable to read first worksheet.');
+        }
+        $rows = [];
+        foreach ($xml->sheetData->row as $rowNode) {
+            $row = [];
+            foreach ($rowNode->c as $cell) {
+                $ref = (string)$cell['r'];
+                $column = preg_replace('/\d+/', '', $ref) ?: 'A';
+                $index = self::xlsxColumnIndex($column);
+                $type = (string)$cell['t'];
+                $value = (string)($cell->v ?? '');
+                if ($type === 's') {
+                    $value = $sharedStrings[(int)$value] ?? '';
+                } elseif ($type === 'inlineStr') {
+                    $value = (string)($cell->is->t ?? '');
+                }
+                $row[$index] = trim($value);
+            }
+            if ($row) {
+                ksort($row);
+                $normalized = [];
+                for ($i = 0, $max = max(array_keys($row)); $i <= $max; $i++) {
+                    $normalized[] = $row[$i] ?? '';
+                }
+                $rows[] = $normalized;
+            }
+        }
+        return $rows;
+    }
+
+    private static function xlsxColumnIndex(string $column): int
+    {
+        $index = 0;
+        foreach (str_split(strtoupper($column)) as $char) {
+            $index = ($index * 26) + (ord($char) - 64);
+        }
+        return max(0, $index - 1);
+    }
+
+    private static function buildSimpleXlsx(array $rows, string $sheetName = 'Leads'): string
+    {
+        if (!class_exists('ZipArchive')) {
+            $csv = '';
+            foreach ($rows as $row) {
+                $csv .= implode(',', array_map(static fn($value): string => '"' . str_replace('"', '""', (string)$value) . '"', $row)) . "\n";
+            }
+            return $csv;
+        }
+        $temp = tempnam(sys_get_temp_dir(), 'lead-template-');
+        $zip = new ZipArchive();
+        $zip->open($temp, ZipArchive::OVERWRITE);
+        $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
+        $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+        $zip->addFromString('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
+        $safeSheetName = htmlspecialchars(trim($sheetName) ?: 'Export', ENT_XML1, 'UTF-8');
+        $zip->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="' . $safeSheetName . '" sheetId="1" r:id="rId1"/></sheets></workbook>');
+        $sheetRows = '';
+        foreach ($rows as $rowIndex => $row) {
+            $sheetRows .= '<row r="' . ($rowIndex + 1) . '">';
+            foreach ($row as $colIndex => $value) {
+                $cellRef = self::xlsxColumnName($colIndex + 1) . ($rowIndex + 1);
+                $sheetRows .= '<c r="' . $cellRef . '" t="inlineStr"><is><t>' . htmlspecialchars((string)$value, ENT_XML1, 'UTF-8') . '</t></is></c>';
+            }
+            $sheetRows .= '</row>';
+        }
+        $zip->addFromString('xl/worksheets/sheet1.xml', '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' . $sheetRows . '</sheetData></worksheet>');
+        $zip->close();
+        $content = (string)file_get_contents($temp);
+        unlink($temp);
+        return $content;
+    }
+
+    private static function xlsxColumnName(int $index): string
+    {
+        $name = '';
+        while ($index > 0) {
+            $index--;
+            $name = chr(65 + ($index % 26)) . $name;
+            $index = intdiv($index, 26);
+        }
+        return $name;
     }
 
     public static function adminCounts(): array
@@ -1695,7 +3169,17 @@ final class SiteRepository
 
     public static function contentList(): array
     {
-        return Database::query('SELECT id, key_name, content_value, content_type, updated_at FROM site_content ORDER BY key_name');
+        if (!self::tableExists('site_content')) {
+            return [];
+        }
+        $rows = Database::query('SELECT id, key_name, content_value, content_type, updated_at FROM site_content ORDER BY updated_at DESC, key_name LIMIT 300');
+        foreach ($rows as &$row) {
+            $value = (string)($row['content_value'] ?? '');
+            $row['content_value_full'] = $value;
+            $row['content_value'] = strlen($value) > 1200 ? substr($value, 0, 1200) . '...' : $value;
+        }
+        unset($row);
+        return $rows;
     }
 
     public static function upsertContent(string $keyName, string $contentValue, string $contentType = 'text'): void
@@ -1709,6 +3193,294 @@ final class SiteRepository
         self::$contentCache = null;
     }
 
+    public static function articleFilterOptions(): array
+    {
+        $fallback = self::professionalStandardOptions();
+        return [
+            'cities' => $fallback['cities'],
+            'work_types' => $fallback['work_types'],
+            'article_types' => ['Interior Guide', 'Design Ideas', 'Cost Guide', 'Lead Guide', 'Professional Growth', 'News', 'Case Study'],
+            'states' => ['Delhi', 'Haryana', 'Uttar Pradesh'],
+        ];
+    }
+
+    public static function listArticles(array $filters = [], bool $admin = false): array
+    {
+        if (!self::tableExists('articles')) {
+            return [];
+        }
+        $where = [];
+        $params = [];
+        if (!$admin) {
+            $where[] = 'is_active=1';
+        }
+        foreach (['article_type', 'work_type', 'city', 'state'] as $field) {
+            $value = trim((string)($filters[$field] ?? ''));
+            if ($value !== '') {
+                $where[] = $field . '=?';
+                $params[] = $value;
+            }
+        }
+        $q = trim((string)($filters['q'] ?? ''));
+        if ($q !== '') {
+            $where[] = '(title LIKE ? OR excerpt LIKE ? OR content_html LIKE ? OR article_type LIKE ? OR work_type LIKE ? OR city LIKE ?)';
+            $search = '%' . $q . '%';
+            array_push($params, $search, $search, $search, $search, $search, $search);
+        }
+        $sql = 'SELECT * FROM articles';
+        if ($where) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $sql .= ' ORDER BY is_featured DESC, COALESCE(published_at, created_at) DESC, id DESC';
+        if (!empty($filters['limit'])) {
+            $sql .= ' LIMIT ' . max(1, min(200, (int)$filters['limit']));
+        }
+        $rows = Database::query($sql, $params);
+        foreach ($rows as &$row) {
+            $row = self::normalizeArticleRow($row);
+        }
+        unset($row);
+        return $rows;
+    }
+
+    public static function getArticle(string|int $identifier, bool $admin = false): ?array
+    {
+        if (!self::tableExists('articles')) {
+            return null;
+        }
+        $field = is_int($identifier) || ctype_digit((string)$identifier) ? 'id' : 'slug';
+        $sql = 'SELECT * FROM articles WHERE ' . $field . '=?';
+        if (!$admin) {
+            $sql .= ' AND is_active=1';
+        }
+        $row = Database::one($sql, [$identifier]);
+        if (!$row) {
+            return null;
+        }
+        $article = self::normalizeArticleRow($row);
+        $article['faqs'] = self::articleFaqs((int)$article['id']);
+        return $article;
+    }
+
+    public static function articleFaqs(int $articleId): array
+    {
+        if (!self::tableExists('article_faqs')) {
+            return [];
+        }
+        return Database::query('SELECT id, question, answer, sequence_order FROM article_faqs WHERE article_id=? ORDER BY sequence_order ASC, id ASC', [$articleId]);
+    }
+
+    public static function saveArticle(array $data, ?int $id = null): int
+    {
+        $title = trim((string)($data['title'] ?? ''));
+        $contentHtml = trim((string)($data['content_html'] ?? ''));
+        if ($title === '') {
+            throw new InvalidArgumentException('Article title is required.');
+        }
+        if (trim(strip_tags($contentHtml)) === '') {
+            throw new InvalidArgumentException('Article content is required.');
+        }
+        $slug = trim((string)($data['slug'] ?? ''));
+        $slug = $slug !== '' ? slugify($slug) : slugify($title);
+        $slug = self::uniqueArticleSlug($slug, $id);
+        $fields = [
+            'title', 'slug', 'excerpt', 'content_html', 'article_type', 'work_type', 'city', 'state',
+            'author_name', 'image_path', 'tags_json', 'meta_title', 'meta_description',
+            'is_featured', 'is_active', 'created_by', 'published_at',
+        ];
+        if (self::tableHasColumn('articles', 'content')) {
+            $fields[] = 'content';
+        }
+        if (self::tableHasColumn('articles', 'featured_image')) {
+            $fields[] = 'featured_image';
+        }
+        if (self::tableHasColumn('articles', 'is_published')) {
+            $fields[] = 'is_published';
+        }
+        $values = [];
+        foreach ($fields as $field) {
+            if ($field === 'title') {
+                $values[] = $title;
+            } elseif ($field === 'slug') {
+                $values[] = $slug;
+            } elseif (in_array($field, ['content_html', 'content'], true)) {
+                $values[] = $contentHtml;
+            } elseif ($field === 'article_type') {
+                $values[] = trim((string)($data[$field] ?? 'Interior Guide')) ?: 'Interior Guide';
+            } elseif ($field === 'featured_image') {
+                $value = $data['image_path'] ?? null;
+                $values[] = trim((string)$value) === '' ? null : $value;
+            } elseif ($field === 'tags_json') {
+                $values[] = json_encode(self::parseJsonArray($data[$field] ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            } elseif ($field === 'is_published') {
+                $values[] = !empty($data['is_active']) ? 1 : 0;
+            } elseif (in_array($field, ['is_featured', 'is_active'], true)) {
+                $values[] = !empty($data[$field]) ? 1 : 0;
+            } elseif ($field === 'created_by') {
+                $values[] = !empty($data[$field]) ? (int)$data[$field] : null;
+            } elseif ($field === 'published_at') {
+                $values[] = !empty($data[$field]) ? $data[$field] : null;
+            } else {
+                $value = $data[$field] ?? null;
+                $values[] = trim((string)$value) === '' ? null : $value;
+            }
+        }
+        if ($id) {
+            $sets = implode(', ', array_map(static fn(string $field): string => $field . '=?', $fields));
+            Database::exec('UPDATE articles SET ' . $sets . ' WHERE id=?', [...$values, $id]);
+            $articleId = $id;
+        } else {
+            $articleId = Database::exec('INSERT INTO articles (' . implode(', ', $fields) . ') VALUES (' . implode(', ', array_fill(0, count($fields), '?')) . ')', $values);
+        }
+        self::replaceArticleFaqs($articleId, $data['faqs'] ?? []);
+        self::syncArticleUrlAlias($articleId);
+        SitemapService::regeneratePublicSitemap();
+        return $articleId;
+    }
+
+    public static function deleteArticle(int $id): void
+    {
+        Database::exec('DELETE FROM articles WHERE id=?', [$id]);
+        try {
+            Database::exec("DELETE FROM url_aliases WHERE entity_table='articles' AND entity_id=?", [$id]);
+        } catch (Throwable) {
+            // Continue to sitemap refresh even if alias cleanup is unavailable.
+        }
+        SitemapService::regeneratePublicSitemap();
+    }
+
+    public static function relatedArticles(array $article, int $limit = 3): array
+    {
+        if (!self::tableExists('articles')) {
+            return [];
+        }
+        $sql = 'SELECT * FROM articles WHERE id<>? AND is_active=1 AND (article_type=? OR work_type <=> ? OR city <=> ?) ORDER BY is_featured DESC, COALESCE(published_at, created_at) DESC LIMIT ' . max(1, min(8, $limit));
+        $rows = Database::query($sql, [(int)$article['id'], (string)$article['article_type'], $article['work_type'] ?? null, $article['city'] ?? null]);
+        foreach ($rows as &$row) {
+            $row = self::normalizeArticleRow($row);
+        }
+        unset($row);
+        return $rows;
+    }
+
+    private static function normalizeArticleRow(array $row): array
+    {
+        $row['tags_json'] = self::parseJsonArray($row['tags_json'] ?? '[]');
+        $row['excerpt'] = trim((string)($row['excerpt'] ?? '')) ?: self::articleExcerpt((string)($row['content_html'] ?? ''), 170);
+        $row['featured_image'] = (string)($row['image_path'] ?? '');
+        return $row;
+    }
+
+    private static function articleExcerpt(string $html, int $limit = 170): string
+    {
+        $text = trim(preg_replace('/\s+/', ' ', strip_tags($html)) ?? '');
+        if (strlen($text) <= $limit) {
+            return $text;
+        }
+        return rtrim(substr($text, 0, $limit - 3)) . '...';
+    }
+
+    private static function uniqueArticleSlug(string $slug, ?int $ignoreId = null): string
+    {
+        $base = $slug ?: 'article';
+        $candidate = $base;
+        $i = 2;
+        do {
+            $sql = 'SELECT id FROM articles WHERE slug=?';
+            $params = [$candidate];
+            if ($ignoreId) {
+                $sql .= ' AND id<>?';
+                $params[] = $ignoreId;
+            }
+            $exists = Database::one($sql, $params);
+            if (!$exists) {
+                return $candidate;
+            }
+            $candidate = $base . '-' . $i++;
+        } while ($i < 200);
+        return $base . '-' . time();
+    }
+
+    private static function replaceArticleFaqs(int $articleId, mixed $faqs): void
+    {
+        if (!self::tableExists('article_faqs')) {
+            return;
+        }
+        Database::exec('DELETE FROM article_faqs WHERE article_id=?', [$articleId]);
+        if (!is_array($faqs)) {
+            return;
+        }
+        $sequence = 1;
+        foreach ($faqs as $faq) {
+            if (!is_array($faq)) {
+                continue;
+            }
+            $question = trim((string)($faq['question'] ?? ''));
+            $answer = trim((string)($faq['answer'] ?? ''));
+            if ($question === '' && $answer === '') {
+                continue;
+            }
+            if ($question === '' || $answer === '') {
+                throw new InvalidArgumentException('Each FAQ needs both question and answer.');
+            }
+            Database::exec('INSERT INTO article_faqs (article_id, question, answer, sequence_order) VALUES (?, ?, ?, ?)', [$articleId, $question, $answer, $sequence++]);
+        }
+    }
+
+    private static function syncArticleUrlAlias(int $articleId): void
+    {
+        $article = self::getArticle($articleId, true);
+        if (!$article) {
+            return;
+        }
+        self::syncUrlAlias([
+            'path' => '/articles/' . (string)$article['slug'],
+            'page_type' => 'article_detail',
+            'entity_table' => 'articles',
+            'entity_id' => $articleId,
+            'source' => 'article',
+            'meta_title' => $article['meta_title'] ?: $article['title'] . ' | HomeInteriors360',
+            'meta_description' => $article['meta_description'] ?: $article['excerpt'],
+            'h1' => $article['title'],
+            'content_html' => $article['content_html'],
+            'image_url' => $article['image_path'] ?? null,
+            'canonical_url' => '/articles/' . (string)$article['slug'],
+            'is_active' => !empty($article['is_active']) ? 1 : 0,
+        ]);
+    }
+
+    private static function tableExists(string $table): bool
+    {
+        try {
+            $pdo = Database::pdo();
+            $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table) ?: $table;
+            $stmt = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($safeTable));
+            return (bool)($stmt ? $stmt->fetch(PDO::FETCH_NUM) : false);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private static function tableHasColumn(string $table, string $column): bool
+    {
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, self::$tableColumnCache)) {
+            return self::$tableColumnCache[$key];
+        }
+        try {
+            $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table) ?: $table;
+            $rows = Database::query('SHOW COLUMNS FROM `' . $safeTable . '`');
+            $columns = array_map(static fn(array $row): string => (string)($row['Field'] ?? ''), $rows);
+            foreach ($columns as $existingColumn) {
+                self::$tableColumnCache[$table . '.' . $existingColumn] = true;
+            }
+            self::$tableColumnCache[$key] = in_array($column, $columns, true);
+        } catch (Throwable) {
+            self::$tableColumnCache[$key] = false;
+        }
+        return self::$tableColumnCache[$key];
+    }
+
     public static function leadMarketplaceCounts(string $dateFilter = 'all_time', ?string $startDate = null, ?string $endDate = null): array
     {
         $leads = self::leadRowsForDateFilter($dateFilter, $startDate, $endDate);
@@ -1716,14 +3488,15 @@ final class SiteRepository
         $cards = [];
         foreach ($definitions as $definition) {
             $matching = array_values(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $definition['criteria'])));
-            $count = count($matching);
-            if ($count <= 0) {
+            if ($matching === []) {
                 continue;
             }
-            $price = self::leadPriceForCount($count, false);
+            $availableMatching = array_values(array_filter($matching, static fn(array $lead): bool => self::leadCanBeAssignedToBuyer((int)$lead['id'])));
+            $count = count($availableMatching);
+            $price = self::leadPriceForRows($availableMatching, false);
             $sampleLeads = array_map(
                 static fn(array $lead): array => self::publicSampleLead($lead),
-                self::sampleMatchingLeads($matching, 3)
+                self::sampleMatchingLeads($availableMatching !== [] ? $availableMatching : $matching, 3)
             );
             $cards[] = [
                 'id' => hash('sha256', $definition['name'] . json_encode($definition['criteria']) . $dateFilter . $startDate . $endDate),
@@ -1734,8 +3507,11 @@ final class SiteRepository
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'lead_count' => $count,
+                'total_matching_lead_count' => count($matching),
+                'is_sold_out' => $count === 0,
                 'price_total' => $price['total'],
                 'pricing' => $price,
+                'price_tiers' => $price['lines'],
                 'sample_leads' => $sampleLeads,
             ];
         }
@@ -1776,25 +3552,509 @@ final class SiteRepository
         return $prefix . str_repeat('*', max(4, $length - 4)) . $suffix;
     }
 
+    private static function singleLeadSalesTableExists(): bool
+    {
+        return self::tableExists('single_lead_sales');
+    }
+
+    private static function singleLeadSaleSelect(): string
+    {
+        $soldCountSql = self::leadPurchaseLeadTableExists()
+            ? 'COALESCE(COUNT(DISTINCT pll.buyer_id), 0)'
+            : '0';
+        $leadPrice = self::tableHasColumn('leads', 'lead_price') ? 'l.lead_price' : 'NULL AS lead_price';
+        return 's.*, l.name, l.phone, l.city, l.society_area, l.budget, l.requirement, l.plan_type, l.source, l.floor_plan, l.package_tier, l.rooms_json, l.estimate, ' . $leadPrice . ', l.status AS lead_status, l.created_at AS lead_created_at,
+                ' . $soldCountSql . ' AS sold_count';
+    }
+
+    private static function singleLeadSaleFromJoin(): string
+    {
+        return ' FROM single_lead_sales s
+                 JOIN leads l ON l.id=s.lead_id'
+            . (self::leadPurchaseLeadTableExists() ? ' LEFT JOIN lead_purchase_leads pll ON pll.lead_id=s.lead_id' : '');
+    }
+
+    private static function hydrateSingleLeadSale(array $row, bool $public = false): array
+    {
+        $soldCount = (int)($row['sold_count'] ?? 0);
+        $maxBuyers = max(1, min(self::MAX_BUYERS_PER_LEAD, (int)($row['max_buyers'] ?? self::MAX_BUYERS_PER_LEAD)));
+        $remaining = max(0, $maxBuyers - $soldCount);
+        $status = (string)($row['status'] ?? 'draft');
+        if ($remaining <= 0 && $status === 'active') {
+            $status = 'sold_out';
+        }
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'lead_id' => (int)($row['lead_id'] ?? 0),
+            'slug' => (string)($row['slug'] ?? ''),
+            'title' => (string)($row['title'] ?? ''),
+            'price_amount' => (float)($row['price_amount'] ?? self::SINGLE_LEAD_PRICE),
+            'max_buyers' => $maxBuyers,
+            'sold_count' => $soldCount,
+            'remaining_slots' => $remaining,
+            'status' => $status,
+            'notes' => (string)($row['notes'] ?? ''),
+            'created_at' => (string)($row['created_at'] ?? ''),
+            'updated_at' => (string)($row['updated_at'] ?? ''),
+            'lead' => [
+                'id' => (int)($row['lead_id'] ?? 0),
+                'name' => (string)($row['name'] ?? ''),
+                'phone' => $public ? self::maskPhone((string)($row['phone'] ?? '')) : (string)($row['phone'] ?? ''),
+                'city' => (string)($row['city'] ?? ''),
+                'society_area' => (string)($row['society_area'] ?? ''),
+                'budget' => (string)($row['budget'] ?? ''),
+                'requirement' => (string)($row['requirement'] ?? ''),
+                'plan_type' => (string)($row['plan_type'] ?? ''),
+                'source' => (string)($row['source'] ?? ''),
+                'floor_plan' => (string)($row['floor_plan'] ?? ''),
+                'package_tier' => (string)($row['package_tier'] ?? ''),
+                'rooms' => self::parseJsonArray($row['rooms_json'] ?? '[]'),
+                'estimate' => isset($row['estimate']) ? (float)$row['estimate'] : null,
+                'lead_price' => self::storedLeadPrice($row),
+                'status' => (string)($row['lead_status'] ?? ''),
+                'created_at' => (string)($row['lead_created_at'] ?? ''),
+            ],
+        ];
+    }
+
+    public static function listSingleLeadSales(bool $admin = false, array $filters = []): array
+    {
+        if (!self::singleLeadSalesTableExists()) {
+            return [];
+        }
+        $where = $admin ? '' : " WHERE s.status IN ('active', 'sold_out')";
+        $rows = Database::query(
+            'SELECT ' . self::singleLeadSaleSelect() . self::singleLeadSaleFromJoin() . $where . ' GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 300'
+        );
+        $sales = array_map(static fn(array $row): array => self::hydrateSingleLeadSale($row, !$admin), $rows);
+        if (!$admin) {
+            usort($sales, static function (array $left, array $right): int {
+                $leftAvailable = (string)($left['status'] ?? '') === 'active' && (int)($left['remaining_slots'] ?? 0) > 0;
+                $rightAvailable = (string)($right['status'] ?? '') === 'active' && (int)($right['remaining_slots'] ?? 0) > 0;
+                return ($rightAvailable ? 1 : 0) <=> ($leftAvailable ? 1 : 0);
+            });
+        }
+        if ($admin || $filters === []) {
+            return $sales;
+        }
+
+        return array_values(array_filter($sales, static function (array $sale) use ($filters): bool {
+            $lead = (array)($sale['lead'] ?? []);
+            foreach (['city', 'requirement', 'budget', 'plan_type'] as $field) {
+                $expected = trim((string)($filters[$field] ?? ''));
+                if ($expected === '') {
+                    continue;
+                }
+                $actual = trim((string)($lead[$field] ?? ''));
+                if ($field === 'city') {
+                    $actual = self::singleLeadCityLabel($actual);
+                    $expected = self::singleLeadCityLabel($expected);
+                }
+                if (mb_strtolower($actual) !== mb_strtolower($expected)) {
+                    return false;
+                }
+            }
+            return true;
+        }));
+    }
+
+    /** Lists each available lead created today (IST) with its stored quality price. */
+    public static function syncTodayLeadsToSingleLeadSales(): int
+    {
+        if (!self::singleLeadSalesTableExists()) {
+            return 0;
+        }
+
+        $india = new DateTimeZone('Asia/Kolkata');
+        $utc = new DateTimeZone('UTC');
+        $today = new DateTimeImmutable('today', $india);
+        $tomorrow = $today->modify('+1 day');
+        $start = $today->setTimezone($utc)->format('Y-m-d H:i:s');
+        $end = $tomorrow->setTimezone($utc)->format('Y-m-d H:i:s');
+        $availability = self::leadPurchaseLeadTableExists()
+            ? ' AND (SELECT COUNT(DISTINCT pll.buyer_id) FROM lead_purchase_leads pll WHERE pll.lead_id=l.id) < ' . self::MAX_BUYERS_PER_LEAD
+            : '';
+
+        return Database::exec(
+            'INSERT INTO single_lead_sales (lead_id, slug, title, price_amount, max_buyers, status, notes, created_by)
+             SELECT l.id,
+                    CONCAT("single-interior-lead-", l.id),
+                    CONCAT(COALESCE(NULLIF(TRIM(l.city), ""), "Delhi NCR"), " Interior Lead #", l.id),
+                    ' . (self::tableHasColumn('leads', 'lead_price') ? 'COALESCE(l.lead_price, 199)' : '199') . ', ' . self::MAX_BUYERS_PER_LEAD . ', "active", "Automatically listed from today\'s fresh lead inventory.", NULL
+             FROM leads l
+             WHERE l.created_at >= ?
+               AND l.created_at < ?
+               AND LOWER(COALESCE(l.status, "new")) = "new"
+               AND NOT EXISTS (SELECT 1 FROM single_lead_sales s WHERE s.lead_id=l.id)'
+                . $availability,
+            [$start, $end]
+        );
+    }
+
+    /** Adds one newly-created eligible lead to the single-lead catalog immediately. */
+    private static function syncLeadToSingleLeadSale(int $leadId): void
+    {
+        if ($leadId <= 0 || !self::singleLeadSalesTableExists()) {
+            return;
+        }
+        $availability = self::leadPurchaseLeadTableExists()
+            ? ' AND (SELECT COUNT(DISTINCT pll.buyer_id) FROM lead_purchase_leads pll WHERE pll.lead_id=l.id) < ' . self::MAX_BUYERS_PER_LEAD
+            : '';
+        Database::exec(
+            'INSERT INTO single_lead_sales (lead_id, slug, title, price_amount, max_buyers, status, notes, created_by)
+             SELECT l.id,
+                    CONCAT("single-interior-lead-", l.id),
+                    CONCAT(COALESCE(NULLIF(TRIM(l.city), ""), "Delhi NCR"), " Interior Lead"),
+                    ' . (self::tableHasColumn('leads', 'lead_price') ? 'COALESCE(l.lead_price, 199)' : '199') . ', ' . self::MAX_BUYERS_PER_LEAD . ', "active", "Automatically listed from fresh lead inventory.", NULL
+             FROM leads l
+             WHERE l.id=?
+               AND LOWER(COALESCE(l.status, "new"))="new"
+               AND NOT EXISTS (SELECT 1 FROM single_lead_sales s WHERE s.lead_id=l.id)'
+                . $availability,
+            [$leadId]
+        );
+    }
+
+    /** Public filter values and their stable SEO slugs, derived only from active inventory. */
+    public static function singleLeadSaleFilterOptions(): array
+    {
+        $options = ['cities' => [], 'requirements' => [], 'budgets' => []];
+        foreach (self::listSingleLeadSales(false) as $sale) {
+            $lead = (array)($sale['lead'] ?? []);
+            foreach ([
+                'cities' => ['field' => 'city', 'label' => self::singleLeadCityLabel((string)($lead['city'] ?? ''))],
+                'requirements' => ['field' => 'requirement', 'label' => trim((string)($lead['requirement'] ?? ''))],
+                'budgets' => ['field' => 'budget', 'label' => trim((string)($lead['budget'] ?? ''))],
+            ] as $group => $item) {
+                $label = trim((string)$item['label']);
+                if ($label === '') {
+                    continue;
+                }
+                $slug = slugify($label);
+                $options[$group][$slug] = ['value' => $label, 'slug' => $slug];
+            }
+        }
+        foreach ($options as $group => $items) {
+            uasort($items, static fn(array $a, array $b): int => strcasecmp((string)$a['value'], (string)$b['value']));
+            $options[$group] = array_values($items);
+        }
+        return $options;
+    }
+
+    public static function singleLeadSaleListingPath(array $filters = []): string
+    {
+        $segments = ['/single-lead'];
+        $map = ['city' => 'in-', 'requirement' => 'work-', 'budget' => 'budget-'];
+        foreach ($map as $field => $prefix) {
+            $value = trim((string)($filters[$field] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            if ($field === 'city') {
+                $value = self::singleLeadCityLabel($value);
+            }
+            $segments[] = $prefix . slugify($value);
+        }
+        return implode('/', $segments);
+    }
+
+    public static function singleLeadSaleFiltersFromPath(array $segments): array
+    {
+        $options = self::singleLeadSaleFilterOptions();
+        $groups = [
+            'in-' => ['group' => 'cities', 'field' => 'city'],
+            'work-' => ['group' => 'requirements', 'field' => 'requirement'],
+            'budget-' => ['group' => 'budgets', 'field' => 'budget'],
+        ];
+        $filters = [];
+        foreach ($segments as $segment) {
+            $segment = strtolower(trim((string)$segment));
+            foreach ($groups as $prefix => $config) {
+                if (!str_starts_with($segment, $prefix)) {
+                    continue;
+                }
+                $slug = substr($segment, strlen($prefix));
+                foreach ($options[$config['group']] as $option) {
+                    if ((string)$option['slug'] === $slug) {
+                        $filters[$config['field']] = (string)$option['value'];
+                        break 2;
+                    }
+                }
+            }
+        }
+        return $filters;
+    }
+
+    public static function singleLeadSaleSeoPaths(): array
+    {
+        $options = self::singleLeadSaleFilterOptions();
+        $paths = ['/single-lead'];
+        foreach (['cities' => 'city', 'requirements' => 'requirement', 'budgets' => 'budget'] as $group => $field) {
+            foreach ($options[$group] as $option) {
+                $paths[] = self::singleLeadSaleListingPath([$field => (string)$option['value']]);
+            }
+        }
+        // Do not manufacture city/work combinations. Empty facet pages are weak
+        // discovery targets and make it harder for crawlers to prioritise real stock.
+        foreach (self::listSingleLeadSales(false) as $sale) {
+            $lead = (array)($sale['lead'] ?? []);
+            $city = self::singleLeadCityLabel((string)($lead['city'] ?? ''));
+            $requirement = trim((string)($lead['requirement'] ?? ''));
+            if ($city !== '' && $requirement !== '') {
+                $paths[] = self::singleLeadSaleListingPath([
+                    'city' => $city,
+                    'requirement' => $requirement,
+                ]);
+            }
+        }
+        return array_slice(array_values(array_unique($paths)), 0, 250);
+    }
+
+    private static function singleLeadCityLabel(string $city): string
+    {
+        $normalized = mb_strtolower(trim($city));
+        return match ($normalized) {
+            'gurgaon', 'gurugram' => 'Gurgaon',
+            'greater noida' => 'Greater Noida',
+            'noida' => 'Noida',
+            'delhi', 'new delhi' => 'Delhi',
+            'ghaziabad' => 'Ghaziabad',
+            'faridabad' => 'Faridabad',
+            default => trim($city),
+        };
+    }
+
+    public static function leadsAvailableForSingleSale(): array
+    {
+        if (!self::leadPurchaseLeadTableExists()) {
+            $rows = Database::query('SELECT l.id, l.name, l.phone, l.city, l.society_area, l.budget, l.requirement, l.status, l.created_at, 0 AS sold_count FROM leads l ORDER BY l.created_at DESC LIMIT 300');
+            return array_map(static function (array $row): array {
+                $row['phone_masked'] = self::maskPhone((string)($row['phone'] ?? ''));
+                $row['remaining_slots'] = self::MAX_BUYERS_PER_LEAD;
+                return $row;
+            }, $rows);
+        }
+        $rows = Database::query(
+            'SELECT l.id, l.name, l.phone, l.city, l.society_area, l.budget, l.requirement, l.status, l.created_at,
+                    COALESCE(COUNT(DISTINCT pll.buyer_id), 0) AS sold_count
+             FROM leads l
+             LEFT JOIN lead_purchase_leads pll ON pll.lead_id=l.id
+             GROUP BY l.id
+             HAVING sold_count < ' . self::MAX_BUYERS_PER_LEAD . '
+             ORDER BY l.created_at DESC
+             LIMIT 300'
+        );
+        return array_map(static function (array $row): array {
+            $row['phone_masked'] = self::maskPhone((string)($row['phone'] ?? ''));
+            $row['remaining_slots'] = max(0, self::MAX_BUYERS_PER_LEAD - (int)($row['sold_count'] ?? 0));
+            return $row;
+        }, $rows);
+    }
+
+    public static function saveSingleLeadSale(array $data, ?int $id = null): int
+    {
+        if (!self::singleLeadSalesTableExists()) {
+            throw new RuntimeException('single_lead_sales table is missing. Please run the latest migration.');
+        }
+        $leadId = (int)($data['lead_id'] ?? 0);
+        $lead = Database::one('SELECT * FROM leads WHERE id=?', [$leadId]);
+        if (!$lead) {
+            throw new InvalidArgumentException('Please select a valid lead.');
+        }
+        $title = trim((string)($data['title'] ?? ''));
+        if ($title === '') {
+            $title = trim('Single ' . (string)($lead['city'] ?? '') . ' Lead - ' . (string)($lead['society_area'] ?? ''), ' -');
+        }
+        $slugBase = slugify((string)($data['slug'] ?? $title . '-' . $leadId));
+        $slug = $slugBase !== '' ? $slugBase : 'single-lead-' . $leadId;
+        $existing = Database::one('SELECT id FROM single_lead_sales WHERE slug=? AND id<>? LIMIT 1', [$slug, (int)($id ?? 0)]);
+        if ($existing) {
+            $slug .= '-' . substr(bin2hex(random_bytes(2)), 0, 4);
+        }
+        $status = in_array((string)($data['status'] ?? 'active'), ['draft', 'active', 'paused', 'sold_out'], true) ? (string)$data['status'] : 'active';
+        $maxBuyers = max(1, min(self::MAX_BUYERS_PER_LEAD, (int)($data['max_buyers'] ?? self::MAX_BUYERS_PER_LEAD)));
+        $notes = trim((string)($data['notes'] ?? ''));
+        $createdBy = isset($data['created_by']) && (int)$data['created_by'] > 0 ? (int)$data['created_by'] : null;
+        $autoPrice = self::storedLeadPrice($lead);
+        $requestedPrice = trim((string)($data['price_amount'] ?? ''));
+        $price = $requestedPrice === '' ? $autoPrice : (float)$requestedPrice;
+        if ($price < 1 || $price > 1999) {
+            throw new InvalidArgumentException('Single lead price must be between ₹1 and ₹1,999.');
+        }
+        $price = round($price, 2);
+        if ($id) {
+            Database::exec(
+                'UPDATE single_lead_sales SET lead_id=?, slug=?, title=?, price_amount=?, max_buyers=?, status=?, notes=?, updated_at=NOW() WHERE id=?',
+                [$leadId, $slug, $title, $price, $maxBuyers, $status, $notes, $id]
+            );
+            return $id;
+        }
+        return Database::exec(
+            'INSERT INTO single_lead_sales (lead_id, slug, title, price_amount, max_buyers, status, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [$leadId, $slug, $title, $price, $maxBuyers, $status, $notes, $createdBy]
+        );
+    }
+
+    public static function deleteSingleLeadSale(int $id): void
+    {
+        if (self::singleLeadSalesTableExists()) {
+            Database::exec('DELETE FROM single_lead_sales WHERE id=?', [$id]);
+        }
+    }
+
+    public static function updateSingleLeadSalePrice(int $id, float $price): void
+    {
+        if (!self::singleLeadSalesTableExists()) {
+            throw new RuntimeException('single_lead_sales table is missing. Please run the latest migration.');
+        }
+        if ($id <= 0 || $price < 1 || $price > 1999) {
+            throw new InvalidArgumentException('Single lead price must be between ₹1 and ₹1,999.');
+        }
+        $updated = Database::exec('UPDATE single_lead_sales SET price_amount=?, updated_at=NOW() WHERE id=?', [round($price, 2), $id]);
+        if ($updated < 1) {
+            throw new InvalidArgumentException('Single lead sale was not found.');
+        }
+    }
+
+    public static function updateSingleLeadSaleStatus(int $id, string $status): void
+    {
+        if (!self::singleLeadSalesTableExists()) {
+            throw new RuntimeException('single_lead_sales table is missing. Please run the latest migration.');
+        }
+        if (!in_array($status, ['draft', 'active', 'paused', 'sold_out'], true)) {
+            throw new InvalidArgumentException('Invalid single lead sale status.');
+        }
+        Database::exec('UPDATE single_lead_sales SET status=?, updated_at=NOW() WHERE id=?', [$status, $id]);
+    }
+
+    public static function getSingleLeadSaleBySlug(string $slug, bool $public = true): ?array
+    {
+        if (!self::singleLeadSalesTableExists()) {
+            return null;
+        }
+        $where = $public ? "s.slug=? AND s.status IN ('active', 'sold_out')" : 's.slug=?';
+        $row = Database::one(
+            'SELECT ' . self::singleLeadSaleSelect() . self::singleLeadSaleFromJoin() . ' WHERE ' . $where . ' GROUP BY s.id LIMIT 1',
+            [$slug]
+        );
+        return $row ? self::hydrateSingleLeadSale($row, $public) : null;
+    }
+
+    public static function getSingleLeadSaleById(int $id, bool $public = true): ?array
+    {
+        if (!self::singleLeadSalesTableExists()) {
+            return null;
+        }
+        $where = $public ? "s.id=? AND s.status IN ('active', 'sold_out')" : 's.id=?';
+        $row = Database::one(
+            'SELECT ' . self::singleLeadSaleSelect() . self::singleLeadSaleFromJoin() . ' WHERE ' . $where . ' GROUP BY s.id LIMIT 1',
+            [$id]
+        );
+        return $row ? self::hydrateSingleLeadSale($row, $public) : null;
+    }
+
+    public static function createSingleLeadPurchaseOrder(int $buyerId, int $saleId, string $orderId): array
+    {
+        $sale = self::getSingleLeadSaleById($saleId, true);
+        if (!$sale || $sale['status'] !== 'active' || (int)$sale['remaining_slots'] <= 0) {
+            throw new InvalidArgumentException('This lead is no longer available for single purchase.');
+        }
+        $leadId = (int)$sale['lead_id'];
+        if (!self::leadCanBeAssignedToBuyer($leadId, $buyerId)) {
+            throw new InvalidArgumentException('This lead is already purchased by your account or is sold out.');
+        }
+        $cart = [[
+            'single_lead_sale_id' => $saleId,
+            'lead_ids' => [$leadId],
+            'filter_name' => (string)$sale['title'],
+            'criteria' => ['single_lead_sale_id' => $saleId, 'lead_id' => $leadId],
+            'date_filter' => 'single_lead',
+            'lead_count' => 1,
+            'selected_count' => 1,
+            'price_total' => (float)$sale['price_amount'],
+            'pricing' => [
+                'total' => (float)$sale['price_amount'],
+                'lines' => [['label' => 'Single lead', 'count' => 1, 'rate' => (float)$sale['price_amount'], 'amount' => (float)$sale['price_amount']]],
+            ],
+        ]];
+        $purchaseId = Database::exec(
+            'INSERT INTO lead_purchases (buyer_id, razorpay_order_id, coupon_code, discount_amount, amount_total, currency, payment_status, cart_json)
+             VALUES (?, ?, NULL, 0, ?, ?, "pending", ?)',
+            [$buyerId, $orderId, (float)$sale['price_amount'], defined('RAZORPAY_CURRENCY') ? RAZORPAY_CURRENCY : 'INR', json_encode($cart, JSON_UNESCAPED_UNICODE)]
+        );
+        $buyer = Database::one('SELECT name, email, phone FROM lead_buyers WHERE id=?', [$buyerId]) ?? [];
+        self::recordAbandonedCheckout('single_lead', $buyer, (float)$sale['price_amount'], $cart, $orderId, $buyerId);
+        return ['purchase_id' => $purchaseId, 'sale' => $sale];
+    }
+
+    public static function markSingleLeadPurchasePaid(string $orderId, int $buyerId, string $paymentId, string $signature): void
+    {
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        try {
+            $purchase = Database::one('SELECT * FROM lead_purchases WHERE razorpay_order_id=? AND buyer_id=? FOR UPDATE', [$orderId, $buyerId]);
+            if (!$purchase) {
+                throw new RuntimeException('Payment order mismatch.');
+            }
+            if (($purchase['payment_status'] ?? '') === 'paid') {
+                $pdo->commit();
+                return;
+            }
+            $cart = json_decode((string)($purchase['cart_json'] ?? '[]'), true);
+            $item = is_array($cart[0] ?? null) ? $cart[0] : [];
+            $saleId = (int)($item['single_lead_sale_id'] ?? 0);
+            $leadId = (int)($item['lead_ids'][0] ?? 0);
+            $sale = self::getSingleLeadSaleById($saleId, true);
+            if (!$sale || $leadId <= 0 || (int)$sale['lead_id'] !== $leadId || !self::leadCanBeAssignedToBuyer($leadId, $buyerId)) {
+                throw new RuntimeException('This lead is no longer available.');
+            }
+            if (round((float)($purchase['amount_total'] ?? 0), 2) !== round((float)$sale['price_amount'], 2)) {
+                throw new RuntimeException('This lead price has changed. Please start checkout again.');
+            }
+            $purchaseItemId = Database::exec(
+                'INSERT INTO lead_purchase_items (purchase_id, buyer_id, filter_name, filter_json, date_filter, leads_count, amount_total, pricing_json)
+                 VALUES (?, ?, ?, ?, "single_lead", 1, ?, ?)',
+                [
+                    (int)$purchase['id'],
+                    $buyerId,
+                    (string)($sale['title'] ?? 'Single Interior Lead'),
+                    json_encode(['criteria' => ['single_lead_sale_id' => $saleId, 'lead_id' => $leadId], 'lead_ids' => [$leadId]], JSON_UNESCAPED_UNICODE),
+                    (float)$sale['price_amount'],
+                    json_encode(['total' => (float)$sale['price_amount'], 'lines' => [['label' => 'Single lead', 'count' => 1, 'rate' => (float)$sale['price_amount'], 'amount' => (float)$sale['price_amount']]]], JSON_UNESCAPED_UNICODE),
+                ]
+            );
+            $assigned = self::assignPurchasedLeadIds((int)$purchase['id'], $purchaseItemId, $buyerId, [$leadId]);
+            if ($assigned === []) {
+                throw new RuntimeException('This lead is no longer available.');
+            }
+            Database::exec(
+                'UPDATE lead_purchases SET razorpay_payment_id=?, razorpay_signature=?, payment_status="paid", paid_at=NOW(), updated_at=NOW() WHERE id=?',
+                [$paymentId, $signature, (int)$purchase['id']]
+            );
+            $fresh = self::getSingleLeadSaleById($saleId, false);
+            if ($fresh && (int)$fresh['remaining_slots'] <= 0) {
+                Database::exec('UPDATE single_lead_sales SET status="sold_out", updated_at=NOW() WHERE id=? AND status="active"', [$saleId]);
+            }
+            self::completeAbandonedCheckout($orderId);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     public static function leadPriceForCount(int $count, bool $firstTimeEligible = true): array
     {
-        $free = $firstTimeEligible ? min($count, 10) : 0;
+        $free = $firstTimeEligible ? min($count, 3) : 0;
         $payable = max($count - $free, 0);
-        $first = min($payable, 100);
-        $second = min(max($payable - 100, 0), 900);
-        $third = max($payable - 1000, 0);
         $lines = [];
         if ($free > 0) {
             $lines[] = ['label' => 'First-time offer', 'count' => $free, 'rate' => 0, 'amount' => 0];
         }
-        if ($first > 0) {
-            $lines[] = ['label' => 'First 100 leads', 'count' => $first, 'rate' => 100, 'amount' => $first * 100];
-        }
-        if ($second > 0) {
-            $lines[] = ['label' => '101 to 1000 leads', 'count' => $second, 'rate' => 80, 'amount' => $second * 80];
-        }
-        if ($third > 0) {
-            $lines[] = ['label' => 'Above 1000 leads', 'count' => $third, 'rate' => 60, 'amount' => $third * 60];
+        if ($payable > 0) {
+            $lines[] = ['label' => 'Lead price starts from', 'count' => $payable, 'rate' => self::SINGLE_LEAD_PRICE, 'amount' => $payable * self::SINGLE_LEAD_PRICE];
         }
         return [
             'total' => array_sum(array_column($lines, 'amount')),
@@ -1802,6 +4062,49 @@ final class SiteRepository
             'first_time_eligible' => $firstTimeEligible,
             'lines' => $lines,
         ];
+    }
+
+    /** Returns the real quality-price total for the exact lead rows being offered. */
+    private static function leadPriceForRows(array $leads, bool $firstTimeEligible = false): array
+    {
+        $leads = self::sortLeadRowsForPricing($leads);
+        $free = $firstTimeEligible ? min(count($leads), 3) : 0;
+        $groups = [];
+        foreach ($leads as $index => $lead) {
+            if ($index < $free) {
+                continue;
+            }
+            $price = self::storedLeadPrice($lead);
+            $key = (string)(int)$price;
+            $groups[$key] = ($groups[$key] ?? 0) + 1;
+        }
+        $lines = [];
+        if ($free > 0) {
+            $lines[] = ['label' => 'New-account lead benefit', 'count' => $free, 'rate' => 0, 'amount' => 0];
+        }
+        foreach ($groups as $price => $count) {
+            $amount = (float)$price * $count;
+            $lines[] = ['label' => 'Quality-priced leads', 'count' => $count, 'rate' => (float)$price, 'amount' => $amount];
+        }
+        return [
+            'total' => array_sum(array_column($lines, 'amount')),
+            'free_leads' => $free,
+            'first_time_eligible' => $firstTimeEligible,
+            'lines' => $lines,
+        ];
+    }
+
+    /** Lowest price is selected first so package totals are predictable and reproducible. */
+    private static function sortLeadRowsForPricing(array $leads): array
+    {
+        usort($leads, static function (array $left, array $right): int {
+            $priceComparison = self::storedLeadPrice($left) <=> self::storedLeadPrice($right);
+            if ($priceComparison !== 0) {
+                return $priceComparison;
+            }
+            return strcmp((string)($right['created_at'] ?? ''), (string)($left['created_at'] ?? ''));
+        });
+        return $leads;
     }
 
     public static function normalizeLeadCartItem(array $item, bool $firstTimeEligible = true): array
@@ -1813,7 +4116,9 @@ final class SiteRepository
         $availableCount = self::countLeadsForCriteria($criteria, $dateFilter, $startDate, $endDate);
         $requestedCount = isset($item['selected_count']) ? (int)$item['selected_count'] : (isset($item['lead_count']) ? (int)$item['lead_count'] : $availableCount);
         $count = $availableCount > 0 ? max(1, min($requestedCount, $availableCount)) : 0;
-        $price = self::leadPriceForCount($count, $firstTimeEligible);
+        $matching = self::sortLeadRowsForPricing(self::matchingLeadRows($criteria, $dateFilter, $startDate, $endDate));
+        $matching = array_values(array_filter($matching, static fn(array $lead): bool => self::leadCanBeAssignedToBuyer((int)$lead['id'])));
+        $price = self::leadPriceForRows(array_slice($matching, 0, $count), $firstTimeEligible);
         $packageId = hash('sha256', json_encode([$criteria, $dateFilter, $startDate, $endDate]));
         return [
             'id' => hash('sha256', json_encode([$criteria, $dateFilter, $startDate, $endDate, $count])),
@@ -1831,57 +4136,66 @@ final class SiteRepository
         ];
     }
 
-    public static function leadCartSummary(array $cart, ?string $couponCode = null, bool $firstTimeEligible = true): array
+    public static function leadCartSummary(array $cart, ?string $couponCode = null, bool $firstTimeEligible = true, ?int $buyerId = null): array
     {
         $items = [];
         $seenLeadKeys = [];
         $uniqueLeadCount = 0;
+        $allSelectedLeads = [];
         foreach ($cart as $cartItem) {
             $normalized = self::normalizeLeadCartItem(is_array($cartItem) ? $cartItem : [], false);
             $requestedCount = (int)$normalized['selected_count'];
-            $matching = self::matchingLeadRows(
+            $matching = self::sortLeadRowsForPricing(self::matchingLeadRows(
                 $normalized['criteria'],
                 $normalized['date_filter'],
                 $normalized['start_date'],
                 $normalized['end_date']
-            );
+            ));
             $leadIds = [];
-            foreach (array_slice($matching, 0, $requestedCount) as $lead) {
+            $selectedLeads = [];
+            foreach ($matching as $lead) {
+                if (count($leadIds) >= $requestedCount) {
+                    break;
+                }
+                if (!self::leadCanBeAssignedToBuyer((int)$lead['id'], $buyerId)) {
+                    continue;
+                }
                 $uniqueKey = self::leadUniqueKey($lead);
                 if (isset($seenLeadKeys[$uniqueKey])) {
                     continue;
                 }
                 $seenLeadKeys[$uniqueKey] = true;
                 $leadIds[] = (int)$lead['id'];
+                $selectedLeads[] = $lead;
             }
-            $previousTotal = self::leadPriceForCount($uniqueLeadCount, $firstTimeEligible)['total'];
             $uniqueLeadCount += count($leadIds);
-            $runningTotal = self::leadPriceForCount($uniqueLeadCount, $firstTimeEligible)['total'];
-            $itemAmount = max(0, $runningTotal - $previousTotal);
+            $allSelectedLeads = array_merge($allSelectedLeads, $selectedLeads);
+            $itemPricing = self::leadPriceForRows($selectedLeads, false);
+            $itemAmount = (float)$itemPricing['total'];
             $normalized['requested_count'] = $requestedCount;
             $normalized['lead_count'] = count($leadIds);
             $normalized['unique_lead_count'] = count($leadIds);
             $normalized['duplicate_count'] = max(0, $requestedCount - count($leadIds));
             $normalized['lead_ids'] = $leadIds;
             $normalized['price_total'] = $itemAmount;
-            $normalized['pricing'] = [
-                'total' => $itemAmount,
-                'lines' => [[
-                    'label' => 'Unique leads',
-                    'count' => count($leadIds),
-                    'rate' => count($leadIds) > 0 ? round($itemAmount / count($leadIds), 2) : 0,
-                    'amount' => $itemAmount,
-                ]],
-            ];
+            $normalized['pricing'] = $itemPricing;
+            if ($leadIds === []) {
+                continue;
+            }
             $items[] = $normalized;
         }
-        $cartPricing = self::leadPriceForCount($uniqueLeadCount, $firstTimeEligible);
+        $cartPricing = self::leadPriceForRows($allSelectedLeads, false);
         $subtotal = (float)$cartPricing['total'];
         $leadCount = $uniqueLeadCount;
+        $firstTimeCredit = 0.0;
+        if ($firstTimeEligible && $allSelectedLeads !== []) {
+            $benefitLeads = array_slice(self::sortLeadRowsForPricing($allSelectedLeads), 0, 10);
+            $firstTimeCredit = (float)self::leadPriceForRows($benefitLeads, false)['total'];
+        }
         $coupon = null;
         $discount = 0.0;
         if ($couponCode) {
-            $coupon = self::validateLeadCoupon($couponCode, $subtotal, $leadCount);
+            $coupon = self::validateLeadCoupon($couponCode, max(0, $subtotal - $firstTimeCredit), $leadCount);
             $discount = (float)$coupon['discount_amount'];
         }
         return [
@@ -1892,7 +4206,8 @@ final class SiteRepository
             'pricing' => $cartPricing,
             'coupon' => $coupon,
             'discount_amount' => $discount,
-            'grand_total' => max($subtotal - $discount, 0),
+            'first_time_credit' => $firstTimeCredit,
+            'grand_total' => max($subtotal - $firstTimeCredit - $discount, 0),
             'first_time_eligible' => $firstTimeEligible,
         ];
     }
@@ -1911,8 +4226,192 @@ final class SiteRepository
 
     public static function buyerFirstTimeLeadOfferEligible(int $buyerId): bool
     {
-        $row = Database::one('SELECT COUNT(*) AS c FROM lead_purchases WHERE buyer_id=? AND payment_status="paid"', [$buyerId]);
-        return (int)($row['c'] ?? 0) === 0;
+        return self::designerOnboardingLeadBenefitEligible($buyerId);
+    }
+
+    public static function createDesignerContactQuery(array $data): int
+    {
+        $name = trim((string)($data['name'] ?? ''));
+        $email = strtolower(trim((string)($data['email'] ?? '')));
+        $phone = preg_replace('/\D+/', '', (string)($data['phone'] ?? '')) ?? '';
+        $subject = trim((string)($data['subject'] ?? ''));
+        $message = trim((string)($data['message'] ?? ''));
+        if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($phone) < 10 || $subject === '' || $message === '' || empty($data['consent'])) {
+            throw new InvalidArgumentException('Name, valid email, mobile number, subject, message, and consent are required.');
+        }
+        return Database::exec(
+            'INSERT INTO designer_contact_queries (name, email, phone, firm_name, role_name, city, subject, message, linkedin_url, consent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
+            [$name, $email, $phone, trim((string)($data['firm_name'] ?? '')) ?: null, trim((string)($data['role_name'] ?? '')) ?: null, trim((string)($data['city'] ?? '')) ?: null, $subject, $message, trim((string)($data['linkedin_url'] ?? '')) ?: null]
+        );
+    }
+
+    public static function listDesignerContactQueries(): array
+    {
+        return Database::query('SELECT * FROM designer_contact_queries ORDER BY FIELD(status, "new", "in_progress", "resolved", "closed"), created_at DESC');
+    }
+
+    public static function updateDesignerContactQueryStatus(int $id, string $status): void
+    {
+        if (!in_array($status, ['new', 'in_progress', 'resolved', 'closed'], true)) {
+            throw new InvalidArgumentException('Invalid contact query status.');
+        }
+        Database::exec('UPDATE designer_contact_queries SET status=?, updated_at=NOW() WHERE id=?', [$status, $id]);
+    }
+
+    public static function grantDesignerOnboardingLeadBenefit(int $userId, int $proId, int $buyerId): void
+    {
+        if ($userId <= 0 || $proId <= 0 || $buyerId <= 0) {
+            return;
+        }
+        try {
+            Database::exec('INSERT INTO designer_onboarding_lead_benefits (user_id, pro_id, buyer_id, lead_count, status) VALUES (?, ?, ?, 3, "available")', [$userId, $proId, $buyerId]);
+        } catch (PDOException $e) {
+            if ((string)$e->getCode() !== '23000') {
+                throw $e;
+            }
+        }
+    }
+
+    public static function designerOnboardingLeadBenefitEligible(int $buyerId): bool
+    {
+        return Database::one('SELECT id FROM designer_onboarding_lead_benefits WHERE buyer_id=? AND status="available" LIMIT 1', [$buyerId]) !== null;
+    }
+
+    public static function redeemDesignerOnboardingLeadBenefit(int $buyerId): void
+    {
+        Database::exec('UPDATE designer_onboarding_lead_benefits SET status="redeemed", redeemed_at=NOW(), updated_at=NOW() WHERE buyer_id=? AND status="available"', [$buyerId]);
+    }
+
+    public static function autoAssignDesignerRegistrationLeads(array $user, ?array $buyer = null): array
+    {
+        $proId = (int)($user['pro_id'] ?? 0);
+        $buyer = $buyer ?: self::designerBuyerForUser($user);
+        $buyerId = (int)($buyer['id'] ?? 0);
+        if ($proId <= 0 || $buyerId <= 0) {
+            return ['assigned_count' => 0, 'is_complete' => false];
+        }
+        $benefit = Database::one('SELECT * FROM designer_onboarding_lead_benefits WHERE buyer_id=? LIMIT 1', [$buyerId]);
+        if (!$benefit) {
+            return ['assigned_count' => self::registrationLeadDeliveryCount($buyerId), 'is_complete' => true];
+        }
+        if ((string)$benefit['status'] !== 'available') {
+            return ['assigned_count' => self::registrationLeadDeliveryCount($buyerId), 'is_complete' => true];
+        }
+        $pro = Database::one('SELECT city FROM pros WHERE id=?', [$proId]);
+        $city = trim((string)($pro['city'] ?? ''));
+        if ($city === '') {
+            return ['assigned_count' => 0, 'is_complete' => false];
+        }
+        $cityKey = strtolower(str_replace([' ', '-'], '', $city));
+        $cityAliases = $cityKey === 'gurgaon' || $cityKey === 'gurugram' ? ['gurgaon', 'gurugram'] : [$cityKey];
+        $leads = Database::query('SELECT id, city FROM leads WHERE status="new" ORDER BY created_at DESC, id DESC LIMIT 500');
+        $leadIds = [];
+        foreach ($leads as $lead) {
+            $leadCity = strtolower(str_replace([' ', '-'], '', (string)($lead['city'] ?? '')));
+            if (!in_array($leadCity, $cityAliases, true) || !self::leadCanBeAssignedToBuyer((int)$lead['id'], $buyerId)) {
+                continue;
+            }
+            $leadIds[] = (int)$lead['id'];
+            if (count($leadIds) === min(3, (int)$benefit['lead_count'])) {
+                break;
+            }
+        }
+        if ($leadIds === []) {
+            return ['assigned_count' => 0, 'is_complete' => false];
+        }
+        $orderId = 'registration_leads_' . $buyerId . '_' . time() . '_' . bin2hex(random_bytes(3));
+        $cart = [[
+            'filter_name' => 'Designer registration benefit',
+            'criteria' => ['city' => $city],
+            'date_filter' => 'all_time',
+            'lead_ids' => $leadIds,
+            'price_total' => 0,
+            'pricing' => ['total' => 0, 'lines' => [['label' => 'Registration benefit', 'count' => count($leadIds), 'rate' => 0, 'amount' => 0]],],
+        ]];
+        $purchaseId = self::createLeadPurchaseOrder($buyerId, $cart, $orderId, 0);
+        self::markLeadPurchasePaid($orderId, $buyerId, 'registration_benefit', 'registration_benefit');
+        self::redeemDesignerOnboardingLeadBenefit($buyerId);
+        return ['assigned_count' => count($leadIds), 'is_complete' => true, 'purchase_id' => $purchaseId];
+    }
+
+    public static function registrationLeadDeliveryCount(int $buyerId): int
+    {
+        $row = Database::one('SELECT COALESCE(SUM(i.leads_count), 0) AS c FROM lead_purchase_items i JOIN lead_purchases p ON p.id=i.purchase_id WHERE i.buyer_id=? AND i.filter_name="Designer registration benefit" AND p.payment_status="paid"', [$buyerId]);
+        return (int)($row['c'] ?? 0);
+    }
+
+    private static function leadPurchaseLeadTableExists(): bool
+    {
+        static $exists = null;
+        if ($exists !== null) {
+            return $exists;
+        }
+        try {
+            $row = Database::one('SHOW TABLES LIKE "lead_purchase_leads"');
+            $exists = (bool)$row;
+        } catch (Throwable) {
+            $exists = false;
+        }
+        return $exists;
+    }
+
+    private static function userIdForBuyer(int $buyerId): ?int
+    {
+        $row = Database::one(
+            'SELECT u.id
+             FROM lead_buyers b
+             JOIN users u ON LOWER(u.email)=LOWER(b.email)
+             WHERE b.id=? AND u.is_active=1
+             ORDER BY u.id DESC
+             LIMIT 1',
+            [$buyerId]
+        );
+        return !empty($row['id']) ? (int)$row['id'] : null;
+    }
+
+    private static function leadCanBeAssignedToBuyer(int $leadId, ?int $buyerId = null): bool
+    {
+        if ($leadId <= 0 || !self::leadPurchaseLeadTableExists()) {
+            return true;
+        }
+        if ($buyerId !== null && $buyerId > 0) {
+            $existing = Database::one('SELECT id FROM lead_purchase_leads WHERE buyer_id=? AND lead_id=? LIMIT 1', [$buyerId, $leadId]);
+            if ($existing) {
+                return false;
+            }
+        }
+        $row = Database::one('SELECT COUNT(DISTINCT buyer_id) AS c FROM lead_purchase_leads WHERE lead_id=?', [$leadId]);
+        return (int)($row['c'] ?? 0) < self::MAX_BUYERS_PER_LEAD;
+    }
+
+    private static function assignPurchasedLeadIds(int $purchaseId, int $purchaseItemId, int $buyerId, array $leadIds): array
+    {
+        $leadIds = array_values(array_unique(array_filter(array_map('intval', $leadIds))));
+        if ($leadIds === [] || !self::leadPurchaseLeadTableExists()) {
+            return $leadIds;
+        }
+        $userId = self::userIdForBuyer($buyerId);
+        $assigned = [];
+        foreach ($leadIds as $leadId) {
+            // Lock the lead row while counting assignments so concurrent checkouts cannot oversell it.
+            Database::one('SELECT id FROM leads WHERE id=? FOR UPDATE', [$leadId]);
+            if (!self::leadCanBeAssignedToBuyer($leadId, $buyerId)) {
+                continue;
+            }
+            Database::exec(
+                'INSERT IGNORE INTO lead_purchase_leads (purchase_id, purchase_item_id, buyer_id, user_id, lead_id)
+                 VALUES (?, ?, ?, ?, ?)',
+                [$purchaseId, $purchaseItemId, $buyerId, $userId, $leadId]
+            );
+            $row = Database::one(
+                'SELECT lead_id FROM lead_purchase_leads WHERE purchase_item_id=? AND buyer_id=? AND lead_id=?',
+                [$purchaseItemId, $buyerId, $leadId]
+            );
+            if ($row) {
+                $assigned[] = $leadId;
+            }
+        }
+        return $assigned;
     }
 
     public static function validateLeadCoupon(string $code, float $subtotal, int $leadCount): array
@@ -2012,7 +4511,7 @@ final class SiteRepository
     public static function countLeadsForCriteria(array $criteria, string $dateFilter, ?string $startDate = null, ?string $endDate = null): int
     {
         $leads = self::leadRowsForDateFilter($dateFilter, $startDate, $endDate);
-        return count(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $criteria)));
+        return count(array_filter($leads, static fn(array $lead): bool => self::leadMatchesCriteria($lead, $criteria) && self::leadCanBeAssignedToBuyer((int)$lead['id'])));
     }
 
     public static function createOrLoginBuyer(array $data): array
@@ -2042,6 +4541,28 @@ final class SiteRepository
         return Database::one('SELECT * FROM lead_buyers WHERE id = ?', [$id]) ?? [];
     }
 
+    /** Checkout may create or reuse a buyer without exposing an account-password step. */
+    public static function createOrLoginBuyerForCheckout(array $data): array
+    {
+        $name = trim((string)($data['name'] ?? ''));
+        $phone = preg_replace('/\D+/', '', (string)($data['phone'] ?? '')) ?? '';
+        $email = strtolower(trim((string)($data['email'] ?? '')));
+        if ($name === '' || strlen($phone) < 10 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidArgumentException('Name, valid email, and 10 digit mobile number are required.');
+        }
+
+        $existing = Database::one('SELECT * FROM lead_buyers WHERE (phone=? OR LOWER(email)=?) AND is_active=1 ORDER BY id DESC LIMIT 1', [$phone, $email]);
+        if ($existing) {
+            return $existing;
+        }
+
+        $id = Database::exec(
+            'INSERT INTO lead_buyers (name, email, phone, password_hash) VALUES (?, ?, ?, ?)',
+            [$name, $email, $phone, password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT)]
+        );
+        return Database::one('SELECT * FROM lead_buyers WHERE id=?', [$id]) ?? [];
+    }
+
     public static function loginBuyer(string $phone, string $password): ?array
     {
         $cleanPhone = preg_replace('/\D+/', '', $phone) ?? '';
@@ -2050,6 +4571,49 @@ final class SiteRepository
             return null;
         }
         return $buyer;
+    }
+
+    public static function recordAbandonedCheckout(string $type, array $contact, float $amount, array $snapshot, string $externalOrderId = '', ?int $buyerId = null, ?int $userId = null, ?int $proId = null): void
+    {
+        if (!self::tableExists('abandoned_checkout_attempts') || !in_array($type, ['single_lead', 'bulk_leads', 'proposal_generator'], true)) {
+            return;
+        }
+        $phone = preg_replace('/\D+/', '', (string)($contact['phone'] ?? '')) ?? '';
+        Database::exec(
+            'INSERT INTO abandoned_checkout_attempts (checkout_type, checkout_status, external_order_id, buyer_id, user_id, pro_id, customer_name, customer_email, customer_phone, amount_total, currency, cart_snapshot_json, source_path)
+             VALUES (?, "open", ?, ?, ?, ?, ?, ?, ?, ?, "INR", ?, ?)
+             ON DUPLICATE KEY UPDATE checkout_status="open", buyer_id=VALUES(buyer_id), user_id=VALUES(user_id), pro_id=VALUES(pro_id), customer_name=VALUES(customer_name), customer_email=VALUES(customer_email), customer_phone=VALUES(customer_phone), amount_total=VALUES(amount_total), cart_snapshot_json=VALUES(cart_snapshot_json), source_path=VALUES(source_path), updated_at=NOW()',
+            [
+                $type,
+                $externalOrderId !== '' ? $externalOrderId : null,
+                $buyerId,
+                $userId,
+                $proId,
+                trim((string)($contact['name'] ?? '')) ?: null,
+                trim((string)($contact['email'] ?? '')) ?: null,
+                $phone !== '' ? $phone : null,
+                max(0, $amount),
+                json_encode($snapshot, JSON_UNESCAPED_UNICODE),
+                substr((string)($_SERVER['REQUEST_URI'] ?? ''), 0, 500) ?: null,
+            ]
+        );
+    }
+
+    public static function completeAbandonedCheckout(string $externalOrderId): void
+    {
+        if ($externalOrderId === '' || !self::tableExists('abandoned_checkout_attempts')) {
+            return;
+        }
+        Database::exec('UPDATE abandoned_checkout_attempts SET checkout_status="completed", completed_at=NOW(), updated_at=NOW() WHERE external_order_id=? AND checkout_status="open"', [$externalOrderId]);
+    }
+
+    public static function abandonedCheckouts(string $status = 'open'): array
+    {
+        if (!self::tableExists('abandoned_checkout_attempts')) {
+            return [];
+        }
+        $where = $status === 'all' ? '' : ' WHERE checkout_status="open"';
+        return Database::query('SELECT * FROM abandoned_checkout_attempts' . $where . ' ORDER BY started_at DESC LIMIT 2000');
     }
 
     public static function createLeadPurchaseOrder(int $buyerId, array $cart, string $orderId, float $amount, ?string $couponCode = null, float $discount = 0): int
@@ -2063,11 +4627,17 @@ final class SiteRepository
 
     public static function markLeadPurchasePaid(string $orderId, int $buyerId, string $paymentId, string $signature): void
     {
-        $purchase = Database::one('SELECT * FROM lead_purchases WHERE razorpay_order_id = ? AND buyer_id = ?', [$orderId, $buyerId]);
-        if (!$purchase) {
-            throw new RuntimeException('Payment order mismatch.');
-        }
-        if (($purchase['payment_status'] ?? '') !== 'paid') {
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        try {
+            $purchase = Database::one('SELECT * FROM lead_purchases WHERE razorpay_order_id = ? AND buyer_id = ? FOR UPDATE', [$orderId, $buyerId]);
+            if (!$purchase) {
+                throw new RuntimeException('Payment order mismatch.');
+            }
+            if (($purchase['payment_status'] ?? '') === 'paid') {
+                $pdo->commit();
+                return;
+            }
             Database::exec(
                 'UPDATE lead_purchases SET razorpay_payment_id=?, razorpay_signature=?, payment_status="paid", paid_at=NOW(), updated_at=NOW() WHERE id=?',
                 [$paymentId, $signature, (int)$purchase['id']]
@@ -2085,7 +4655,7 @@ final class SiteRepository
                 $uniqueLeadCount = count($leadIds);
                 $itemAmount = (float)($item['price_total'] ?? 0);
                 $itemPricing = is_array($item['pricing'] ?? null) ? $item['pricing'] : ['total' => $itemAmount, 'lines' => []];
-                Database::exec(
+                $purchaseItemId = Database::exec(
                     'INSERT INTO lead_purchase_items (purchase_id, buyer_id, filter_name, filter_json, date_filter, leads_count, amount_total, pricing_json)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     [
@@ -2104,7 +4674,30 @@ final class SiteRepository
                         json_encode($itemPricing, JSON_UNESCAPED_UNICODE),
                     ]
                 );
+                $assignedLeadIds = self::assignPurchasedLeadIds((int)$purchase['id'], $purchaseItemId, $buyerId, $leadIds);
+                if ($assignedLeadIds !== $leadIds) {
+                    Database::exec(
+                        'UPDATE lead_purchase_items SET filter_json=?, leads_count=? WHERE id=?',
+                        [
+                            json_encode([
+                                'criteria' => $normalized['criteria'],
+                                'start_date' => $normalized['start_date'],
+                                'end_date' => $normalized['end_date'],
+                                'lead_ids' => $assignedLeadIds,
+                            ], JSON_UNESCAPED_UNICODE),
+                            count($assignedLeadIds),
+                            $purchaseItemId,
+                        ]
+                    );
+                }
             }
+            self::completeAbandonedCheckout($orderId);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
         }
     }
 
@@ -2136,6 +4729,19 @@ final class SiteRepository
         );
         if (!$item) {
             throw new RuntimeException('Purchased lead package not found.');
+        }
+        if (self::leadPurchaseLeadTableExists()) {
+            $assignedRows = Database::query(
+                'SELECT l.id, l.name, l.phone, l.city, l.society_area, l.budget, l.requirement, l.source, l.status, l.estimate, l.created_at
+                 FROM lead_purchase_leads pll
+                 JOIN leads l ON l.id=pll.lead_id
+                 WHERE pll.purchase_item_id=? AND pll.buyer_id=?
+                 ORDER BY pll.id ASC',
+                [$itemId, $buyerId]
+            );
+            if ($assignedRows !== []) {
+                return $assignedRows;
+            }
         }
         $filter = json_decode((string)$item['filter_json'], true);
         $leadIds = array_values(array_filter(array_map('intval', (array)($filter['lead_ids'] ?? []))));
@@ -2172,7 +4778,8 @@ final class SiteRepository
             $params[] = $startDate;
             $params[] = $endDate;
         }
-        $sql = 'SELECT id, name, phone, city, society_area, budget, requirement, source, status, estimate, created_at FROM leads';
+        $leadPrice = self::tableHasColumn('leads', 'lead_price') ? 'lead_price' : 'NULL AS lead_price';
+        $sql = 'SELECT id, name, phone, city, society_area, budget, requirement, source, status, plan_type, floor_plan, package_tier, rooms_json, estimate, ' . $leadPrice . ', created_at FROM leads';
         if ($where) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
         }
@@ -2608,6 +5215,351 @@ final class SiteRepository
         return $path === '/' ? '/' : rtrim($path, '/');
     }
 
+    /**
+     * Searches the public catalogue in PHP so a query can match separate words
+     * anywhere in a title, description, heading, or URL instead of requiring an
+     * exact consecutive keyword phrase.
+     */
+    public static function searchPublicPages(string $query, string $sourcePage = '', int $limit = 8): array
+    {
+        $query = trim((string)preg_replace('/\s+/u', ' ', $query));
+        $normalized = self::siteSearchText($query);
+        if (mb_strlen($normalized) < 1) {
+            return ['search_id' => null, 'results' => []];
+        }
+
+        $tokens = self::siteSearchTokens($normalized);
+        $matches = [];
+        foreach (self::siteSearchCatalogue() as $item) {
+            $title = trim((string)($item['title'] ?? ''));
+            $description = trim((string)($item['description'] ?? ''));
+            $path = self::normalizeUrlAliasPath((string)($item['path'] ?? '/'));
+            if ($title === '' || $path === '/' && $title === '') {
+                continue;
+            }
+            $titleText = self::siteSearchText($title);
+            $descriptionText = self::siteSearchText($description);
+            $pathText = self::siteSearchText(str_replace(['/', '-'], ' ', $path));
+            $score = 0;
+            $matchedTokens = 0;
+            foreach ($tokens as $token) {
+                if (str_contains($titleText, $token)) {
+                    $score += 26;
+                    $matchedTokens++;
+                } elseif (str_contains($descriptionText, $token)) {
+                    $score += 12;
+                    $matchedTokens++;
+                } elseif (str_contains($pathText, $token)) {
+                    $score += 8;
+                    $matchedTokens++;
+                }
+            }
+            if ($matchedTokens === 0) {
+                continue;
+            }
+            if (str_contains($titleText . ' ' . $descriptionText, $normalized)) {
+                $score += 18;
+            }
+            $score += min(10, $matchedTokens * 3);
+            $item['path'] = $path;
+            $item['title'] = $title;
+            $item['description'] = self::siteSearchExcerpt($description);
+            $item['score'] = $score;
+            $matches[] = $item;
+        }
+        usort($matches, static fn(array $a, array $b): int => ($b['score'] <=> $a['score']) ?: strcmp((string)$a['title'], (string)$b['title']));
+        $results = array_values(array_slice($matches, 0, max(1, min(12, $limit))));
+        $searchId = self::trackSiteSearchQuery($query, $normalized, count($results), $sourcePage);
+        foreach ($results as &$result) {
+            unset($result['score']);
+        }
+        unset($result);
+        return ['search_id' => $searchId, 'results' => $results];
+    }
+
+    public static function trackSiteSearchClick(array $data): void
+    {
+        $requestedPath = trim((string)($data['path'] ?? ''));
+        if (!str_starts_with($requestedPath, '/') || str_starts_with($requestedPath, '//')) {
+            return;
+        }
+        $path = self::normalizeUrlAliasPath($requestedPath);
+        try {
+            if (!self::tableExists('site_search_clicks')) {
+                return;
+            }
+            Database::exec(
+                'INSERT INTO site_search_clicks (search_query_id, session_key, result_path, result_title, result_type) VALUES (?, ?, ?, ?, ?)',
+                [
+                    !empty($data['search_id']) ? (int)$data['search_id'] : null,
+                    self::siteSearchSessionKey(),
+                    $path,
+                    mb_substr(trim((string)($data['title'] ?? '')), 0, 500),
+                    mb_substr(trim((string)($data['type'] ?? '')), 0, 80),
+                ]
+            );
+        } catch (Throwable) {
+            // Search tracking must never delay a visitor's selected destination.
+        }
+    }
+
+    /** Admin-only search terms and selected-result activity. */
+    public static function siteSearchAnalytics(array $filters = []): array
+    {
+        if (!self::ensureSiteSearchTables()) {
+            return ['stats' => ['searches' => 0, 'unique_searches' => 0, 'clicks' => 0, 'click_through_rate' => 0], 'queries' => [], 'clicks' => []];
+        }
+
+        $days = max(1, min(365, (int)($filters['days'] ?? 30)));
+        $term = trim((string)($filters['q'] ?? ''));
+        $where = ['q.created_at >= DATE_SUB(NOW(), INTERVAL ' . $days . ' DAY)'];
+        $params = [];
+        if ($term !== '') {
+            $where[] = '(q.query_text LIKE ? OR q.source_page LIKE ? OR c.result_path LIKE ? OR c.result_title LIKE ?)';
+            $like = '%' . $term . '%';
+            array_push($params, $like, $like, $like, $like);
+        }
+        $whereSql = implode(' AND ', $where);
+        $stats = Database::one(
+            'SELECT COUNT(DISTINCT q.id) AS searches, COUNT(DISTINCT q.normalized_query) AS unique_searches, COUNT(c.id) AS clicks
+             FROM site_search_queries q
+             LEFT JOIN site_search_clicks c ON c.search_query_id=q.id
+             WHERE ' . $whereSql,
+            $params
+        ) ?: [];
+        $searches = (int)($stats['searches'] ?? 0);
+        $clicks = (int)($stats['clicks'] ?? 0);
+        $stats = [
+            'searches' => $searches,
+            'unique_searches' => (int)($stats['unique_searches'] ?? 0),
+            'clicks' => $clicks,
+            'click_through_rate' => $searches > 0 ? round(($clicks / $searches) * 100, 1) : 0,
+        ];
+        $queries = Database::query(
+            'SELECT q.id, q.query_text, q.normalized_query, q.result_count, q.source_page, q.created_at,
+                    COUNT(c.id) AS click_count, MAX(c.result_path) AS clicked_path, MAX(c.result_title) AS clicked_title
+             FROM site_search_queries q
+             LEFT JOIN site_search_clicks c ON c.search_query_id=q.id
+             WHERE ' . $whereSql . '
+             GROUP BY q.id, q.query_text, q.normalized_query, q.result_count, q.source_page, q.created_at
+             ORDER BY q.created_at DESC
+             LIMIT 500',
+            $params
+        );
+        $clickRows = Database::query(
+            'SELECT c.id, c.result_path, c.result_title, c.result_type, c.created_at, q.query_text, q.source_page
+             FROM site_search_clicks c
+             LEFT JOIN site_search_queries q ON q.id=c.search_query_id
+             WHERE c.created_at >= DATE_SUB(NOW(), INTERVAL ' . $days . ' DAY)' . ($term !== '' ? ' AND (q.query_text LIKE ? OR c.result_path LIKE ? OR c.result_title LIKE ?)' : '') . '
+             ORDER BY c.created_at DESC
+             LIMIT 300',
+            $term !== '' ? [$like, $like, $like] : []
+        );
+        return ['stats' => $stats, 'queries' => $queries, 'clicks' => $clickRows];
+    }
+
+    public static function siteSearchAnalyticsRows(): array
+    {
+        $analytics = self::siteSearchAnalytics(['days' => 365]);
+        return array_map(static function (array $query): array {
+            return [
+                'searched_at' => $query['created_at'] ?? '',
+                'search_query' => $query['query_text'] ?? '',
+                'normalized_query' => $query['normalized_query'] ?? '',
+                'source_page' => $query['source_page'] ?? '',
+                'suggestions_shown' => $query['result_count'] ?? 0,
+                'click_count' => $query['click_count'] ?? 0,
+                'clicked_page' => $query['clicked_path'] ?? '',
+                'clicked_title' => $query['clicked_title'] ?? '',
+            ];
+        }, $analytics['queries']);
+    }
+
+    private static function siteSearchCatalogue(): array
+    {
+        $items = [];
+        $add = static function (array $item) use (&$items): void {
+            if (empty($item['is_indexable'])) {
+                return;
+            }
+            $path = self::normalizeUrlAliasPath((string)($item['path'] ?? ''));
+            if ($path === '/' && ($item['title'] ?? '') === '') {
+                return;
+            }
+            $item['path'] = $path;
+            if (!isset($items[$path]) || strlen((string)($item['description'] ?? '')) > strlen((string)($items[$path]['description'] ?? ''))) {
+                $items[$path] = $item;
+            }
+        };
+
+        foreach (self::siteSearchStaticPages() as $page) {
+            $page['is_indexable'] = true;
+            $add($page);
+        }
+        try {
+            if (self::tableExists('url_aliases')) {
+                foreach (Database::query("SELECT path, page_type, meta_title, meta_description, h1 FROM url_aliases WHERE is_active=1 AND path NOT LIKE '/admin%' AND path NOT LIKE '/api%' AND path <> '/properties' AND path NOT LIKE '/property/%' AND path NOT LIKE '/professionals/%' AND path NOT LIKE '/portfolio/%' AND path NOT LIKE '/design-ideas/%' AND COALESCE(robots, '') NOT LIKE '%noindex%' ORDER BY updated_at DESC LIMIT 2500") as $row) {
+                    $add(['path' => $row['path'], 'title' => $row['meta_title'] ?: ($row['h1'] ?: self::siteSearchLabelFromPath((string)$row['path'])), 'description' => $row['meta_description'] ?? '', 'type' => self::siteSearchTypeLabel((string)($row['page_type'] ?? 'Page')), 'is_indexable' => true]);
+                }
+            }
+            if (self::tableExists('articles')) {
+                $publishedFilter = self::tableHasColumn('articles', 'is_published') ? ' AND is_published=1' : '';
+                foreach (Database::query("SELECT slug, title, excerpt, meta_title, meta_description, article_type, city, work_type FROM articles WHERE is_active=1{$publishedFilter} AND TRIM(COALESCE(slug, ''))<>'' AND (published_at IS NULL OR published_at<=NOW()) ORDER BY COALESCE(published_at, created_at) DESC LIMIT 1000") as $row) {
+                    $add(['path' => '/articles/' . $row['slug'], 'title' => $row['meta_title'] ?: $row['title'], 'description' => ($row['meta_description'] ?: $row['excerpt']) . ' ' . ($row['city'] ?? '') . ' ' . ($row['work_type'] ?? ''), 'type' => 'Article', 'is_indexable' => true]);
+                }
+            }
+            if (self::tableExists('design_ideas')) {
+                $photoSourceFilter = self::tableHasColumn('design_ideas', 'photo_source_name') ? " AND TRIM(COALESCE(photo_source_name, ''))<>''" : '';
+                foreach (Database::query("SELECT slug, name, short_description, meta_title, meta_description, type, city, style, color FROM design_ideas WHERE is_active=1{$photoSourceFilter} AND TRIM(COALESCE(slug, ''))<>'' ORDER BY is_featured DESC, updated_at DESC LIMIT 1000") as $row) {
+                    $add(['path' => '/design-ideas/idea/' . $row['slug'], 'title' => $row['meta_title'] ?: $row['name'], 'description' => ($row['meta_description'] ?: $row['short_description']) . ' ' . implode(' ', array_filter([$row['type'] ?? '', $row['city'] ?? '', $row['style'] ?? '', $row['color'] ?? ''])), 'type' => 'Design idea', 'is_indexable' => true]);
+                }
+            }
+            if (self::tableExists('design_idea_aliases')) {
+                foreach (Database::query("SELECT slug, title, subtitle, meta_title, meta_description FROM design_idea_aliases WHERE is_active=1 AND TRIM(COALESCE(slug, ''))<>'' ORDER BY updated_at DESC LIMIT 200") as $row) {
+                    $add(['path' => '/design-ideas/' . $row['slug'], 'title' => $row['meta_title'] ?: $row['title'], 'description' => $row['meta_description'] ?: ($row['subtitle'] ?? ''), 'type' => 'Design ideas', 'is_indexable' => true]);
+                }
+            }
+            if (self::tableExists('pros')) {
+                foreach (Database::query("SELECT slug, full_name, profile_description, role, city, primary_work_type, specialization FROM pros WHERE is_active=1 AND TRIM(COALESCE(slug, ''))<>'' ORDER BY verification_status DESC, updated_at DESC LIMIT 1000") as $row) {
+                    $add(['path' => '/professionals/' . $row['slug'], 'title' => $row['full_name'] . ' | HomeInteriors360', 'description' => implode(' ', array_filter([$row['profile_description'] ?? '', $row['role'] ?? '', $row['city'] ?? '', $row['primary_work_type'] ?? '', $row['specialization'] ?? ''])), 'type' => 'Professional', 'is_indexable' => true]);
+                }
+            }
+            if (self::tableExists('projects')) {
+                $projectModerationFilter = self::tableHasColumn('projects', 'moderation_status') ? " AND COALESCE(p.moderation_status, 'APPROVED')='APPROVED'" : '';
+                foreach (Database::query("SELECT p.slug, p.project_name, p.project_description, p.location, p.work_type, p.design_style, pr.full_name FROM projects p JOIN pros pr ON pr.id=p.pro_id AND pr.is_active=1 WHERE TRIM(COALESCE(p.slug, ''))<>''{$projectModerationFilter} ORDER BY p.updated_at DESC LIMIT 800") as $row) {
+                    $add(['path' => '/portfolio/' . $row['slug'], 'title' => $row['project_name'] . ' | ' . $row['full_name'], 'description' => implode(' ', array_filter([$row['project_description'] ?? '', $row['location'] ?? '', $row['work_type'] ?? '', $row['design_style'] ?? ''])), 'type' => 'Portfolio', 'is_indexable' => true]);
+                }
+            }
+            if (self::tableExists('home_service_nodes')) {
+                foreach (Database::query('SELECT s.slug, s.name, s.short_description, c.slug AS category_slug, c.name AS category_name FROM home_service_nodes s JOIN home_service_nodes c ON c.id=s.parent_id AND c.node_type="category" WHERE s.node_type="service" AND s.is_active=1 AND c.is_active=1 ORDER BY c.sort_order, s.sort_order') as $row) {
+                    $add(['path' => '/services/' . $row['category_slug'] . '/' . $row['slug'], 'title' => $row['name'] . ' Services | HomeInteriors360', 'description' => ($row['short_description'] ?? '') . ' ' . ($row['category_name'] ?? ''), 'type' => 'Home service', 'is_indexable' => true]);
+                }
+            }
+        } catch (Throwable) {
+            // Static pages still provide a useful search result during a partial migration.
+        }
+        return array_values($items);
+    }
+
+    private static function siteSearchStaticPages(): array
+    {
+        return [
+            ['path' => '/', 'title' => 'HomeInteriors360 | Interior Design, Decor & Home Services', 'description' => 'Find interior designers, home services, design ideas, calculators and free consultations.', 'type' => 'Page'],
+            ['path' => '/home-interior-hire-a-designer', 'title' => 'Hire an Interior Designer | HomeInteriors360', 'description' => 'Share your home interior requirement and get matched with suitable designers.', 'type' => 'Page'],
+            ['path' => '/professionals', 'title' => 'Find Interior Designers & Architects | HomeInteriors360', 'description' => 'Browse professional interior designers, architects and contractors by city and work type.', 'type' => 'Directory'],
+            ['path' => '/home-services', 'title' => 'Home Services | HomeInteriors360', 'description' => 'Explore cleaning, repair, electrical, plumbing, painting, moving and interior services.', 'type' => 'Home service'],
+            ['path' => '/design-ideas', 'title' => 'Interior Design Ideas | HomeInteriors360', 'description' => 'Browse kitchen, bedroom, living room, bathroom and home interior design ideas.', 'type' => 'Design ideas'],
+            ['path' => '/articles', 'title' => 'Interior Design Articles & Guides | HomeInteriors360', 'description' => 'Read guides for interiors, home decor, renovation, budgets and home services.', 'type' => 'Article'],
+            ['path' => '/cost-calculator', 'title' => 'Interior Cost Calculator | HomeInteriors360', 'description' => 'Estimate interior design and home renovation budgets.', 'type' => 'Calculator'],
+            ['path' => '/kitchen-cost-calculator', 'title' => 'Kitchen Cost Calculator | HomeInteriors360', 'description' => 'Estimate a modular kitchen budget and finishes.', 'type' => 'Calculator'],
+            ['path' => '/full-home-cost-calculator', 'title' => 'Full Home Interior Cost Calculator | HomeInteriors360', 'description' => 'Estimate a full home interiors budget by BHK and finish tier.', 'type' => 'Calculator'],
+            ['path' => '/single-lead', 'title' => 'Buy Verified Home Buyer Leads | HomeInteriors360', 'description' => 'Browse verified homeowner enquiries for professionals.', 'type' => 'Lead marketplace'],
+            ['path' => '/interior-designer-registration', 'title' => 'Register as an Interior Designer | HomeInteriors360', 'description' => 'Create a professional profile, upload portfolio work and receive leads.', 'type' => 'Professional'],
+            ['path' => '/for-professionals', 'title' => 'Tools for Interior Design Professionals | HomeInteriors360', 'description' => 'Professional listing, portfolio, leads and proposal builder tools.', 'type' => 'Professional'],
+        ];
+    }
+
+    private static function trackSiteSearchQuery(string $query, string $normalized, int $resultCount, string $sourcePage): ?int
+    {
+        try {
+            if (!self::ensureSiteSearchTables()) {
+                return null;
+            }
+            return Database::exec(
+                'INSERT INTO site_search_queries (session_key, query_text, normalized_query, result_count, source_page) VALUES (?, ?, ?, ?, ?)',
+                [self::siteSearchSessionKey(), mb_substr($query, 0, 255), mb_substr($normalized, 0, 255), $resultCount, mb_substr(self::normalizeUrlAliasPath($sourcePage ?: '/'), 0, 500)]
+            );
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private static function siteSearchSessionKey(): string
+    {
+        $key = (string)($_COOKIE['hi360_search_session'] ?? '');
+        if (!preg_match('/^[a-f0-9]{32}$/', $key)) {
+            $key = bin2hex(random_bytes(16));
+            setcookie('hi360_search_session', $key, ['expires' => time() + 60 * 60 * 24 * 90, 'path' => '/', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'httponly' => true, 'samesite' => 'Lax']);
+        }
+        return $key;
+    }
+
+    /**
+     * Shared-hosting fallback for a missed additive migration. The statements are
+     * fixed and idempotent; no request data is ever used as SQL.
+     */
+    private static function ensureSiteSearchTables(): bool
+    {
+        static $ready = null;
+        if ($ready !== null) {
+            return $ready;
+        }
+        try {
+            if (!self::tableExists('site_search_queries')) {
+                Database::pdo()->exec('CREATE TABLE IF NOT EXISTS site_search_queries (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    session_key CHAR(32) DEFAULT NULL,
+                    query_text VARCHAR(255) NOT NULL,
+                    normalized_query VARCHAR(255) NOT NULL,
+                    result_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                    source_page VARCHAR(500) DEFAULT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_site_search_queries_created (created_at),
+                    INDEX idx_site_search_queries_normalized (normalized_query),
+                    INDEX idx_site_search_queries_session (session_key)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+            }
+            if (!self::tableExists('site_search_clicks')) {
+                Database::pdo()->exec('CREATE TABLE IF NOT EXISTS site_search_clicks (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    search_query_id BIGINT UNSIGNED DEFAULT NULL,
+                    session_key CHAR(32) DEFAULT NULL,
+                    result_path VARCHAR(500) NOT NULL,
+                    result_title VARCHAR(500) DEFAULT NULL,
+                    result_type VARCHAR(80) DEFAULT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_site_search_clicks_created (created_at),
+                    INDEX idx_site_search_clicks_query (search_query_id),
+                    INDEX idx_site_search_clicks_path (result_path),
+                    CONSTRAINT fk_site_search_clicks_query FOREIGN KEY (search_query_id) REFERENCES site_search_queries(id) ON DELETE SET NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+            }
+            return $ready = self::tableExists('site_search_queries') && self::tableExists('site_search_clicks');
+        } catch (Throwable) {
+            return $ready = false;
+        }
+    }
+
+    private static function siteSearchText(string $value): string
+    {
+        $value = trim(strip_tags(html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+        $value = mb_strtolower($value, 'UTF-8');
+        return trim((string)preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value));
+    }
+
+    private static function siteSearchTokens(string $normalized): array
+    {
+        $stopWords = ['and', 'the', 'for', 'with', 'near', 'from', 'how', 'what', 'where', 'a', 'an', 'in', 'of', 'to'];
+        $tokens = array_filter(preg_split('/\s+/u', $normalized) ?: [], static fn(string $token): bool => mb_strlen($token) >= 2 && !in_array($token, $stopWords, true));
+        return array_values(array_unique($tokens)) ?: [$normalized];
+    }
+
+    private static function siteSearchExcerpt(string $value): string
+    {
+        $value = trim((string)preg_replace('/\s+/u', ' ', strip_tags($value)));
+        return mb_strlen($value) > 160 ? mb_substr($value, 0, 157) . '...' : $value;
+    }
+
+    private static function siteSearchLabelFromPath(string $path): string
+    {
+        return ucwords(str_replace('-', ' ', trim($path, '/'))) ?: 'HomeInteriors360';
+    }
+
+    private static function siteSearchTypeLabel(string $value): string
+    {
+        return ucwords(str_replace(['_', '-'], ' ', $value ?: 'Page'));
+    }
+
     public static function getUrlAliasByPath(string $path, bool $admin = false): ?array
     {
         try {
@@ -2780,6 +5732,46 @@ final class SiteRepository
         ];
     }
 
+    /** Values used by the editor. Unlike public filters, drafts are included. */
+    public static function designIdeaAdminOptions(): array
+    {
+        $ideaValues = static function (string $field): array {
+            $allowed = ['type', 'color', 'city', 'state', 'style', 'layout', 'location', 'photo_source_name'];
+            if (!in_array($field, $allowed, true)) {
+                return [];
+            }
+            return array_map(
+                static fn(array $row): string => trim((string)$row[$field]),
+                Database::query('SELECT DISTINCT ' . $field . ' FROM design_ideas WHERE ' . $field . ' IS NOT NULL AND TRIM(' . $field . ')<>"" ORDER BY ' . $field)
+            );
+        };
+        $cities = array_merge($ideaValues('city'), array_map(static fn(array $row): string => trim((string)$row['city']), Database::query('SELECT DISTINCT city FROM pros WHERE city IS NOT NULL AND TRIM(city)<>"" ORDER BY city')));
+        $jsonValues = static function (string $field): array {
+            $values = [];
+            foreach (Database::query('SELECT ' . $field . ' FROM design_ideas WHERE ' . $field . ' IS NOT NULL AND TRIM(' . $field . ')<>""') as $row) {
+                foreach (self::parseJsonArray($row[$field] ?? []) as $value) {
+                    $value = trim((string)$value);
+                    if ($value !== '') $values[$value] = true;
+                }
+            }
+            $values = array_keys($values);
+            sort($values, SORT_NATURAL | SORT_FLAG_CASE);
+            return $values;
+        };
+        return [
+            'types' => $ideaValues('type'),
+            'colors' => $ideaValues('color'),
+            'cities' => array_values(array_unique(array_filter($cities))),
+            'states' => $ideaValues('state'),
+            'styles' => $ideaValues('style'),
+            'layouts' => $ideaValues('layout'),
+            'locations' => $ideaValues('location'),
+            'photo_sources' => $ideaValues('photo_source_name'),
+            'materials' => $jsonValues('materials_json'),
+            'tags' => $jsonValues('tags_json'),
+        ];
+    }
+
     private static function distinctDesignIdeaField(string $field): array
     {
         return array_map(
@@ -2859,26 +5851,29 @@ final class SiteRepository
         $where = [];
         $params = [];
         if (!$admin) {
-            $where[] = 'is_active=1';
+            $where[] = 'di.is_active=1';
+            $where[] = "TRIM(COALESCE(di.photo_source_name, '')) <> ''";
         }
         foreach (['type', 'color', 'city', 'state', 'style', 'layout'] as $field) {
             $value = trim((string)($filters[$field] ?? ''));
             if ($value !== '') {
-                $where[] = $field . '=?';
+                $where[] = 'di.' . $field . '=?';
                 $params[] = $value;
             }
         }
         $q = trim((string)($filters['q'] ?? ''));
         if ($q !== '') {
-            $where[] = '(name LIKE ? OR location LIKE ? OR city LIKE ? OR type LIKE ? OR color LIKE ? OR style LIKE ?)';
+            $where[] = '(di.name LIKE ? OR di.location LIKE ? OR di.city LIKE ? OR di.type LIKE ? OR di.color LIKE ? OR di.style LIKE ?)';
             $search = '%' . $q . '%';
             array_push($params, $search, $search, $search, $search, $search, $search);
         }
-        $sql = 'SELECT * FROM design_ideas';
+        $sql = 'SELECT di.*, p.full_name AS recommended_designer_name, p.slug AS recommended_designer_slug, p.city AS recommended_designer_city
+                FROM design_ideas di
+                LEFT JOIN pros p ON p.id=di.recommended_designer_id AND p.is_active=1';
         if ($where) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
         }
-        $sql .= ' ORDER BY is_featured DESC, updated_at DESC, id DESC';
+        $sql .= ' ORDER BY di.is_featured DESC, di.updated_at DESC, di.id DESC';
         $rows = Database::query($sql, $params);
         foreach ($rows as &$row) {
             $row = self::normalizeDesignIdeaRow($row);
@@ -2918,9 +5913,12 @@ final class SiteRepository
     public static function getDesignIdea(string|int $identifier, bool $admin = false): ?array
     {
         $field = is_int($identifier) || ctype_digit((string)$identifier) ? 'id' : 'slug';
-        $sql = 'SELECT * FROM design_ideas WHERE ' . $field . '=?';
+        $sql = 'SELECT di.*, p.full_name AS recommended_designer_name, p.slug AS recommended_designer_slug, p.city AS recommended_designer_city
+                FROM design_ideas di
+                LEFT JOIN pros p ON p.id=di.recommended_designer_id AND p.is_active=1
+                WHERE di.' . $field . '=?';
         if (!$admin) {
-            $sql .= ' AND is_active=1';
+            $sql .= " AND di.is_active=1 AND TRIM(COALESCE(di.photo_source_name, '')) <> ''";
         }
         $row = Database::one($sql, [$identifier]);
         return $row ? self::normalizeDesignIdeaRow($row) : null;
@@ -2929,21 +5927,45 @@ final class SiteRepository
     private static function normalizeDesignIdeaRow(array $row): array
     {
         $row['gallery_json'] = self::parseJsonArray($row['gallery_json'] ?? '[]');
+        $row['materials_json'] = self::parseJsonArray($row['materials_json'] ?? '[]');
         $row['tags_json'] = self::parseJsonArray($row['tags_json'] ?? '[]');
         return $row;
     }
 
     public static function saveDesignIdea(array $data, ?int $id = null): int
     {
+        $name = trim((string)($data['name'] ?? ''));
+        $type = trim((string)($data['type'] ?? ''));
+        if ($name === '' || $type === '') {
+            throw new InvalidArgumentException('Idea title and type are required.');
+        }
+        $existing = $id ? Database::one('SELECT * FROM design_ideas WHERE id=? LIMIT 1', [$id]) : null;
+        if ($id && !$existing) {
+            throw new InvalidArgumentException('Design idea was not found.');
+        }
+        // A published URL should remain stable after editorial title updates.
+        $data['slug'] = $existing['slug'] ?? self::uniqueDesignIdeaSlug(slugify($name));
+        if (!array_key_exists('gallery_json', $data) && $existing) {
+            $data['gallery_json'] = $existing['gallery_json'] ?? [];
+        }
+        if (trim((string)($data['photo_source_name'] ?? '')) === '') {
+            throw new InvalidArgumentException('Photo owner or source is required for every design idea.');
+        }
+        $data['image_alt'] = trim((string)($data['image_alt'] ?? '')) ?: trim($name . ' - ' . $type . (!empty($data['city']) ? ' in ' . $data['city'] : ''));
+        $summary = trim((string)($data['short_description'] ?? $data['description'] ?? ''));
+        $data['meta_title'] = trim((string)($data['meta_title'] ?? '')) ?: $name . ' | HomeInteriors360';
+        $data['meta_description'] = trim((string)($data['meta_description'] ?? '')) ?: $summary;
+        $data['meta_title'] = function_exists('mb_substr') ? mb_substr($data['meta_title'], 0, 160) : substr($data['meta_title'], 0, 160);
+        $data['meta_description'] = function_exists('mb_substr') ? mb_substr($data['meta_description'], 0, 160) : substr($data['meta_description'], 0, 160);
         $fields = [
             'slug', 'name', 'location', 'city', 'state', 'type', 'color', 'style', 'layout',
             'length_ft', 'breadth_ft', 'height_ft', 'budget_min', 'budget_max',
-            'short_description', 'description', 'image_url', 'gallery_json', 'tags_json',
+            'short_description', 'description', 'image_url', 'image_alt', 'photo_source_name', 'photo_source_url', 'photo_license', 'recommended_designer_id', 'gallery_json', 'materials_json', 'tags_json',
             'meta_title', 'meta_description', 'is_featured', 'is_active',
         ];
         $values = [];
         foreach ($fields as $field) {
-            if (in_array($field, ['gallery_json', 'tags_json'], true)) {
+            if (in_array($field, ['gallery_json', 'materials_json', 'tags_json'], true)) {
                 $values[] = json_encode(self::parseJsonArray($data[$field] ?? []), JSON_UNESCAPED_UNICODE);
             } elseif (in_array($field, ['is_featured', 'is_active'], true)) {
                 $values[] = !empty($data[$field]) ? 1 : 0;
@@ -2961,6 +5983,17 @@ final class SiteRepository
         $newId = Database::exec('INSERT INTO design_ideas (' . implode(', ', $fields) . ') VALUES (' . implode(', ', array_fill(0, count($fields), '?')) . ')', $values);
         self::syncDesignIdeaUrlAliases($newId);
         return $newId;
+    }
+
+    private static function uniqueDesignIdeaSlug(string $base): string
+    {
+        $base = $base !== '' ? $base : 'design-idea';
+        $slug = $base;
+        $suffix = 2;
+        while (Database::one('SELECT id FROM design_ideas WHERE slug=? LIMIT 1', [$slug])) {
+            $slug = $base . '-' . $suffix++;
+        }
+        return $slug;
     }
 
     public static function syncDesignIdeaUrlAliases(int $ideaId): void
@@ -3455,6 +6488,29 @@ final class SiteRepository
 
     public static function designerSubscriptionStatus(array $user): array
     {
+        $userId = (int)($user['id'] ?? 0);
+        $proId = (int)($user['pro_id'] ?? 0);
+        $subscription = $userId > 0 && $proId > 0 ? Database::one(
+            "SELECT * FROM designer_quotation_subscriptions
+             WHERE (user_id=? OR pro_id=?) AND status IN ('created','authenticated','active','pending')
+             ORDER BY COALESCE(current_end_at, created_at) DESC, id DESC LIMIT 1",
+            [$userId, $proId]
+        ) : null;
+        if ($subscription && !empty($subscription['current_start_at']) && strtotime((string)$subscription['current_start_at']) <= time() && !empty($subscription['current_end_at']) && strtotime((string)$subscription['current_end_at']) >= time()) {
+            $daysLeft = max(0, (int)ceil((strtotime((string)$subscription['current_end_at']) - time()) / 86400));
+            return [
+                'has_subscription' => true,
+                'is_trial' => false,
+                'trial_available' => false,
+                'is_expired' => false,
+                'can_create' => true,
+                'show_warning' => $daysLeft <= 3,
+                'days_left' => $daysLeft,
+                'expires_at' => $subscription['current_end_at'],
+                'can_cancel_mandate' => true,
+                'message' => $daysLeft <= 3 ? $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's') . ' left before your next automatic payment.' : 'Monthly subscription active.',
+            ];
+        }
         $registration = Database::one(
             'SELECT * FROM designer_feature_registrations
              WHERE payment_status="paid" AND (user_id=? OR pro_id=?)
@@ -3462,37 +6518,249 @@ final class SiteRepository
              LIMIT 1',
             [(int)($user['id'] ?? 0), (int)($user['pro_id'] ?? 0)]
         );
-        if (!$registration || empty($registration['paid_at'])) {
-            return [
-                'has_subscription' => false,
-                'is_expired' => false,
-                'show_warning' => false,
-                'days_left' => null,
-                'expires_at' => null,
-                'message' => 'Subscription status is managed by admin.',
-            ];
+        $legacySubscriptionExpired = false;
+        if ($registration && !empty($registration['paid_at'])) {
+            $expiresAt = date('Y-m-d H:i:s', strtotime((string)$registration['paid_at'] . ' +30 days'));
+            $daysLeft = (int)ceil((strtotime($expiresAt) - time()) / 86400);
+            if ($daysLeft >= 0) {
+            return ['has_subscription' => true, 'is_trial' => false, 'trial_available' => false, 'is_expired' => false, 'can_create' => true, 'show_warning' => $daysLeft <= 3, 'days_left' => $daysLeft, 'expires_at' => $expiresAt, 'can_cancel_mandate' => false, 'message' => $daysLeft <= 3 ? $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's') . ' left in your existing subscription.' : 'Subscription active.'];
+            }
+            $legacySubscriptionExpired = true;
         }
 
-        $expiresAt = date('Y-m-d H:i:s', strtotime((string)$registration['paid_at'] . ' +30 days'));
-        $today = new DateTimeImmutable('today');
-        $expiryDay = new DateTimeImmutable(substr($expiresAt, 0, 10));
-        $daysLeft = (int)$today->diff($expiryDay)->format('%r%a');
-        $isExpired = $daysLeft < 0;
+        $trial = $userId > 0 && $proId > 0 ? Database::one('SELECT * FROM designer_quotation_trials WHERE user_id=? OR pro_id=? ORDER BY id DESC LIMIT 1', [$userId, $proId]) : null;
+        if (!$trial) {
+            if ($legacySubscriptionExpired) {
+                return ['has_subscription' => false, 'is_trial' => false, 'trial_available' => false, 'is_expired' => true, 'can_create' => false, 'show_warning' => false, 'days_left' => 0, 'expires_at' => null, 'can_cancel_mandate' => false, 'message' => 'Your previous subscription has ended. Set up a ₹999/month automatic payment to create new quotations.'];
+            }
+            return ['has_subscription' => false, 'is_trial' => false, 'trial_available' => true, 'is_expired' => false, 'can_create' => false, 'show_warning' => false, 'days_left' => 15, 'expires_at' => null, 'can_cancel_mandate' => false, 'message' => 'Authorise a ₹2 standing-instruction verification to start your 15-day free trial. ₹999/month starts only after the trial.'];
+        }
+        $daysLeft = (int)ceil((strtotime((string)$trial['ends_at']) - time()) / 86400);
+        $expired = $daysLeft < 0;
         return [
-            'has_subscription' => true,
-            'is_expired' => $isExpired,
-            'show_warning' => !$isExpired && $daysLeft <= 3,
+            'has_subscription' => false,
+            'is_trial' => !$expired,
+            'trial_available' => false,
+            'is_expired' => $expired,
+            'can_create' => !$expired,
+            'show_warning' => !$expired && $daysLeft <= 3,
             'days_left' => max($daysLeft, 0),
-            'expires_at' => $expiresAt,
-            'message' => $isExpired
-                ? 'Your subscription has expired. Renew to create new quotations.'
-                : ($daysLeft <= 3 ? $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's') . ' left in your subscription.' : 'Subscription active.'),
+            'expires_at' => $trial['ends_at'],
+            'can_cancel_mandate' => !empty($subscription),
+            'message' => $expired ? 'Your 15-day free trial has ended. Set up a ₹999/month automatic payment to create new quotations.' : ($daysLeft <= 3 ? $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's') . ' left in your 15-day free trial.' : 'Your 15-day free trial is active.'),
         ];
+    }
+
+    public static function startDesignerQuotationTrial(array $user): array
+    {
+        $userId = (int)($user['id'] ?? 0);
+        $proId = (int)($user['pro_id'] ?? 0);
+        if ($userId <= 0 || $proId <= 0) {
+            throw new InvalidArgumentException('A designer profile is required to start the free trial.');
+        }
+        $status = self::designerSubscriptionStatus($user);
+        if (!$status['trial_available']) {
+            return $status;
+        }
+        try {
+            Database::exec('INSERT INTO designer_quotation_trials (user_id, pro_id, starts_at, ends_at) VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 15 DAY))', [$userId, $proId]);
+        } catch (PDOException $e) {
+            if ((string)$e->getCode() !== '23000') {
+                throw $e;
+            }
+        }
+        return self::designerSubscriptionStatus($user);
     }
 
     public static function designerCanCreateQuotation(array $user): bool
     {
-        return !self::designerSubscriptionStatus($user)['is_expired'];
+        return !empty(self::designerSubscriptionStatus($user)['can_create']);
+    }
+
+    public static function designerMembershipPlans(): array
+    {
+        $plans = Database::query('SELECT * FROM designer_membership_plans WHERE is_active=1 ORDER BY sort_order, id');
+        foreach ($plans as &$plan) {
+            $features = json_decode((string)($plan['features_json'] ?? '[]'), true);
+            $plan['features'] = is_array($features) ? $features : [];
+            unset($plan['features_json']);
+        }
+        return $plans;
+    }
+
+    private static function membershipRazorpayPlanId(string $code, string $cycle): string
+    {
+        return match ($code . ':' . $cycle) {
+            'pro:monthly' => RAZORPAY_DESIGNER_PRO_MONTHLY_PLAN_ID,
+            'pro:yearly' => RAZORPAY_DESIGNER_PRO_YEARLY_PLAN_ID,
+            'featured:monthly' => RAZORPAY_DESIGNER_FEATURED_MONTHLY_PLAN_ID,
+            'featured:yearly' => RAZORPAY_DESIGNER_FEATURED_YEARLY_PLAN_ID,
+            default => '',
+        };
+    }
+
+    public static function designerMembershipStatus(array $user): array
+    {
+        $membership = Database::one(
+            "SELECT m.*, p.code, p.name, p.billing_cycle, p.lead_discount_percentage, p.bonus_lead_credits, p.featured_locality_slots
+             FROM designer_memberships m JOIN designer_membership_plans p ON p.id=m.plan_id
+             WHERE (m.user_id=? OR m.pro_id=?) ORDER BY m.created_at DESC, m.id DESC LIMIT 1",
+            [(int)($user['id'] ?? 0), (int)($user['pro_id'] ?? 0)]
+        );
+        return $membership ?: ['code' => 'free', 'name' => 'Free Listing', 'status' => 'free', 'billing_cycle' => 'monthly'];
+    }
+
+    public static function createDesignerMembershipSubscription(array $user, array $data): array
+    {
+        $code = trim((string)($data['plan_code'] ?? ''));
+        $cycle = trim((string)($data['billing_cycle'] ?? 'monthly'));
+        $plan = Database::one('SELECT * FROM designer_membership_plans WHERE code=? AND billing_cycle=? AND is_active=1 LIMIT 1', [$code, $cycle]);
+        if (!$plan || $code === 'free') {
+            throw new InvalidArgumentException('Please select a paid membership plan.');
+        }
+        $razorpayPlanId = self::membershipRazorpayPlanId($code, $cycle);
+        if ($razorpayPlanId === '') {
+            throw new RuntimeException('This membership plan is not configured for payment yet. Please contact HomeInteriors360 support.');
+        }
+        $email = strtolower(trim((string)($data['invoice_email'] ?? $user['email'] ?? '')));
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidArgumentException('Enter a valid invoice email.');
+        }
+        $phone = preg_replace('/\D+/', '', (string)($data['whatsapp_phone'] ?? '')) ?? '';
+        if (strlen($phone) < 10) {
+            throw new InvalidArgumentException('Enter a valid WhatsApp number.');
+        }
+        $subscription = razorpayCreateSubscription($razorpayPlanId, [
+            'module' => 'designer_membership', 'user_id' => (string)$user['id'], 'pro_id' => (string)$user['pro_id'], 'plan_code' => $code,
+        ]);
+        if (empty($subscription['id'])) {
+            throw new RuntimeException('Razorpay could not create the membership payment instruction.');
+        }
+        $pro = Database::one('SELECT full_name FROM pros WHERE id=?', [(int)$user['pro_id']]) ?: [];
+        Database::exec(
+            'INSERT INTO designer_memberships (user_id,pro_id,plan_id,status,razorpay_subscription_id,business_name,owner_name,whatsapp_phone,invoice_email,gstin,featured_locality,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+            [(int)$user['id'], (int)$user['pro_id'], (int)$plan['id'], (string)($subscription['status'] ?? 'created'), (string)$subscription['id'], trim((string)($data['business_name'] ?? $pro['full_name'] ?? '')), trim((string)($data['owner_name'] ?? '')), $phone, $email, trim((string)($data['gstin'] ?? '')), trim((string)($data['featured_locality'] ?? '')), json_encode(['consent' => !empty($data['renewal_consent'])], JSON_UNESCAPED_UNICODE)]
+        );
+        return ['subscription_id' => (string)$subscription['id'], 'key_id' => RAZORPAY_KEY_ID, 'name' => 'HomeInteriors360', 'description' => (string)$plan['name'] . ' membership'];
+    }
+
+    public static function activateDesignerMembershipSubscription(array $user, string $subscriptionId, string $paymentId, string $signature): void
+    {
+        if (!razorpaySubscriptionSignatureIsValid($subscriptionId, $paymentId, $signature)) {
+            throw new InvalidArgumentException('Membership payment signature mismatch.');
+        }
+        $record = Database::one('SELECT * FROM designer_memberships WHERE razorpay_subscription_id=? AND (user_id=? OR pro_id=?)', [$subscriptionId, (int)$user['id'], (int)$user['pro_id']]);
+        if (!$record) {
+            throw new InvalidArgumentException('Membership payment instruction was not found.');
+        }
+        Database::exec('UPDATE designer_memberships SET status="active", razorpay_payment_id=?, razorpay_signature=?, starts_at=NOW(), ends_at=DATE_ADD(NOW(), INTERVAL 1 MONTH), updated_at=NOW() WHERE id=?', [$paymentId, $signature, (int)$record['id']]);
+        Database::exec('UPDATE pros SET is_premium=1, listing_tier="PAID", updated_at=NOW() WHERE id=?', [(int)$user['pro_id']]);
+    }
+
+    public static function createDesignerRecurringSubscription(array $user, bool $withTrial = false): array
+    {
+        $userId = (int)($user['id'] ?? 0);
+        $proId = (int)($user['pro_id'] ?? 0);
+        if ($userId <= 0 || $proId <= 0) {
+            throw new InvalidArgumentException('A designer account is required.');
+        }
+        $status = self::designerSubscriptionStatus($user);
+        if (!empty($status['has_subscription']) && !$status['is_expired']) {
+            throw new InvalidArgumentException('Your monthly subscription is already active.');
+        }
+        $startAt = $withTrial ? strtotime('+15 days') : null;
+        $subscription = razorpayCreateSubscription(RAZORPAY_QUOTATION_PLAN_ID, [
+            'module' => 'designer_quotation_builder',
+            'user_id' => (string)$userId,
+            'pro_id' => (string)$proId,
+        ], $startAt, $withTrial ? 200 : null);
+        if (empty($subscription['id'])) {
+            throw new RuntimeException('Razorpay could not create the recurring payment instruction.');
+        }
+        Database::exec(
+            'INSERT INTO designer_quotation_subscriptions (user_id, pro_id, razorpay_plan_id, razorpay_subscription_id, status, mandate_status, current_start_at, current_end_at) VALUES (?, ?, ?, ?, ?, "pending", ?, ?)',
+            [$userId, $proId, RAZORPAY_QUOTATION_PLAN_ID, (string)$subscription['id'], (string)($subscription['status'] ?? 'created'), $startAt ? date('Y-m-d H:i:s', $startAt) : null, $startAt ? date('Y-m-d H:i:s', strtotime('+1 month', $startAt)) : null]
+        );
+        $professional = Database::one('SELECT full_name, email, phone FROM pros WHERE id=?', [$proId]) ?? [];
+        self::recordAbandonedCheckout('proposal_generator', ['name' => $professional['full_name'] ?? ($user['username'] ?? ''), 'email' => $professional['email'] ?? ($user['email'] ?? ''), 'phone' => $professional['phone'] ?? ''], $withTrial ? 2 : 999, ['product' => 'BOQ / Proposal Generator', 'trial' => $withTrial], (string)$subscription['id'], null, $userId, $proId);
+        return ['subscription_id' => (string)$subscription['id'], 'key_id' => RAZORPAY_KEY_ID, 'name' => 'HomeInteriors360', 'description' => $withTrial ? '₹2 authorisation today, 15 days free, then ₹999/month' : 'Quotation Builder monthly membership'];
+    }
+
+    public static function activateDesignerRecurringSubscription(array $user, string $subscriptionId, string $paymentId, string $signature): void
+    {
+        if (!razorpaySubscriptionSignatureIsValid($subscriptionId, $paymentId, $signature)) {
+            throw new InvalidArgumentException('Recurring payment signature mismatch.');
+        }
+        $record = Database::one('SELECT * FROM designer_quotation_subscriptions WHERE razorpay_subscription_id=? AND (user_id=? OR pro_id=?)', [$subscriptionId, (int)$user['id'], (int)$user['pro_id']]);
+        if (!$record) {
+            throw new InvalidArgumentException('Recurring payment instruction was not found.');
+        }
+        Database::exec('UPDATE designer_quotation_subscriptions SET razorpay_payment_id=?, razorpay_signature=?, status="active", mandate_status="authorised", current_start_at=COALESCE(current_start_at, NOW()), current_end_at=COALESCE(current_end_at, DATE_ADD(NOW(), INTERVAL 1 MONTH)), updated_at=NOW() WHERE id=?', [$paymentId, $signature, (int)$record['id']]);
+        self::completeAbandonedCheckout($subscriptionId);
+        self::startDesignerQuotationTrial($user);
+    }
+
+    public static function updateDesignerRecurringSubscriptionFromWebhook(array $payload): void
+    {
+        $entity = is_array($payload['payload']['subscription']['entity'] ?? null) ? $payload['payload']['subscription']['entity'] : [];
+        $paymentEntity = is_array($payload['payload']['payment']['entity'] ?? null) ? $payload['payload']['payment']['entity'] : [];
+        $subscriptionId = (string)($entity['id'] ?? $paymentEntity['subscription_id'] ?? '');
+        if ($subscriptionId === '') {
+            return;
+        }
+        $event = strtolower((string)($payload['event'] ?? ''));
+        $status = strtolower((string)($entity['status'] ?? ''));
+        $paymentFailed = $event === 'payment.failed' || in_array($status, ['halted', 'cancelled', 'completed', 'expired'], true);
+        if ($paymentFailed) {
+            $status = 'cancelled';
+        }
+        $startAt = !empty($entity['current_start']) ? date('Y-m-d H:i:s', (int)$entity['current_start']) : null;
+        $endAt = !empty($entity['current_end']) ? date('Y-m-d H:i:s', (int)$entity['current_end']) : null;
+        $cancelledAt = !empty($entity['ended_at']) ? date('Y-m-d H:i:s', (int)$entity['ended_at']) : null;
+        Database::exec('UPDATE designer_quotation_subscriptions SET status=?, mandate_status=?, current_start_at=COALESCE(?, current_start_at), current_end_at=COALESCE(?, current_end_at), cancelled_at=COALESCE(?, cancelled_at), updated_at=NOW() WHERE razorpay_subscription_id=?', [$status, $paymentFailed ? 'payment_failed' : (in_array($status, ['active', 'authenticated'], true) ? 'authorised' : $status), $startAt, $endAt, $paymentFailed ? date('Y-m-d H:i:s') : $cancelledAt, $subscriptionId]);
+        if ($paymentFailed) {
+            try {
+                razorpayCancelSubscription($subscriptionId);
+            } catch (Throwable) {
+                // The provider may already have ended the subscription.
+            }
+        }
+    }
+
+    public static function reconcileDesignerRecurringSubscriptions(): array
+    {
+        $records = Database::query(
+            "SELECT * FROM designer_quotation_subscriptions
+             WHERE status IN ('created','authenticated','active','pending')
+               AND ((current_start_at IS NOT NULL AND DATE(current_start_at) < CURDATE())
+                 OR (current_end_at IS NOT NULL AND DATE(current_end_at) < CURDATE()))"
+        );
+        $result = ['checked' => 0, 'cancelled' => 0, 'active' => 0, 'errors' => []];
+        foreach ($records as $record) {
+            $result['checked']++;
+            try {
+                $provider = razorpayFetchSubscription((string)$record['razorpay_subscription_id']);
+                $status = strtolower((string)($provider['status'] ?? ''));
+                $startAt = !empty($provider['current_start']) ? date('Y-m-d H:i:s', (int)$provider['current_start']) : null;
+                $endAt = !empty($provider['current_end']) ? date('Y-m-d H:i:s', (int)$provider['current_end']) : null;
+                $paymentSucceeded = $status === 'active' && ($endAt === null || strtotime($endAt) >= strtotime('today'));
+                if ($paymentSucceeded) {
+                    Database::exec('UPDATE designer_quotation_subscriptions SET status="active", mandate_status="authorised", current_start_at=COALESCE(?, current_start_at), current_end_at=COALESCE(?, current_end_at), updated_at=NOW() WHERE id=?', [$startAt, $endAt, (int)$record['id']]);
+                    $result['active']++;
+                    continue;
+                }
+                try {
+                    razorpayCancelSubscription((string)$record['razorpay_subscription_id']);
+                } catch (Throwable) {
+                    // A failed, halted, or already-cancelled provider subscription is still locked locally.
+                }
+                Database::exec('UPDATE designer_quotation_subscriptions SET status="cancelled", mandate_status="payment_failed", cancelled_at=NOW(), updated_at=NOW() WHERE id=?', [(int)$record['id']]);
+                $result['cancelled']++;
+            } catch (Throwable $exception) {
+                $result['errors'][] = 'Subscription ' . (string)$record['razorpay_subscription_id'] . ': ' . $exception->getMessage();
+            }
+        }
+        return $result;
     }
 
     public static function getQuotation(int $id): ?array
@@ -3551,10 +6819,25 @@ final class SiteRepository
         }
         unset($quote['vendor_cost'], $quote['margin_amount'], $quote['margin_percentage'], $quote['platform_commission'], $quote['internal_notes']);
         foreach ($quote['items'] as &$item) {
-            unset($item['vendor_cost'], $item['margin_amount']);
+            unset($item['vendor_cost'], $item['margin_amount'], $item['markup_percentage'], $item['is_manual_override'], $item['notes']);
         }
         unset($item);
         return $quote;
+    }
+
+    public static function respondToPublicProposal(string $token, string $response, string $note = ''): ?array
+    {
+        $quote = self::getQuotationByToken($token);
+        if (!$quote) {
+            return null;
+        }
+        if (!empty($quote['valid_until']) && strtotime((string)$quote['valid_until']) < strtotime(date('Y-m-d'))) {
+            throw new InvalidArgumentException('This proposal has expired. Please request an updated proposal.');
+        }
+        $status = $response === 'accept' ? 'accepted' : 'revision_requested';
+        self::updateQuotationStatus((int)$quote['id'], $status, null, $note ?: ($status === 'accepted' ? 'Accepted by client' : 'Revision requested by client'));
+        self::recordQuotationEvent((int)$quote['id'], $status, ['note' => substr($note, 0, 1000)]);
+        return self::publicProposalData($token, false);
     }
 
     private static function designerProposalPortfolio(int $designerId): array
@@ -3594,7 +6877,7 @@ final class SiteRepository
         if ($items === []) {
             throw new InvalidArgumentException('At least one room item is required.');
         }
-        foreach (['client_name', 'client_phone', 'city', 'property_type', 'package_id'] as $field) {
+        foreach (['client_name', 'city', 'property_type', 'package_id'] as $field) {
             if (trim((string)($data[$field] ?? '')) === '') {
                 throw new InvalidArgumentException(ucwords(str_replace('_', ' ', $field)) . ' is required.');
             }
@@ -3618,22 +6901,24 @@ final class SiteRepository
         }
 
         $fields = [
-            'lead_id', 'client_name', 'client_phone', 'client_email', 'city', 'locality', 'society_name',
+            'lead_id', 'quote_date', 'client_name', 'client_phone', 'client_email', 'city', 'locality', 'society_name', 'site_address',
             'property_type', 'bhk', 'carpet_area', 'builtup_area', 'possession_status', 'expected_start_date',
-            'expected_handover_date', 'budget_range', 'design_style', 'scope_type', 'package_id', 'template_id',
+            'expected_handover_date', 'project_stage', 'budget_range', 'design_style', 'scope_type', 'quality_tier', 'package_id', 'template_id',
             'designer_id', 'assigned_to_user_id', 'subtotal', 'design_fee', 'project_management_fee',
             'site_visit_fee', 'discount_amount', 'discount_percentage', 'gst_percentage', 'gst_amount',
             'final_amount', 'vendor_cost', 'margin_amount', 'margin_percentage', 'platform_commission',
-            'payment_schedule_json', 'status', 'valid_until', 'internal_notes', 'client_notes', 'updated_by',
+            'payment_schedule_json', 'status', 'valid_until', 'internal_notes', 'client_notes', 'exclusions_text', 'terms_html', 'studio_name', 'studio_logo_url', 'studio_accent_color', 'updated_by',
         ];
         $values = [
             !empty($data['lead_id']) ? (int)$data['lead_id'] : null,
+            ($data['quote_date'] ?? '') ?: date('Y-m-d'),
             trim((string)$data['client_name']),
-            trim((string)$data['client_phone']),
+            trim((string)($data['client_phone'] ?? '')) ?: null,
             trim((string)($data['client_email'] ?? '')) ?: null,
             trim((string)$data['city']),
             trim((string)($data['locality'] ?? '')) ?: null,
             trim((string)($data['society_name'] ?? '')) ?: null,
+            trim((string)($data['site_address'] ?? '')) ?: null,
             trim((string)$data['property_type']),
             trim((string)($data['bhk'] ?? '')) ?: null,
             ($data['carpet_area'] ?? '') !== '' ? (float)$data['carpet_area'] : null,
@@ -3641,9 +6926,11 @@ final class SiteRepository
             trim((string)($data['possession_status'] ?? '')) ?: null,
             ($data['expected_start_date'] ?? '') ?: null,
             ($data['expected_handover_date'] ?? '') ?: null,
+            trim((string)($data['project_stage'] ?? '')) ?: null,
             trim((string)($data['budget_range'] ?? '')) ?: null,
             trim((string)($data['design_style'] ?? '')) ?: null,
             trim((string)($data['scope_type'] ?? '')) ?: null,
+            trim((string)($data['quality_tier'] ?? '')) ?: null,
             (int)$data['package_id'],
             !empty($data['template_id']) ? (int)$data['template_id'] : null,
             !empty($data['designer_id']) ? (int)$data['designer_id'] : null,
@@ -3666,6 +6953,11 @@ final class SiteRepository
             $validUntil,
             trim((string)($data['internal_notes'] ?? '')) ?: null,
             trim((string)($data['client_notes'] ?? '')) ?: null,
+            trim((string)($data['exclusions_text'] ?? '')) ?: null,
+            trim((string)($data['terms_html'] ?? $settings['boq_default_terms'] ?? '')) ?: null,
+            trim((string)($data['studio_name'] ?? '')) ?: null,
+            trim((string)($data['studio_logo_url'] ?? '')) ?: null,
+            trim((string)($data['studio_accent_color'] ?? '')) ?: null,
             $userId,
         ];
 
@@ -3804,6 +7096,7 @@ final class SiteRepository
                 'Pending onboarding for HomeInteriors360 professional dashboard.',
             ]
         );
+        self::recordAbandonedCheckout('proposal_generator', ['name' => $name, 'email' => (string)($data['email'] ?? ''), 'phone' => $phone], 999, ['company_name' => $data['company_name'] ?? '', 'city' => $data['city'] ?? '', 'product' => 'BOQ / Proposal Generator'], (string)$order['id']);
         self::syncProfessionalUrlAlias($id);
         return $id;
     }
@@ -3839,7 +7132,7 @@ final class SiteRepository
             throw new InvalidArgumentException('Name, valid phone, consent, and minimum 8 character password are required.');
         }
 
-        $order = razorpayCreateOrder(39900, 'designer_' . substr($phone, -10) . '_' . time(), [
+        $order = razorpayCreateOrder(99900, 'designer_' . substr($phone, -10) . '_' . time(), [
             'module' => 'designer_subscription',
             'plan' => 'quotation_builder',
             'phone' => $phone,
@@ -3863,7 +7156,7 @@ final class SiteRepository
         return [
             'registration_id' => $id,
             'order_id' => (string)$order['id'],
-            'amount' => (int)($order['amount'] ?? 39900),
+            'amount' => (int)($order['amount'] ?? 99900),
             'currency' => (string)($order['currency'] ?? 'INR'),
             'key_id' => defined('RAZORPAY_KEY_ID') ? RAZORPAY_KEY_ID : '',
         ];
@@ -3888,6 +7181,7 @@ final class SiteRepository
             'UPDATE designer_feature_registrations SET payment_status="paid", status="converted", razorpay_payment_id=?, razorpay_signature=?, pro_id=?, user_id=?, paid_at=NOW(), updated_at=NOW() WHERE id=?',
             [$paymentId, $signature, $proId, $userId, (int)$registration['id']]
         );
+        self::completeAbandonedCheckout($orderId);
         return Database::one('SELECT id, username, email, role, pro_id FROM users WHERE id=?', [$userId]) ?: [];
     }
 
@@ -3959,17 +7253,19 @@ final class SiteRepository
     private static function insertQuotationItem(int $quoteId, array $item, int $sortOrder): void
     {
         Database::exec(
-            'INSERT INTO quotation_items (quotation_id, room_name, category, item_name, description, material, finish, brand, unit_type, quantity, length, width, height, calculated_area, rate, amount, discount_amount, gst_percentage, gst_amount, vendor_cost, margin_amount, include_in_proposal, is_manual_override, sort_order, notes)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO quotation_items (quotation_id, room_name, category, item_name, description, specification, material, finish, brand, image_url, unit_type, quantity, length, width, height, calculated_area, rate, amount, discount_amount, gst_percentage, gst_amount, vendor_cost, markup_percentage, margin_amount, include_in_proposal, is_manual_override, sort_order, room_sort_order, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $quoteId,
                 trim((string)($item['room_name'] ?? 'Room')) ?: 'Room',
                 trim((string)($item['category'] ?? 'Other')) ?: 'Other',
                 trim((string)($item['item_name'] ?? 'Interior item')) ?: 'Interior item',
                 trim((string)($item['description'] ?? '')) ?: null,
+                trim((string)($item['specification'] ?? '')) ?: null,
                 trim((string)($item['material'] ?? '')) ?: null,
                 trim((string)($item['finish'] ?? '')) ?: null,
                 trim((string)($item['brand'] ?? '')) ?: null,
+                trim((string)($item['image_url'] ?? '')) ?: null,
                 trim((string)($item['unit_type'] ?? 'Per unit')) ?: 'Per unit',
                 max(0.01, (float)($item['quantity'] ?? 1)),
                 max(0.0, (float)($item['length'] ?? 0)),
@@ -3982,10 +7278,12 @@ final class SiteRepository
                 max(0.0, (float)($item['gst_percentage'] ?? 18)),
                 max(0.0, (float)($item['gst_amount'] ?? 0)),
                 max(0.0, (float)($item['vendor_cost'] ?? 0)),
+                max(0.0, (float)($item['markup_percentage'] ?? 0)),
                 (float)($item['margin_amount'] ?? 0),
                 !empty($item['include_in_proposal']) || !array_key_exists('include_in_proposal', $item) ? 1 : 0,
                 !empty($item['is_manual_override']) ? 1 : 0,
                 $sortOrder,
+                max(0, (int)($item['room_sort_order'] ?? 0)),
                 trim((string)($item['notes'] ?? '')) ?: null,
             ]
         );
@@ -4001,12 +7299,12 @@ final class SiteRepository
         $revision = $asRevision ? (int)(Database::one('SELECT COALESCE(MAX(revision_number),0)+1 AS n FROM quotations WHERE id=? OR parent_quote_id=?', [$parentId, $parentId])['n'] ?? 1) : 0;
         $newQuoteNumber = $asRevision ? preg_replace('/-R\d+$/', '', (string)$quote['quote_number']) . '-R' . $revision : self::nextQuoteNumber();
         $fields = [
-            'quote_number', 'revision_number', 'parent_quote_id', 'lead_id', 'client_name', 'client_phone', 'client_email', 'city', 'locality', 'society_name',
-            'property_type', 'bhk', 'carpet_area', 'builtup_area', 'possession_status', 'expected_start_date', 'expected_handover_date',
-            'budget_range', 'design_style', 'scope_type', 'package_id', 'template_id', 'designer_id', 'assigned_to_user_id', 'subtotal',
+            'quote_number', 'revision_number', 'parent_quote_id', 'lead_id', 'quote_date', 'client_name', 'client_phone', 'client_email', 'city', 'locality', 'society_name', 'site_address',
+            'property_type', 'bhk', 'carpet_area', 'builtup_area', 'possession_status', 'expected_start_date', 'expected_handover_date', 'project_stage',
+            'budget_range', 'design_style', 'scope_type', 'quality_tier', 'package_id', 'template_id', 'designer_id', 'assigned_to_user_id', 'subtotal',
             'design_fee', 'project_management_fee', 'site_visit_fee', 'discount_amount', 'discount_percentage', 'gst_percentage',
             'gst_amount', 'final_amount', 'vendor_cost', 'margin_amount', 'margin_percentage', 'platform_commission',
-            'payment_schedule_json', 'status', 'proposal_token', 'valid_until', 'internal_notes', 'client_notes', 'created_by', 'updated_by',
+            'payment_schedule_json', 'status', 'proposal_token', 'valid_until', 'internal_notes', 'client_notes', 'exclusions_text', 'terms_html', 'studio_name', 'studio_logo_url', 'studio_accent_color', 'created_by', 'updated_by',
         ];
         $values = [];
         foreach ($fields as $field) {
@@ -4059,6 +7357,16 @@ final class SiteRepository
         if (!empty($quote['lead_id'])) {
             self::updateLeadStatusSafe((int)$quote['lead_id'], ucwords(str_replace('_', ' ', $newStatus)));
         }
+    }
+
+    public static function recordQuotationEvent(int $quoteId, string $eventName, array $eventData = []): void
+    {
+        Database::exec('INSERT INTO quotation_events (quotation_id, event_name, event_data_json, ip_address) VALUES (?, ?, ?, ?)', [
+            $quoteId,
+            substr($eventName, 0, 80),
+            json_encode($eventData, JSON_UNESCAPED_UNICODE),
+            substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 80),
+        ]);
     }
 
     public static function deleteQuotation(int $id): void

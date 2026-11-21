@@ -16,9 +16,25 @@ if (is_file($bootstrapSameDir)) {
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+if ($method === 'GET' && $host === 'www.homeinteriors360.com') {
+    $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '/');
+    header('Location: https://homeinteriors360.com' . $requestUri, true, 301);
+    exit;
+}
+if ($method === 'GET' && $path !== '/' && str_ends_with($path, '/') && !str_starts_with($path, '/api/')) {
+    $query = (string)(parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_QUERY) ?? '');
+    $target = rtrim($path, '/');
+    header('Location: ' . $target . ($query !== '' ? '?' . $query : ''), true, 301);
+    exit;
+}
 if ($method === 'POST' && !empty($_POST['_method'])) {
     $method = strtoupper((string)$_POST['_method']);
 }
+// Cache successful public HTML briefly so crawler bursts do not exhaust the
+// shared-hosting PHP worker pool. Error responses are explicitly made private
+// in the catch block below and are never cacheable.
+header('Cache-Control: public, max-age=300, s-maxage=300, stale-while-revalidate=60');
 $content = SiteRepository::allContent();
 $seoCityPages = [
     'delhi-ncr' => ['city' => 'Delhi NCR', 'nearby' => 'Delhi, Gurugram, Noida, Faridabad, and Ghaziabad'],
@@ -26,8 +42,39 @@ $seoCityPages = [
     'noida' => ['city' => 'Noida', 'nearby' => 'Noida, Greater Noida, and Noida Extension'],
     'mumbai' => ['city' => 'Mumbai', 'nearby' => 'Mumbai, Navi Mumbai, and Thane'],
     'pune' => ['city' => 'Pune', 'nearby' => 'Kharadi, Wakad, Baner, Hinjewadi, and nearby Pune markets'],
+    'chennai' => ['city' => 'Chennai', 'nearby' => 'OMR, Anna Nagar, Velachery, Adyar, Porur, and nearby Chennai markets'],
     'hyderabad' => ['city' => 'Hyderabad', 'nearby' => 'Gachibowli, Hitech City, Kondapur, and Attapur'],
     'bangalore' => ['city' => 'Bangalore', 'nearby' => 'Whitefield, Sarjapur Road, Electronic City, and North Bangalore'],
+];
+$seoLeadIntentCopy = [
+    '/interior-design-leads' => [
+        'chips' => ['interior design leads', 'architect leads', 'turnkey interior leads', 'residential project enquiries'],
+        'sections' => [
+            ['title' => 'Interior Design Leads for Residential Project Teams', 'body' => ['Use this page when you want the broader category of interior project enquiries across full home interiors, modular kitchens, wardrobes, painting, renovation, and turnkey execution.', 'HomeInteriors360 captures homeowner intent with city, locality, budget, work type, and project context so architects, interior designers, and contractors can identify relevant conversations faster.']],
+            ['title' => 'Lead Types Covered', 'body' => [['Full home interior requirements', 'Modular kitchen and wardrobe enquiries', 'Renovation, painting, ceiling, lighting and furniture work', 'Budget-tagged homeowner enquiries from Delhi NCR and supported cities']]],
+        ],
+    ],
+    '/interior-designer-leads' => [
+        'chips' => ['interior designer leads', 'design studio enquiries', 'homeowner consultation leads', 'portfolio-led sales'],
+        'sections' => [
+            ['title' => 'Interior Designer Leads for Design Studios', 'body' => ['This page focuses on professional interior designers and studios that sell design consultation, design-and-build packages, modular work, and full home interior projects.', 'The intent is different from generic contractor leads: buyers can use portfolio strength, response time, city fit, and scope fit to decide which homeowner enquiries to pursue.']],
+            ['title' => 'Best Fit for Designers', 'body' => [['Independent interior designers', 'Design studios and boutique firms', 'Modular kitchen and wardrobe brands', 'Turnkey residential interior teams']]],
+        ],
+    ],
+    '/buy-interior-design-leads' => [
+        'chips' => ['buy interior design leads', 'lead packages', 'Razorpay checkout', 'buyer dashboard'],
+        'sections' => [
+            ['title' => 'Buy Interior Design Leads Online', 'body' => ['This is the transaction-focused page for professionals ready to select filters, add lead packages to cart, apply eligible offers, pay securely, and access purchased leads from the buyer dashboard.', 'Use the marketplace when you already know your preferred city, society, work type, budget band, and number of leads to buy.']],
+            ['title' => 'Purchase Flow', 'body' => [['Choose city, locality, budget and requirement filters', 'Review unique lead count and pricing', 'Complete secure Razorpay checkout', 'Access purchased leads from your dashboard']]],
+        ],
+    ],
+    '/interior-leads-provider-india' => [
+        'chips' => ['interior leads provider India', 'lead marketplace India', 'verified interior enquiries', 'city-wise leads'],
+        'sections' => [
+            ['title' => 'Interior Leads Provider for Indian Interior Markets', 'body' => ['This page explains HomeInteriors360 as a lead provider rather than a single-city landing page. It covers how lead demand varies by city, budget, property type, and service category.', 'The strongest current focus is Delhi NCR, with city pages for Gurgaon, Delhi, Noida and other supported markets where data is available.']],
+            ['title' => 'How Leads Are Structured', 'body' => [['City and locality context', 'Homeowner requirement type', 'Budget range and timeline', 'Digital delivery after verified checkout']]],
+        ],
+    ],
 ];
 $seoLeadPages = [
     '/interior-design-leads' => [
@@ -46,7 +93,7 @@ $seoLeadPages = [
         'keyword' => 'buy interior design leads',
         'title' => 'Buy Interior Design Leads Online',
         'subtitle' => 'Choose active lead packages, add filtered opportunities to cart, and access purchased leads from your buyer dashboard after payment verification.',
-        'meta' => 'Buy interior design leads online from HomeInteriors360. City-wise and work-type lead packages with first-time free lead offer and slab pricing.',
+        'meta' => 'Buy interior design leads online from HomeInteriors360. City-wise and work-type lead packages with quality-based pricing.',
     ],
     '/interior-leads-provider-india' => [
         'keyword' => 'interior leads provider in India',
@@ -62,12 +109,23 @@ $seoLeadPages = [
     ],
 ];
 foreach ($seoCityPages as $slug => $cityData) {
+    $localAreas = match ($slug) {
+        'gurgaon' => 'Golf Course Road, Sohna Road, SPR, New Gurgaon, Dwarka Expressway, Sector 57, Sector 67, DLF phases and premium gated societies',
+        'noida' => 'Noida sectors, Noida Extension, Greater Noida West, Expressway micro-markets and new apartment clusters',
+        'delhi-ncr' => 'Delhi, Gurgaon, Noida, Greater Noida, Faridabad and Ghaziabad residential pockets',
+        'mumbai' => 'Mumbai, Thane, Navi Mumbai and compact apartment renovation markets',
+        'pune' => 'Kharadi, Wakad, Baner, Hinjewadi, Viman Nagar and family apartment clusters',
+        'hyderabad' => 'Gachibowli, Hitech City, Kondapur, Kokapet, Attapur and villa/apartment corridors',
+        'bangalore' => 'Whitefield, Sarjapur Road, Electronic City, North Bangalore and premium gated communities',
+        default => $cityData['nearby'],
+    };
     $seoLeadPages['/interior-designer-leads-' . $slug] = [
         'keyword' => 'interior designer leads ' . $cityData['city'],
         'title' => 'Interior Designer Leads in ' . $cityData['city'],
         'subtitle' => 'Buy location-specific interior designer leads from homeowners in ' . $cityData['nearby'] . '. Filter by budget, work type, locality, and recency.',
         'meta' => 'Buy verified interior designer leads in ' . $cityData['city'] . '. Homeowner enquiries for full home interiors, kitchens, wardrobes, and renovation projects.',
         'city' => $cityData['city'],
+        'local_areas' => $localAreas,
     ];
     $seoLeadPages['/interior-design-lead-generation-' . $slug] = [
         'keyword' => 'interior design lead generation ' . $cityData['city'],
@@ -75,6 +133,7 @@ foreach ($seoCityPages as $slug => $cityData) {
         'subtitle' => 'Grow your interior business in ' . $cityData['city'] . ' with verified homeowner enquiries, digital lead delivery, and transparent lead package pricing.',
         'meta' => 'Interior design lead generation in ' . $cityData['city'] . ' for designers, architects, and contractors. Buy filtered residential interior leads.',
         'city' => $cityData['city'],
+        'local_areas' => $localAreas,
     ];
 }
 $seoCityLinks = array_map(
@@ -88,6 +147,7 @@ $seoCityLinks = array_map(
 
 try {
     if ($path === '/robots.txt') {
+        header('Cache-Control: public, max-age=300, must-revalidate');
         header('Content-Type: text/plain; charset=utf-8');
         echo "User-agent: *\n";
         echo "Allow: /\n";
@@ -97,22 +157,62 @@ try {
         echo "Disallow: /lead-checkout\n";
         echo "Disallow: /lead-dashboard\n";
         echo "Disallow: /lead-download/\n";
+        echo "Disallow: /ai-room-visualizer\n";
         echo "Sitemap: " . absoluteUrl('/sitemap.xml') . "\n";
+        echo "LLMs: " . absoluteUrl('/llms.txt') . "\n";
+        exit;
+    }
+
+    if ($path === '/lead-alert-sw.js') {
+        header('Content-Type: application/javascript; charset=utf-8');
+        echo "self.addEventListener('push', event => { const data = event.data ? event.data.json() : {}; event.waitUntil(self.registration.showNotification(data.title || 'New HomeInteriors360 lead', { body: data.body || 'A matching project opportunity is available.', data: data })); });\n";
+        echo "self.addEventListener('notificationclick', event => { event.notification.close(); const url = event.notification.data && event.notification.data.url ? event.notification.data.url : '/lead-marketplace'; event.waitUntil(clients.openWindow(url)); });\n";
         exit;
     }
 
     if ($path === '/sitemap.xml') {
-        $today = date('Y-m-d');
+        header('Cache-Control: public, max-age=300, must-revalidate');
+        header('Content-Type: application/xml; charset=utf-8');
+        echo SitemapService::xml($seoLeadPages, $seoCityPages);
+        exit;
+
+        /* Legacy inline sitemap generator retained below temporarily for source-history compatibility. */
+        $formatSitemapLastmod = static function (mixed $value = null): string {
+            $raw = trim((string)($value ?? ''));
+            $timestamp = $raw !== '' ? strtotime($raw) : time();
+            if ($timestamp === false) {
+                $timestamp = time();
+            }
+            return gmdate('Y-m-d\TH:i:s', $timestamp) . '.000Z';
+        };
+        $today = $formatSitemapLastmod();
         $urls = [
             ['loc' => '/', 'priority' => '1.0', 'changefreq' => 'daily'],
             ['loc' => '/home-interior-hire-a-designer', 'priority' => '0.96', 'changefreq' => 'weekly'],
+            ['loc' => '/hire-a-designer', 'priority' => '0.82', 'changefreq' => 'weekly'],
             ['loc' => '/lead-marketplace', 'priority' => '0.95', 'changefreq' => 'daily'],
+            ['loc' => '/for-professionals', 'priority' => '0.92', 'changefreq' => 'weekly'],
+            ['loc' => '/delhi-ncr-founding-partners', 'priority' => '0.9', 'changefreq' => 'weekly'],
             ['loc' => '/pricing-details', 'priority' => '0.9', 'changefreq' => 'weekly'],
             ['loc' => '/pricing', 'priority' => '0.75', 'changefreq' => 'weekly'],
             ['loc' => '/interior-designer-registration', 'priority' => '0.88', 'changefreq' => 'weekly'],
+            ['loc' => '/register-interior-designer', 'priority' => '0.72', 'changefreq' => 'weekly'],
             ['loc' => '/professionals', 'priority' => '0.8', 'changefreq' => 'weekly'],
-            ['loc' => '/ai-room-visualizer', 'priority' => '0.86', 'changefreq' => 'weekly'],
+            ['loc' => '/properties', 'priority' => '0.76', 'changefreq' => 'weekly'],
             ['loc' => '/cost-calculator', 'priority' => '0.72', 'changefreq' => 'monthly'],
+            ['loc' => '/full-home-cost-calculator', 'priority' => '0.72', 'changefreq' => 'monthly'],
+            ['loc' => '/kitchen-cost-calculator', 'priority' => '0.72', 'changefreq' => 'monthly'],
+            ['loc' => '/modular-kitchen-cost-calculator', 'priority' => '0.7', 'changefreq' => 'monthly'],
+            ['loc' => '/wardrobe-cost-calculator', 'priority' => '0.7', 'changefreq' => 'monthly'],
+            ['loc' => '/1-bhk-cost-calculator', 'priority' => '0.68', 'changefreq' => 'monthly'],
+            ['loc' => '/2-bhk-cost-calculator', 'priority' => '0.68', 'changefreq' => 'monthly'],
+            ['loc' => '/3-bhk-cost-calculator', 'priority' => '0.68', 'changefreq' => 'monthly'],
+            ['loc' => '/4-bhk-cost-calculator', 'priority' => '0.66', 'changefreq' => 'monthly'],
+            ['loc' => '/living-room-cost-calculator', 'priority' => '0.64', 'changefreq' => 'monthly'],
+            ['loc' => '/bathroom-cost-calculator', 'priority' => '0.64', 'changefreq' => 'monthly'],
+            ['loc' => '/pooja-room-cost-calculator', 'priority' => '0.64', 'changefreq' => 'monthly'],
+            ['loc' => '/false-ceiling-cost-calculator', 'priority' => '0.64', 'changefreq' => 'monthly'],
+            ['loc' => '/painting-cost-calculator', 'priority' => '0.64', 'changefreq' => 'monthly'],
             ['loc' => '/contact-us', 'priority' => '0.45', 'changefreq' => 'yearly'],
             ['loc' => '/privacy-policy', 'priority' => '0.35', 'changefreq' => 'yearly'],
             ['loc' => '/terms-and-conditions', 'priority' => '0.35', 'changefreq' => 'yearly'],
@@ -153,12 +253,27 @@ try {
         foreach (Database::query("SELECT slug, updated_at FROM projects WHERE COALESCE(moderation_status, 'APPROVED')='APPROVED' ORDER BY updated_at DESC LIMIT 200") as $project) {
             $urls[] = ['loc' => '/portfolio/' . $project['slug'], 'priority' => '0.5', 'changefreq' => 'monthly', 'lastmod' => substr((string)($project['updated_at'] ?? $today), 0, 10)];
         }
+        try {
+            foreach (Database::query("SELECT slug, updated_at FROM real_estate_projects WHERE is_active=1 ORDER BY updated_at DESC LIMIT 500") as $property) {
+                $urls[] = ['loc' => '/property/' . $property['slug'], 'priority' => '0.64', 'changefreq' => 'weekly', 'lastmod' => substr((string)($property['updated_at'] ?? $today), 0, 10)];
+            }
+        } catch (Throwable) {
+            // The real estate module may not exist before its migration has run.
+        }
         $urls[] = ['loc' => '/design-ideas', 'priority' => '0.9', 'changefreq' => 'weekly'];
         foreach (Database::query('SELECT slug, updated_at FROM design_idea_aliases WHERE is_active=1 ORDER BY updated_at DESC LIMIT 200') as $alias) {
             $urls[] = ['loc' => '/design-ideas/' . $alias['slug'], 'priority' => '0.86', 'changefreq' => 'weekly', 'lastmod' => substr((string)($alias['updated_at'] ?? $today), 0, 10)];
         }
         foreach (Database::query('SELECT slug, updated_at FROM design_ideas WHERE is_active=1 ORDER BY updated_at DESC LIMIT 500') as $idea) {
             $urls[] = ['loc' => '/design-ideas/idea/' . $idea['slug'], 'priority' => '0.72', 'changefreq' => 'monthly', 'lastmod' => substr((string)($idea['updated_at'] ?? $today), 0, 10)];
+        }
+        $urls[] = ['loc' => '/articles', 'priority' => '0.86', 'changefreq' => 'weekly'];
+        try {
+            foreach (Database::query('SELECT slug, updated_at FROM articles WHERE is_active=1 ORDER BY updated_at DESC LIMIT 1000') as $article) {
+                $urls[] = ['loc' => '/articles/' . $article['slug'], 'priority' => '0.78', 'changefreq' => 'daily', 'lastmod' => substr((string)($article['updated_at'] ?? $today), 0, 10)];
+            }
+        } catch (Throwable) {
+            // Article CMS may not exist before its migration has run.
         }
         try {
             foreach (Database::query("SELECT path, updated_at, page_type FROM url_aliases WHERE is_active=1 AND path NOT LIKE '/admin%' AND path NOT LIKE '/api%' AND path <> '/properties' AND path NOT LIKE '/property/%' AND COALESCE(robots, '') NOT LIKE '%noindex%' ORDER BY updated_at DESC LIMIT 2000") as $aliasUrl) {
@@ -180,13 +295,62 @@ try {
         foreach ($urls as $url) {
             echo "  <url>\n";
             echo "    <loc>" . htmlspecialchars(absoluteUrl((string)$url['loc']), ENT_XML1, 'UTF-8') . "</loc>\n";
-            echo "    <lastmod>" . htmlspecialchars((string)($url['lastmod'] ?? $today), ENT_XML1, 'UTF-8') . "</lastmod>\n";
-            echo "    <changefreq>" . htmlspecialchars((string)$url['changefreq'], ENT_XML1, 'UTF-8') . "</changefreq>\n";
-            echo "    <priority>" . htmlspecialchars((string)$url['priority'], ENT_XML1, 'UTF-8') . "</priority>\n";
+            echo "    <lastmod>" . htmlspecialchars($formatSitemapLastmod($url['lastmod'] ?? $today), ENT_XML1, 'UTF-8') . "</lastmod>\n";
             echo "  </url>\n";
         }
         echo "</urlset>\n";
         exit;
+    }
+
+    if ($path === '/auth/google/designer' && $method === 'GET') {
+        try {
+            Auth::start();
+            $state = bin2hex(random_bytes(24));
+            $_SESSION['google_designer_oauth_state'] = $state;
+            $_SESSION['google_designer_oauth_return_source'] = trim((string)($_GET['source'] ?? ''));
+            header('Location: ' . GoogleOAuthService::authorizationUrl($state), true, 302);
+            exit;
+        } catch (Throwable $e) {
+            redirectTo('/interior-designer-registration?google_error=' . rawurlencode($e->getMessage()));
+        }
+    }
+
+    if ($path === '/auth/google/designer/callback' && $method === 'GET') {
+        Auth::start();
+        $state = (string)($_GET['state'] ?? '');
+        $expectedState = (string)($_SESSION['google_designer_oauth_state'] ?? '');
+        unset($_SESSION['google_designer_oauth_state']);
+        if ($state === '' || $expectedState === '' || !hash_equals($expectedState, $state)) {
+            redirectTo('/interior-designer-registration?google_error=' . rawurlencode('Google sign-up verification failed. Please try again.'));
+        }
+        if (!empty($_GET['error'])) {
+            redirectTo('/interior-designer-registration?google_error=' . rawurlencode('Google sign-up was cancelled.'));
+        }
+        try {
+            $identity = GoogleOAuthService::identityFromAuthorizationCode(trim((string)($_GET['code'] ?? '')));
+            $existing = Database::one('SELECT id, username, email, role, pro_id, google_subject FROM users WHERE google_subject=? OR email=? ORDER BY id DESC LIMIT 1', [$identity['sub'], $identity['email']]);
+            if ($existing) {
+                if (($existing['role'] ?? '') !== 'designer' || empty($existing['pro_id'])) {
+                    throw new RuntimeException('This Google email is already used by a different HomeInteriors360 account.');
+                }
+                if (empty($existing['google_subject'])) {
+                    Database::exec('UPDATE users SET google_subject=?, updated_at=NOW() WHERE id=?', [$identity['sub'], (int)$existing['id']]);
+                    $existing['google_subject'] = $identity['sub'];
+                }
+                Auth::loginUser($existing);
+                $designerBuyer = SiteRepository::designerBuyerForUser($existing);
+                if ($designerBuyer) {
+                    setBuyerSession($designerBuyer);
+                }
+                redirectTo('/designer');
+            }
+            $_SESSION['google_designer_identity'] = $identity;
+            $source = trim((string)($_SESSION['google_designer_oauth_return_source'] ?? ''));
+            unset($_SESSION['google_designer_oauth_return_source']);
+            redirectTo('/interior-designer-registration?google=connected' . ($source !== '' ? '&source=' . rawurlencode($source) : ''));
+        } catch (Throwable $e) {
+            redirectTo('/interior-designer-registration?google_error=' . rawurlencode($e->getMessage()));
+        }
     }
 
     // Auth APIs
@@ -345,28 +509,135 @@ try {
         }
     }
 
+    if ($path === '/api/designer-contact-queries' && $method === 'POST') {
+        try {
+            jsonResponse(['success' => true, 'id' => SiteRepository::createDesignerContactQuery(requestJson())]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
     if ($path === '/api/interior-designer-registration' && $method === 'POST') {
         try {
             $body = requestData();
-            $body['profile_pic'] = saveUploadedFile($_FILES['profile_pic'] ?? [], 'professionals', null);
-            $body['cover_photo'] = saveUploadedFile($_FILES['cover_photo'] ?? [], 'professionals', null);
-            $result = SiteRepository::registerInteriorDesigner($body);
-            if (!empty($result['user'])) {
-                Auth::start();
-                session_regenerate_id(true);
-                $_SESSION['auth_user'] = $result['user'];
+            Auth::start();
+            if (!empty($body['google_signup'])) {
+                $googleIdentity = $_SESSION['google_designer_identity'] ?? null;
+                if (!is_array($googleIdentity) || empty($googleIdentity['sub']) || empty($googleIdentity['email'])) {
+                    throw new InvalidArgumentException('Please continue with Google again before saving your designer registration.');
+                }
+                $body['_google_identity'] = $googleIdentity;
+                $body['email'] = (string)$googleIdentity['email'];
             }
-            if (!empty($result['buyer'])) {
+            $step = (int)($body['registration_step'] ?? 0);
+            $isFinal = !empty($body['final_step']);
+            $profilePic = saveUploadedFile($_FILES['profile_pic'] ?? [], 'professionals', null);
+            $coverPhoto = saveUploadedFile($_FILES['cover_photo'] ?? [], 'professionals', null);
+            if ($profilePic) {
+                $body['profile_pic'] = $profilePic;
+            }
+            if ($coverPhoto) {
+                $body['cover_photo'] = $coverPhoto;
+            }
+            if (!empty($body['pro_id'])) {
+                $result = SiteRepository::updateInteriorDesignerRegistrationStep((int)$body['pro_id'], $body);
+            } else {
+                $result = SiteRepository::registerInteriorDesigner($body);
+            }
+            if ((string)($body['source'] ?? '') === 'founding_partner') {
+                LeadMatchingService::captureFoundingPartner($body, (int)($result['pro_id'] ?? 0), !empty($result['user_id']) ? (int)$result['user_id'] : null);
+            }
+            if ($isFinal && !empty($result['user'])) {
+                Auth::loginUser($result['user']);
+            }
+            if ($isFinal && !empty($result['buyer'])) {
                 setBuyerSession($result['buyer']);
             }
             jsonResponse([
                 'success' => true,
                 'pro_id' => $result['pro_id'],
-                'redirect_url' => '/designer/portfolio-onboarding',
+                'user_id' => $result['user_id'] ?? null,
+                'step' => $step,
+                'redirect_url' => $isFinal ? '/designer/portfolio-onboarding' : null,
             ]);
         } catch (InvalidArgumentException $e) {
             jsonResponse(['error' => $e->getMessage()], 400);
         }
+    }
+
+    if ($path === '/api/designer-membership-plans' && $method === 'GET') {
+        jsonResponse(['plans' => SiteRepository::designerMembershipPlans()]);
+    }
+
+    if ($path === '/api/designer/membership' && $method === 'GET') {
+        jsonResponse(['membership' => SiteRepository::designerMembershipStatus(Auth::requireDesigner())]);
+    }
+
+    if ($path === '/api/designer/membership/checkout' && $method === 'POST') {
+        $user = Auth::requireDesigner();
+        try {
+            jsonResponse(['success' => true] + SiteRepository::createDesignerMembershipSubscription($user, requestJson()));
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    if ($path === '/api/designer/membership/verify' && $method === 'POST') {
+        $user = Auth::requireDesigner();
+        $body = requestJson();
+        try {
+            SiteRepository::activateDesignerMembershipSubscription($user, (string)($body['razorpay_subscription_id'] ?? ''), (string)($body['razorpay_payment_id'] ?? ''), (string)($body['razorpay_signature'] ?? ''));
+            jsonResponse(['success' => true, 'redirect_url' => '/designer']);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/designer/alert-preferences' && $method === 'POST') {
+        $user = Auth::requireDesigner();
+        $body = requestData();
+        LeadMatchingService::savePreferences((int)$user['pro_id'], [
+            'cities' => $body['cities'] ?? '',
+            'localities' => $body['localities'] ?? '',
+            'project_categories' => $body['project_categories'] ?? '',
+            'min_project_budget' => $body['min_project_budget'] ?? 0,
+            'max_project_budget' => $body['max_project_budget'] ?? 0,
+            'whatsapp_alerts_enabled' => !empty($body['whatsapp_alerts_enabled']),
+            'browser_push_enabled' => !empty($body['browser_push_enabled']),
+            'quiet_hours_start' => $body['quiet_hours_start'] ?? '',
+            'quiet_hours_end' => $body['quiet_hours_end'] ?? '',
+            'daily_alert_limit' => $body['daily_alert_limit'] ?? 10,
+            'alerts_paused' => !empty($body['alerts_paused']),
+            'whatsapp_consent' => !empty($body['whatsapp_consent']),
+            'browser_push_consent' => !empty($body['browser_push_consent']),
+        ]);
+        jsonResponse(['success' => true, 'message' => 'Alert preferences saved.']);
+    }
+
+    if ($path === '/api/designer/push-subscriptions' && $method === 'POST') {
+        $user = Auth::requireDesigner();
+        try {
+            LeadMatchingService::savePushSubscription((int)$user['pro_id'], requestJson(), (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/designer/push-subscriptions' && $method === 'DELETE') {
+        $user = Auth::requireDesigner();
+        $body = requestJson();
+        LeadMatchingService::removePushSubscription((int)$user['pro_id'], (string)($body['endpoint'] ?? ''));
+        jsonResponse(['success' => true]);
+    }
+
+    if ($path === '/api/lead-engagement' && $method === 'POST') {
+        $user = Auth::requireDesigner();
+        $body = requestJson();
+        LeadMatchingService::recordEngagement((int)($body['lead_id'] ?? 0), (int)$user['pro_id'], (string)($body['event_type'] ?? ''), $body);
+        jsonResponse(['success' => true]);
     }
 
     if ($path === '/api/designer/portfolios' && $method === 'POST') {
@@ -378,6 +649,56 @@ try {
             jsonResponse(['success' => true, 'id' => $id]);
         } catch (InvalidArgumentException $e) {
             jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/designer/profile') {
+        $user = Auth::requireDesigner();
+        if ($method === 'GET') {
+            $profile = SiteRepository::designerProfessional((int)$user['pro_id']);
+            if (!$profile) {
+                jsonResponse(['error' => 'Professional profile not found.'], 404);
+            }
+            jsonResponse(['profile' => $profile]);
+        }
+        if ($method === 'POST') {
+            try {
+                $body = requestData();
+                $current = SiteRepository::designerProfessional((int)$user['pro_id']);
+                if (!$current) {
+                    jsonResponse(['error' => 'Professional profile not found.'], 404);
+                }
+                $body['profile_pic'] = saveUploadedFile($_FILES['profile_pic'] ?? [], 'professionals', (string)($current['profile_pic'] ?? ''));
+                $body['cover_photo'] = saveUploadedFile($_FILES['cover_photo'] ?? [], 'professionals', (string)($current['cover_photo'] ?? ''));
+                SiteRepository::updateDesignerProfessional((int)$user['pro_id'], $body);
+                jsonResponse(['success' => true]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
+    if (preg_match('#^/api/designer/portfolios/(\d+)$#', $path, $match)) {
+        $user = Auth::requireDesigner();
+        $portfolioId = (int)$match[1];
+        try {
+            if ($method === 'PUT' || $method === 'POST') {
+                $body = requestData();
+                $current = SiteRepository::designerPortfolio((int)$user['pro_id'], $portfolioId);
+                if (!$current) {
+                    jsonResponse(['error' => 'Portfolio work was not found.'], 404);
+                }
+                $existingMedia = getJsonArrayField($body, 'current_media_json', getJsonArrayField($current, 'media_json', []));
+                $body['media_json'] = saveUploadedFiles($_FILES['media_files'] ?? [], 'portfolio', $existingMedia);
+                SiteRepository::updateDesignerPortfolio((int)$user['pro_id'], $portfolioId, $body);
+                jsonResponse(['success' => true]);
+            }
+            if ($method === 'DELETE') {
+                SiteRepository::deleteDesignerPortfolio((int)$user['pro_id'], $portfolioId);
+                jsonResponse(['success' => true]);
+            }
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 404);
         }
     }
 
@@ -412,6 +733,60 @@ try {
         } catch (InvalidArgumentException $e) {
             jsonResponse(['error' => $e->getMessage()], 400);
         }
+    }
+
+    if ($path === '/api/designer/quotation-trial' && $method === 'POST') {
+        $user = Auth::requireDesigner();
+        try {
+            $status = SiteRepository::designerSubscriptionStatus($user);
+            if (empty($status['trial_available'])) {
+                jsonResponse(['error' => 'This free trial is no longer available for this account.'], 400);
+            }
+            jsonResponse(['success' => true] + SiteRepository::createDesignerRecurringSubscription($user, true));
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/designer/quotation-subscription' && $method === 'POST') {
+        $user = Auth::requireDesigner();
+        try {
+            jsonResponse(['success' => true] + SiteRepository::createDesignerRecurringSubscription($user));
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], $e->getCode() === 401 ? 401 : 500);
+        }
+    }
+
+    if ($path === '/api/designer/quotation-subscription/verify' && $method === 'POST') {
+        $user = Auth::requireDesigner();
+        $body = requestJson();
+        try {
+            SiteRepository::activateDesignerRecurringSubscription(
+                $user,
+                trim((string)($body['razorpay_subscription_id'] ?? '')),
+                trim((string)($body['razorpay_payment_id'] ?? '')),
+                trim((string)($body['razorpay_signature'] ?? ''))
+            );
+            jsonResponse(['success' => true, 'redirect_url' => '/designer/quotations/create']);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/razorpay/quotation-subscription-webhook' && $method === 'POST') {
+        $raw = file_get_contents('php://input') ?: '';
+        $signature = (string)($_SERVER['HTTP_X_RAZORPAY_SIGNATURE'] ?? '');
+        if (RAZORPAY_WEBHOOK_SECRET === '' || !hash_equals(hash_hmac('sha256', $raw, RAZORPAY_WEBHOOK_SECRET), $signature)) {
+            jsonResponse(['error' => 'Invalid webhook signature'], 401);
+        }
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            jsonResponse(['error' => 'Invalid webhook payload'], 400);
+        }
+        SiteRepository::updateDesignerRecurringSubscriptionFromWebhook($payload);
+        jsonResponse(['success' => true]);
     }
 
     if ($path === '/api/mobile/professional/register' && $method === 'POST') {
@@ -555,6 +930,67 @@ try {
         jsonResponse(['success' => true, 'lead_id' => $leadId]);
     }
 
+    if ($path === '/api/site-search' && $method === 'GET') {
+        $query = trim((string)($_GET['q'] ?? ''));
+        if (mb_strlen($query) < 1) {
+            jsonResponse(['search_id' => null, 'results' => []]);
+        }
+        jsonResponse(SiteRepository::searchPublicPages($query, (string)($_GET['source'] ?? '/')));
+    }
+
+    if ($path === '/api/site-search/click' && $method === 'POST') {
+        SiteRepository::trackSiteSearchClick(requestJson());
+        jsonResponse(['success' => true]);
+    }
+
+    if ($path === '/api/home-services' && $method === 'GET') {
+        jsonResponse(['categories' => SiteRepository::homeServiceCatalog(), 'cities' => SiteRepository::homeServiceCities()]);
+    }
+
+    if (preg_match('#^/api/home-services/([a-z0-9-]+)/form$#', $path, $homeServiceFormMatch) && $method === 'GET') {
+        $service = SiteRepository::homeServiceBySlug((string)$homeServiceFormMatch[1]);
+        if (!$service) {
+            jsonResponse(['error' => 'Service not found.'], 404);
+        }
+        jsonResponse(['service' => $service, 'form' => SiteRepository::homeServiceForm((int)$service['id'])]);
+    }
+
+    if ($path === '/api/home-services/enquiries' && $method === 'POST') {
+        try {
+            $data = requestData();
+            $result = SiteRepository::createHomeServiceEnquiry($data);
+            jsonResponse(['success' => true, 'enquiry_id' => $result['id'], 'lead_id' => $result['lead_id'] ?? null, 'duplicate' => $result['duplicate'] ?? false]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 422);
+        } catch (Throwable $e) {
+            jsonResponse(['error' => 'Unable to save this service request. Please try again.'], 500);
+        }
+    }
+
+    if ($path === '/api/admin/home-services/nodes' && $method === 'POST') {
+        Auth::requireAdmin();
+        try {
+            jsonResponse(['success' => true, 'id' => SiteRepository::saveHomeServiceNode(requestData())]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 422);
+        }
+    }
+
+    if ($path === '/api/admin/home-services/questions' && $method === 'POST') {
+        Auth::requireAdmin();
+        try {
+            $data = requestData();
+            $questions = json_decode((string)($data['questions_json'] ?? '[]'), true);
+            if (!is_array($questions)) {
+                throw new InvalidArgumentException('Questions JSON is invalid.');
+            }
+            SiteRepository::saveHomeServiceFormQuestions((int)($data['service_id'] ?? 0), $questions);
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 422);
+        }
+    }
+
     if ($path === '/api/calculator/estimate' && $method === 'POST') {
         $body = requestJson();
         if (empty($body['floor_plan']) || empty($body['package_tier']) || empty($body['rooms']) || !is_array($body['rooms'])) {
@@ -600,17 +1036,75 @@ try {
         jsonResponse(['coupons' => SiteRepository::publicLeadCoupons()]);
     }
 
+    if ($path === '/api/single-lead-orders/create' && $method === 'POST') {
+        Auth::start();
+        $body = requestJson();
+        $saleId = (int)($body['sale_id'] ?? 0);
+        $buyer = buyerUser();
+        try {
+            if (!$buyer) {
+                $buyer = SiteRepository::createOrLoginBuyerForCheckout($body['buyer'] ?? []);
+                setBuyerSession($buyer);
+            }
+            $sale = SiteRepository::getSingleLeadSaleById($saleId, true);
+            if (!$sale) {
+                jsonResponse(['error' => 'Single lead is not available.'], 404);
+            }
+            $receipt = 'single_' . (int)$buyer['id'] . '_' . $saleId . '_' . time();
+            $singleLeadAmount = (int)round((float)$sale['price_amount'] * 100);
+            $order = razorpayCreateOrder($singleLeadAmount, $receipt, [
+                'buyer_id' => (int)$buyer['id'],
+                'single_lead_sale_id' => $saleId,
+                'lead_id' => (int)$sale['lead_id'],
+                'module' => 'single_lead_sale',
+            ]);
+            SiteRepository::createSingleLeadPurchaseOrder((int)$buyer['id'], $saleId, (string)$order['id']);
+            jsonResponse([
+                'success' => true,
+                'key_id' => defined('RAZORPAY_KEY_ID') ? RAZORPAY_KEY_ID : '',
+                'order_id' => (string)$order['id'],
+                'amount' => (int)($order['amount'] ?? $singleLeadAmount),
+                'currency' => (string)($order['currency'] ?? 'INR'),
+                'buyer' => buyerUser(),
+            ]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], $e->getCode() === 401 ? 401 : 500);
+        }
+    }
+
+    if ($path === '/api/single-lead-orders/verify' && $method === 'POST') {
+        $buyer = requireBuyer();
+        $body = requestJson();
+        $orderId = trim((string)($body['razorpay_order_id'] ?? ''));
+        $paymentId = trim((string)($body['razorpay_payment_id'] ?? ''));
+        $signature = trim((string)($body['razorpay_signature'] ?? ''));
+        if ($orderId === '' || $paymentId === '' || $signature === '') {
+            jsonResponse(['error' => 'Missing Razorpay payment fields'], 400);
+        }
+        if (!razorpaySignatureIsValid($orderId, $paymentId, $signature)) {
+            jsonResponse(['error' => 'Payment signature mismatch'], 400);
+        }
+        try {
+            SiteRepository::markSingleLeadPurchasePaid($orderId, (int)$buyer['id'], $paymentId, $signature);
+            jsonResponse(['success' => true, 'redirect_url' => '/lead-dashboard?payment=single-lead-success']);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 409);
+        }
+    }
+
     if ($path === '/api/lead-cart') {
         Auth::start();
         $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
         $buyer = buyerUser();
-        $firstTimeEligible = !$buyer || SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
+        $firstTimeEligible = $buyer && !empty($_SESSION['designer_onboarding_free_lead_buyer_id']) && (int)$_SESSION['designer_onboarding_free_lead_buyer_id'] === (int)$buyer['id'] && SiteRepository::designerOnboardingLeadBenefitEligible((int)$buyer['id']);
         if ($method === 'GET') {
             try {
-                jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
+                jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null));
             } catch (InvalidArgumentException) {
                 unset($_SESSION['lead_coupon']);
-                jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible));
+                jsonResponse(SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null));
             }
         }
         if ($method === 'POST') {
@@ -624,10 +1118,10 @@ try {
             }
             $_SESSION['lead_cart'][$item['id']] = $item;
             try {
-                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
+                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null));
             } catch (InvalidArgumentException) {
                 unset($_SESSION['lead_coupon']);
-                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible));
+                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null));
             }
         }
         if ($method === 'DELETE') {
@@ -645,10 +1139,10 @@ try {
                 }
             }
             try {
-                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible));
+                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null));
             } catch (InvalidArgumentException) {
                 unset($_SESSION['lead_coupon']);
-                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible));
+                jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null));
             }
         }
     }
@@ -659,11 +1153,11 @@ try {
         $body = requestJson();
         $code = strtoupper(trim((string)($body['code'] ?? '')));
         $buyer = buyerUser();
-        $firstTimeEligible = !$buyer || SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
-        $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible);
+        $firstTimeEligible = $buyer && !empty($_SESSION['designer_onboarding_free_lead_buyer_id']) && (int)$_SESSION['designer_onboarding_free_lead_buyer_id'] === (int)$buyer['id'] && SiteRepository::designerOnboardingLeadBenefitEligible((int)$buyer['id']);
+        $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null);
         $coupon = SiteRepository::validateLeadCoupon($code, (float)$summary['subtotal'], (int)$summary['lead_count']);
         $_SESSION['lead_coupon'] = (string)$coupon['code'];
-        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'], $firstTimeEligible));
+        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'], $firstTimeEligible, $buyer ? (int)$buyer['id'] : null));
     }
 
     if ($path === '/api/lead-cart/coupon' && $method === 'DELETE') {
@@ -671,8 +1165,8 @@ try {
         unset($_SESSION['lead_coupon']);
         $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
         $buyer = buyerUser();
-        $firstTimeEligible = !$buyer || SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
-        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible));
+        $firstTimeEligible = $buyer && !empty($_SESSION['designer_onboarding_free_lead_buyer_id']) && (int)$_SESSION['designer_onboarding_free_lead_buyer_id'] === (int)$buyer['id'] && SiteRepository::designerOnboardingLeadBenefitEligible((int)$buyer['id']);
+        jsonResponse(['success' => true] + SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null));
     }
 
     if ($path === '/api/buyer/login' && $method === 'POST') {
@@ -732,24 +1226,24 @@ try {
         $_SESSION['lead_cart'] = isset($_SESSION['lead_cart']) && is_array($_SESSION['lead_cart']) ? $_SESSION['lead_cart'] : [];
         $buyer = buyerUser();
         if (!$buyer) {
-            $buyer = SiteRepository::createOrLoginBuyer($body['buyer'] ?? []);
+            $buyer = SiteRepository::createOrLoginBuyerForCheckout($body['buyer'] ?? []);
             setBuyerSession($buyer);
         }
-        $firstTimeEligible = SiteRepository::buyerFirstTimeLeadOfferEligible((int)$buyer['id']);
+        $firstTimeEligible = !empty($_SESSION['designer_onboarding_free_lead_buyer_id']) && (int)$_SESSION['designer_onboarding_free_lead_buyer_id'] === (int)$buyer['id'] && SiteRepository::designerOnboardingLeadBenefitEligible((int)$buyer['id']);
         if (!empty($body['account_only'])) {
             try {
-                $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible);
+                $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null);
             } catch (InvalidArgumentException) {
                 unset($_SESSION['lead_coupon']);
-                $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible);
+                $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null);
             }
             jsonResponse(['success' => true, 'buyer' => buyerUser(), 'cart' => $summary]);
         }
         try {
-            $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible);
+            $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], $_SESSION['lead_coupon'] ?? null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null);
         } catch (InvalidArgumentException) {
             unset($_SESSION['lead_coupon']);
-            $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible);
+            $summary = SiteRepository::leadCartSummary($_SESSION['lead_cart'], null, $firstTimeEligible, $buyer ? (int)$buyer['id'] : null);
         }
         $cart = $summary['items'];
         if (!$summary['items']) {
@@ -758,6 +1252,10 @@ try {
         $amount = (float)$summary['grand_total'];
         if ($amount <= 0) {
             SiteRepository::createFreeLeadPurchase((int)$buyer['id'], $cart, $summary['coupon']['code'] ?? null, (float)$summary['discount_amount']);
+            if ($firstTimeEligible) {
+                SiteRepository::redeemDesignerOnboardingLeadBenefit((int)$buyer['id']);
+                unset($_SESSION['designer_onboarding_free_lead_buyer_id']);
+            }
             $_SESSION['lead_cart'] = [];
             unset($_SESSION['lead_coupon']);
             jsonResponse([
@@ -774,6 +1272,7 @@ try {
             jsonResponse(['error' => $e->getMessage()], $e->getCode() === 401 ? 401 : 500);
         }
         SiteRepository::createLeadPurchaseOrder((int)$buyer['id'], $cart, (string)$order['id'], $amount, $summary['coupon']['code'] ?? null, (float)$summary['discount_amount']);
+        SiteRepository::recordAbandonedCheckout('bulk_leads', $buyer, $amount, ['cart' => $cart, 'summary' => $summary], (string)$order['id'], (int)$buyer['id']);
         jsonResponse([
             'success' => true,
             'key_id' => defined('RAZORPAY_KEY_ID') ? RAZORPAY_KEY_ID : '',
@@ -799,10 +1298,44 @@ try {
         $shouldMarkLeadPurchase = $path === '/api/lead-orders/verify' || (string)($body['context'] ?? '') === 'lead_marketplace';
         if ($buyer && $shouldMarkLeadPurchase) {
             SiteRepository::markLeadPurchasePaid($orderId, (int)$buyer['id'], $paymentId, $signature);
+            if (!empty($_SESSION['designer_onboarding_free_lead_buyer_id']) && (int)$_SESSION['designer_onboarding_free_lead_buyer_id'] === (int)$buyer['id']) {
+                SiteRepository::redeemDesignerOnboardingLeadBenefit((int)$buyer['id']);
+                unset($_SESSION['designer_onboarding_free_lead_buyer_id']);
+            }
             $_SESSION['lead_cart'] = [];
             unset($_SESSION['lead_coupon']);
         }
         jsonResponse(['success' => true, 'redirect_url' => '/lead-dashboard?payment=success']);
+    }
+
+    if ($path === '/api/admin/checkout-recovery/export' && $method === 'GET') {
+        Auth::requireAdmin();
+        $rows = SiteRepository::abandonedCheckouts((string)($_GET['status'] ?? 'open'));
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="checkout-recovery-' . date('Y-m-d') . '.csv"');
+        $output = fopen('php://output', 'w');
+        fputcsv($output, ['Checkout type', 'Status', 'Name', 'Email', 'Phone', 'Amount', 'Order / subscription ID', 'Started at', 'Cart snapshot']);
+        foreach ($rows as $row) {
+            fputcsv($output, [(string)$row['checkout_type'], (string)$row['checkout_status'], (string)($row['customer_name'] ?? ''), (string)($row['customer_email'] ?? ''), (string)($row['customer_phone'] ?? ''), (string)$row['amount_total'], (string)($row['external_order_id'] ?? ''), (string)$row['started_at'], (string)($row['cart_snapshot_json'] ?? '')]);
+        }
+        fclose($output);
+        exit;
+    }
+
+    if ($path === '/api/admin/export' && $method === 'GET') {
+        Auth::requireAdmin();
+        $resource = strtolower(trim((string)($_GET['resource'] ?? '')));
+        try {
+            $xlsx = SiteRepository::adminExportXlsx($resource);
+            $filename = preg_replace('/[^a-z0-9-]+/', '-', $resource) ?: 'admin-export';
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="homeinteriors360-' . $filename . '-' . date('Y-m-d') . '.xlsx"');
+            header('Content-Length: ' . strlen($xlsx));
+            echo $xlsx;
+            exit;
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
     }
 
     // Admin APIs
@@ -821,9 +1354,74 @@ try {
         }
     }
 
+    if ($path === '/api/admin/articles') {
+        $user = Auth::requireAdmin();
+        if ($method === 'GET') {
+            jsonResponse(['articles' => SiteRepository::listArticles([], true)]);
+        }
+        if ($method === 'POST') {
+            $body = requestData();
+            foreach (['type', 'color', 'city', 'state', 'style', 'layout', 'location', 'photo_source_name'] as $field) {
+                if (($body[$field] ?? '') === '__other__') {
+                    $body[$field] = trim((string)($body[$field . '_other'] ?? ''));
+                }
+            }
+            $body['image_path'] = saveUploadedFile($_FILES['image_file'] ?? [], 'articles', (string)(($body['image_path'] ?? '') ?: ($body['current_image_path'] ?? '')));
+            $body['created_by'] = (int)($user['id'] ?? 0);
+            try {
+                $id = SiteRepository::saveArticle($body);
+                jsonResponse(['success' => true, 'id' => $id]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
+    if (preg_match('#^/api/admin/articles/(\\d+)$#', $path, $match)) {
+        $user = Auth::requireAdmin();
+        $id = (int)$match[1];
+        if ($method === 'GET') {
+            $article = SiteRepository::getArticle($id, true);
+            if (!$article) {
+                jsonResponse(['error' => 'Article not found'], 404);
+            }
+            jsonResponse(['article' => $article]);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            $body = requestData();
+            foreach (['type', 'color', 'city', 'state', 'style', 'layout', 'location', 'photo_source_name'] as $field) {
+                if (($body[$field] ?? '') === '__other__') {
+                    $body[$field] = trim((string)($body[$field . '_other'] ?? ''));
+                }
+            }
+            $body['image_path'] = saveUploadedFile($_FILES['image_file'] ?? [], 'articles', (string)(($body['image_path'] ?? '') ?: ($body['current_image_path'] ?? '')));
+            $body['created_by'] = (int)($user['id'] ?? 0);
+            try {
+                SiteRepository::saveArticle($body, $id);
+                jsonResponse(['success' => true]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+        if ($method === 'DELETE') {
+            SiteRepository::deleteArticle($id);
+            jsonResponse(['success' => true]);
+        }
+    }
+
     if ($path === '/api/admin/leads' && $method === 'GET') {
         Auth::requireAdmin();
         jsonResponse(['leads' => SiteRepository::listLeads()]);
+    }
+
+    if ($path === '/api/admin/leads/upload' && $method === 'POST') {
+        Auth::requireAdmin();
+        try {
+            $result = SiteRepository::importLeadsFromUploadedFile($_FILES['lead_file'] ?? []);
+            jsonResponse(['success' => true] + $result);
+        } catch (Throwable $e) {
+            jsonResponse(['error' => $e->getMessage()], $e instanceof InvalidArgumentException ? 400 : 500);
+        }
     }
 
     if ($path === '/api/admin/leads/status' && $method === 'PUT') {
@@ -838,6 +1436,72 @@ try {
         }
         SiteRepository::updateLeadStatus((int)$body['lead_id'], (string)$body['status']);
         jsonResponse(['success' => true]);
+    }
+
+    if ($path === '/api/admin/single-lead-sales' && ($method === 'POST' || $method === 'PUT')) {
+        $user = Auth::requireAdmin();
+        $body = requestData();
+        try {
+            if (($body['action'] ?? '') === 'delete') {
+                SiteRepository::deleteSingleLeadSale((int)($body['id'] ?? 0));
+                redirectTo('/admin/single-lead-sales?deleted=1');
+            }
+            if (($body['action'] ?? '') === 'set_status') {
+                SiteRepository::updateSingleLeadSaleStatus((int)($body['id'] ?? 0), (string)($body['status'] ?? 'draft'));
+                redirectTo('/admin/single-lead-sales?saved=1');
+            }
+            if (($body['action'] ?? '') === 'update_price') {
+                SiteRepository::updateSingleLeadSalePrice((int)($body['id'] ?? 0), (float)($body['price_amount'] ?? 0));
+                redirectTo('/admin/single-lead-sales?saved=1');
+            }
+            $body['created_by'] = (int)($user['id'] ?? 0);
+            SiteRepository::saveSingleLeadSale($body, !empty($body['id']) ? (int)$body['id'] : null);
+            redirectTo('/admin/single-lead-sales?saved=1');
+        } catch (InvalidArgumentException | RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], $e instanceof InvalidArgumentException ? 400 : 500);
+        }
+    }
+
+    if ($path === '/api/admin/founding-partners/status' && ($method === 'POST' || $method === 'PUT')) {
+        Auth::requireAdmin();
+        $body = requestData();
+        try {
+            LeadMatchingService::updateFoundingPartnerStatus((int)($body['id'] ?? 0), (string)($body['status'] ?? 'Applied'), !empty($body['badge_enabled']));
+            redirectTo('/admin/lead-alerts');
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/api/admin/lead-alert-settings' && ($method === 'POST' || $method === 'PUT')) {
+        Auth::requireAdmin();
+        LeadMatchingService::saveSettings(requestData());
+        redirectTo('/admin/lead-alerts');
+    }
+
+    if ($path === '/api/admin/lead-alerts/recalculate' && $method === 'POST') {
+        Auth::requireAdmin();
+        $body = requestData();
+        $matches = LeadMatchingService::recalculateMatches((int)($body['lead_id'] ?? 0));
+        if (str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')) {
+            jsonResponse(['success' => true, 'matches' => $matches]);
+        }
+        redirectTo('/admin/lead-alerts?lead_id=' . (int)($body['lead_id'] ?? 0));
+    }
+
+    if ($path === '/api/admin/lead-alerts/start' && $method === 'POST') {
+        Auth::requireAdmin();
+        $body = requestData();
+        $jobs = LeadMatchingService::scheduleWaves((int)($body['lead_id'] ?? 0));
+        if (str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')) {
+            jsonResponse(['success' => true, 'jobs' => $jobs]);
+        }
+        redirectTo('/admin/lead-alerts?lead_id=' . (int)($body['lead_id'] ?? 0));
+    }
+
+    if ($path === '/api/admin/lead-alerts/process' && ($method === 'POST' || $method === 'GET')) {
+        Auth::requireAdmin();
+        jsonResponse(['success' => true] + LeadMatchingService::processDueJobs(50));
     }
 
     if ($path === '/api/admin/pros' && $method === 'GET') {
@@ -929,6 +1593,15 @@ try {
                 jsonResponse(['error' => $e->getMessage()], 400);
             }
         }
+    }
+
+    if (preg_match('#^/api/admin/designer-accounts/(\\d+)$#', $path, $match) && $method === 'GET') {
+        Auth::requireAdmin();
+        $detail = SiteRepository::designerAccountDetail((int)$match[1]);
+        if (!$detail) {
+            jsonResponse(['error' => 'Designer account not found.'], 404);
+        }
+        jsonResponse($detail);
     }
 
     if (preg_match('#^/api/admin/designer-accounts/(\\d+)$#', $path, $match) && ($method === 'PUT' || $method === 'POST')) {
@@ -1051,6 +1724,16 @@ try {
         }
     }
 
+    if (preg_match('#^/api/admin/designer-contact-queries/(\\d+)/status$#', $path, $match) && $method === 'PUT') {
+        Auth::requireAdmin();
+        try {
+            SiteRepository::updateDesignerContactQueryStatus((int)$match[1], (string)(requestJson()['status'] ?? ''));
+            jsonResponse(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
     if ($path === '/api/admin/url-aliases') {
         Auth::requireAdmin();
         if ($method === 'GET') {
@@ -1101,8 +1784,17 @@ try {
         }
         if ($method === 'POST') {
             $body = requestData();
-            if (empty($body['name']) || empty($body['slug']) || empty($body['type'])) {
-                jsonResponse(['error' => 'Idea name, slug, and type are required'], 400);
+            foreach (['type', 'color', 'city', 'state', 'style', 'layout', 'location', 'photo_source_name'] as $field) {
+                if (($body[$field] ?? '') === '__other__') {
+                    $body[$field] = trim((string)($body[$field . '_other'] ?? ''));
+                }
+            }
+            if (empty($body['name']) || empty($body['type'])) {
+                jsonResponse(['error' => 'Idea title and type are required'], 400);
+            }
+            $body['image_url'] = saveUploadedFile($_FILES['image_file'] ?? [], 'design-ideas', (string)($body['current_image_url'] ?? ''));
+            if (empty($body['image_url'])) {
+                jsonResponse(['error' => 'Please upload a main image for this design idea.'], 400);
             }
             $id = SiteRepository::saveDesignIdea($body);
             jsonResponse(['success' => true, 'id' => $id]);
@@ -1121,8 +1813,17 @@ try {
         }
         if ($method === 'PUT' || $method === 'POST') {
             $body = requestData();
-            if (empty($body['name']) || empty($body['slug']) || empty($body['type'])) {
-                jsonResponse(['error' => 'Idea name, slug, and type are required'], 400);
+            foreach (['type', 'color', 'city', 'state', 'style', 'layout', 'location', 'photo_source_name'] as $field) {
+                if (($body[$field] ?? '') === '__other__') {
+                    $body[$field] = trim((string)($body[$field . '_other'] ?? ''));
+                }
+            }
+            if (empty($body['name']) || empty($body['type'])) {
+                jsonResponse(['error' => 'Idea title and type are required'], 400);
+            }
+            $body['image_url'] = saveUploadedFile($_FILES['image_file'] ?? [], 'design-ideas', (string)($body['current_image_url'] ?? ''));
+            if (empty($body['image_url'])) {
+                jsonResponse(['error' => 'Please upload a main image for this design idea.'], 400);
             }
             SiteRepository::saveDesignIdea($body, $id);
             jsonResponse(['success' => true]);
@@ -1229,6 +1930,33 @@ try {
             jsonResponse(['error' => $e->getMessage()], 400);
         }
     }
+    if ($path === '/api/boq/anonymous-drafts' && $method === 'POST') {
+        try {
+            $draft = SiteRepository::createAnonymousBoqDraft(requestData());
+            jsonResponse(['success' => true, 'token' => $draft['token'], 'redirect_url' => '/boq-studio/editor/' . $draft['token']]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if (preg_match('#^/api/boq/anonymous-drafts/([a-f0-9]{48})$#', $path, $match)) {
+        if ($method === 'GET') {
+            $draft = SiteRepository::getAnonymousBoqDraft((string)$match[1]);
+            if (!$draft) {
+                jsonResponse(['error' => 'Sample BOQ not found'], 404);
+            }
+            jsonResponse(['draft' => $draft['draft']]);
+        }
+        if ($method === 'POST' || $method === 'PUT') {
+            try {
+                $draft = SiteRepository::saveAnonymousBoqDraft((string)$match[1], requestData());
+                jsonResponse(['success' => true, 'draft' => $draft['draft']]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => $e->getMessage()], 400);
+            }
+        }
+    }
+
     if ($path === '/api/quotations') {
         $user = Auth::requireAuth();
         if ($method === 'GET') {
@@ -1242,8 +1970,9 @@ try {
             try {
                 $body = requestData();
                 if (Auth::isDesigner($user)) {
+                    SiteRepository::startDesignerQuotationTrial($user);
                     if (!SiteRepository::designerCanCreateQuotation($user)) {
-                        jsonResponse(['error' => 'Your subscription has expired. Please renew to create new quotations.'], 403);
+                        jsonResponse(['error' => 'Your 15-day trial has ended. Set up monthly automatic payment to create new quotations.'], 403);
                     }
                     $body['designer_id'] = (int)($user['pro_id'] ?? 0);
                     $body['assigned_to_user_id'] = (int)$user['id'];
@@ -1331,7 +2060,7 @@ try {
             echo 'Quotation not found';
             exit;
         }
-        render('public/proposal-print', [
+        render(empty($match[2]) ? 'public/proposal-public' : 'public/proposal-print', [
             'title' => $quote['quote_number'] . ' Proposal PDF | HomeInteriors360',
             'metaRobots' => 'noindex,nofollow',
             'content' => $content,
@@ -1343,17 +2072,46 @@ try {
     }
 
     if ($path === '/api/rate-cards') {
-        Auth::requireAdmin();
+        $user = Auth::requireAuth();
+        if (!Auth::isAdmin($user) && !Auth::isDesigner($user)) {
+            jsonResponse(['error' => 'Rate cards are not available for this account.'], 403);
+        }
         if ($method === 'GET') {
+            if (Auth::isDesigner($user)) {
+                $_GET['designer_id'] = (int)($user['pro_id'] ?? 0);
+            }
             jsonResponse(['rate_cards' => SiteRepository::quotationRateCards($_GET)]);
         }
         if ($method === 'POST') {
             try {
-                $id = SiteRepository::saveQuotationRateCard(requestData());
+                $body = requestData();
+                if (Auth::isDesigner($user)) {
+                    $body['designer_id'] = (int)($user['pro_id'] ?? 0);
+                }
+                $id = SiteRepository::saveQuotationRateCard($body);
                 jsonResponse(['success' => true, 'id' => $id]);
             } catch (InvalidArgumentException $e) {
                 jsonResponse(['error' => $e->getMessage()], 400);
             }
+        }
+    }
+
+    if (preg_match('#^/api/rate-cards/(\d+)$#', $path, $match) && ($method === 'PUT' || $method === 'POST')) {
+        $user = Auth::requireAuth();
+        $rateId = (int)$match[1];
+        $existing = Database::one('SELECT designer_id FROM quotation_rate_cards WHERE id=?', [$rateId]);
+        if (!$existing || (!Auth::isAdmin($user) && (!Auth::isDesigner($user) || (int)$existing['designer_id'] !== (int)($user['pro_id'] ?? 0)))) {
+            jsonResponse(['error' => 'Rate card not found'], 404);
+        }
+        try {
+            $body = requestData();
+            if (Auth::isDesigner($user)) {
+                $body['designer_id'] = (int)$user['pro_id'];
+            }
+            SiteRepository::saveQuotationRateCard($body, $rateId);
+            jsonResponse(['success' => true, 'id' => $rateId]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
         }
     }
 
@@ -1429,12 +2187,7 @@ try {
     }
 
     if (preg_match('#^/proposal/([a-f0-9]{32,96})(/pdf)?$#', $path, $match)) {
-        if (empty($match[2])) {
-            http_response_code(404);
-            echo '404 Not Found';
-            exit;
-        }
-        $quote = SiteRepository::publicProposalData((string)$match[1], false);
+        $quote = SiteRepository::publicProposalData((string)$match[1], true);
         if (!$quote) {
             http_response_code(404);
             echo 'Proposal not found';
@@ -1450,6 +2203,33 @@ try {
             'expired' => $expired,
             'publicMode' => true,
             'autoPrint' => !empty($match[2]),
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/api/proposals/([a-f0-9]{32,96})/(accept|request-revision)$#', $path, $match) && $method === 'POST') {
+        try {
+            $body = requestData();
+            $quote = SiteRepository::respondToPublicProposal((string)$match[1], $match[2] === 'accept' ? 'accept' : 'revision', (string)($body['note'] ?? ''));
+            if (!$quote) {
+                jsonResponse(['error' => 'Proposal not found'], 404);
+            }
+            jsonResponse(['success' => true, 'status' => $quote['status']]);
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    if ($path === '/contact-us') {
+        render('public/contact-us', [
+            'title' => 'Contact HomeInteriors360 | Designer and Partnership Support',
+            'metaDescription' => 'Contact HomeInteriors360 CEO office for designer support, partnerships, platform feedback, lead marketplace queries, and account help.',
+            'canonicalUrl' => absoluteUrl('/contact-us'),
+            'active' => '',
+            'content' => $content,
+            'structuredData' => [[
+                '@context' => 'https://schema.org', '@type' => 'ContactPage', 'name' => 'Contact HomeInteriors360', 'url' => absoluteUrl('/contact-us'),
+            ]],
         ]);
         exit;
     }
@@ -1758,10 +2538,9 @@ try {
                     'body' => [
                         'Lead package prices are shown before checkout based on the selected city, locality, budget, work type, date range, and available lead count.',
                         [
-                            'First-time eligible buyer offer: up to first 10 leads at INR 0 when available.',
-                            'First 100 paid leads: INR 100 per lead.',
-                            '101 to 1000 paid leads: INR 80 per lead.',
-                            'Above 1000 paid leads: INR 60 per lead.',
+                            'Each lead receives a fixed quality price from INR 199 to INR 999 when it is created.',
+                            'Location, project budget, and completed requirement details contribute to the lead quality price.',
+                            'Registration-only lead benefits, when available, are applied in the designer onboarding flow.',
                         ],
                     ],
                 ],
@@ -1823,14 +2602,23 @@ try {
 
     if (isset($legalPages[$path])) {
         $page = $legalPages[$path];
+        $legalType = $path === '/contact-us' ? 'ContactPage' : 'WebPage';
         render('public/legal', [
             'title' => $page['title'] . ' | HomeInteriors360',
             'metaDescription' => $page['meta'],
+            'canonicalUrl' => absoluteUrl($path),
             'active' => '',
             'content' => $content,
             'legalTitle' => $page['title'],
             'lastUpdated' => $page['lastUpdated'] ?? '28 May 2026',
             'sections' => $page['sections'],
+            'structuredData' => [[
+                '@context' => 'https://schema.org',
+                '@type' => $legalType,
+                'name' => $page['title'],
+                'description' => $page['meta'],
+                'url' => absoluteUrl($path),
+            ]],
         ]);
         exit;
     }
@@ -1839,6 +2627,7 @@ try {
         $page = $seoLeadPages[$path];
         $keyword = (string)$page['keyword'];
         $citySuffix = !empty($page['city']) ? ' in ' . (string)$page['city'] : '';
+        $intentProfile = $seoLeadIntentCopy[$path] ?? null;
         $faqs = [
             [
                 'question' => 'What are interior design leads?',
@@ -1854,9 +2643,15 @@ try {
             ],
             [
                 'question' => 'How much do interior design leads cost?',
-                'answer' => 'Eligible first-time buyers can get up to the first 10 leads free. Paid slabs are INR 100 per lead for the first 100 paid leads, INR 80 from 101 to 1000, and INR 60 above 1000.',
+                'answer' => 'Each lead has a fixed quality price from INR 199 to INR 999. The price reflects location, project budget, and completed requirement details. Registration-only benefits are handled in the designer onboarding flow.',
             ],
         ];
+        if (!empty($page['city'])) {
+            array_unshift($faqs, [
+                'question' => 'Which areas are covered for ' . (string)$page['city'] . ' interior leads?',
+                'answer' => 'HomeInteriors360 supports matching by city and locality. For ' . (string)$page['city'] . ', useful service-area examples include ' . (string)($page['local_areas'] ?? $page['city']) . ', depending on available homeowner enquiry data.',
+            ]);
+        }
         $landingSections = [
             [
                 'title' => 'Buy ' . ucwords($keyword) . ' With Clear Filters',
@@ -1882,11 +2677,23 @@ try {
             [
                 'title' => 'Transparent Pricing and Digital Delivery',
                 'body' => [
-                    'Lead packages use visible slab pricing. First-time eligibility, coupons, subtotal, discount, and grand total are shown before payment.',
+                    'Lead packages use visible quality-based pricing. First-time eligibility, coupons, subtotal, discount, and grand total are shown before payment.',
                     'After successful Razorpay payment verification, the purchased package becomes available from the buyer dashboard as a digital download.',
                 ],
             ],
         ];
+        if ($intentProfile && !empty($intentProfile['sections'])) {
+            $landingSections = array_merge((array)$intentProfile['sections'], $landingSections);
+        }
+        if (!empty($page['city'])) {
+            array_splice($landingSections, 1, 0, [[
+                'title' => 'Local Demand Areas in ' . (string)$page['city'],
+                'body' => [
+                    'Interior lead demand in ' . (string)$page['city'] . ' is shaped by locality, apartment size, possession status, renovation age, and budget band. Useful micro-markets include ' . (string)($page['local_areas'] ?? $page['city']) . '.',
+                    'Use city and locality filters before purchase so your team follows up only on serviceable homeowner enquiries instead of generic, low-fit contacts.',
+                ],
+            ]]);
+        }
         $faqSchema = [
             '@context' => 'https://schema.org',
             '@type' => 'FAQPage',
@@ -1911,12 +2718,13 @@ try {
             ],
             'areaServed' => (string)($page['city'] ?? 'India'),
             'serviceType' => 'Interior design lead generation',
+            'keywords' => implode(', ', (array)($intentProfile['chips'] ?? [$keyword, 'verified interior leads', 'interior lead generation'])),
             'offers' => [
                 '@type' => 'AggregateOffer',
                 'priceCurrency' => 'INR',
-                'lowPrice' => '0',
-                'highPrice' => '100',
-                'offerCount' => '3',
+                'lowPrice' => '199',
+                'highPrice' => '999',
+                'offerCount' => '5',
                 'url' => absoluteUrl('/lead-marketplace'),
             ],
         ];
@@ -1937,28 +2745,97 @@ try {
             'content' => $content,
             'landingTitle' => $page['title'],
             'landingSubtitle' => $page['subtitle'],
-            'keywordChips' => [$keyword, 'verified interior leads', 'interior lead generation', 'lead marketplace'],
+            'keywordChips' => $intentProfile['chips'] ?? [$keyword, 'verified interior leads', 'interior lead generation', 'lead marketplace'],
             'landingSections' => $landingSections,
             'faqs' => $faqs,
             'cityLinks' => $seoCityLinks,
+            'recentLeadPreviews' => $path === '/interior-designer-leads-delhi-ncr'
+                ? SiteRepository::recentPublicLeadPreviews('Delhi NCR', 10)
+                : [],
             'structuredData' => [$serviceSchema, $faqSchema, $breadcrumbSchema],
         ]);
         exit;
     }
 
     // Public pages
+    if ($path === '/boq-studio') {
+        SiteRepository::trackBoqEvent('landing_view');
+        render('public/boq-studio', [
+            'title' => 'BOQ Studio for Interior Designers | HomeInteriors360',
+            'metaDescription' => 'Create a GST-ready, client-ready interior BOQ in minutes. Try the HomeInteriors360 BOQ Studio free without signing up.',
+            'canonicalUrl' => absoluteUrl('/boq-studio'),
+            'active' => 'professionals-growth',
+            'content' => $content,
+            'boqTemplates' => SiteRepository::boqTemplates(),
+        ]);
+        exit;
+    }
+    if (preg_match('#^/boq-studio/editor/([a-f0-9]{48})$#', $path, $match)) {
+        $draft = SiteRepository::getAnonymousBoqDraft((string)$match[1]);
+        if (!$draft) {
+            header('Location: /boq-studio');
+            exit;
+        }
+        render('public/boq-studio-editor', [
+            'title' => 'Edit Sample BOQ | HomeInteriors360',
+            'metaDescription' => 'Build a client-ready sample interior BOQ.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'professionals-growth',
+            'content' => $content,
+            'draftToken' => (string)$match[1],
+            'draft' => $draft['draft'],
+            'rateCards' => SiteRepository::quotationRateCards(['city' => (string)$draft['draft']['city']]),
+        ]);
+        exit;
+    }
+    if (preg_match('#^/boq-studio/unlock/([a-f0-9]{48})$#', $path, $match)) {
+        $draft = SiteRepository::getAnonymousBoqDraft((string)$match[1]);
+        if (!$draft) {
+            header('Location: /boq-studio');
+            exit;
+        }
+        SiteRepository::trackBoqEvent('signup_gate_shown', (string)$match[1]);
+        render('public/boq-studio-unlock', [
+            'title' => 'Unlock Your BOQ | HomeInteriors360',
+            'metaDescription' => 'Create your interior designer account and unlock the full BOQ Studio.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'professionals-growth',
+            'content' => $content,
+            'draftToken' => (string)$match[1],
+            'draft' => $draft['draft'],
+        ]);
+        exit;
+    }
     if ($path === '/') {
+        $homeServiceSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Service',
+            'name' => 'Interior Designers and Architects Near You',
+            'description' => 'Find verified interior designers, architects, contractors, and turnkey home interior professionals across Delhi NCR, Gurgaon, Delhi, and Noida.',
+            'provider' => ['@type' => 'Organization', 'name' => 'HomeInteriors360', 'url' => absoluteUrl('/')],
+            'areaServed' => ['Delhi NCR', 'Gurgaon', 'Delhi', 'Noida', 'Greater Noida', 'Ghaziabad', 'Faridabad'],
+            'serviceType' => 'Interior designer matching and consultation',
+        ];
         render('public/home', [
-            'title' => 'Home Interior Designers & Free Design Consultation | HomeInteriors360',
-            'metaDescription' => 'Hire interior designers across Delhi NCR, compare professionals, book free design consultation, and buy verified interior design leads from HomeInteriors360.',
+            'title' => 'HomeInteriors360 | Find Interior Designers & Architects in Delhi NCR',
+            'metaDescription' => 'Discover interior designers, architects and turnkey experts in Delhi NCR. Compare portfolios, explore design ideas, estimate costs and book a free design consultation.',
+            'ogTitle' => 'HomeInteriors360 | Find Interior Designers & Architects in Delhi NCR',
+            'ogDescription' => 'Compare trusted interior professionals, explore design ideas and start your free home design consultation across Delhi NCR.',
+            'canonicalUrl' => absoluteUrl('/'),
             'active' => 'home',
             'content' => $content,
             'payload' => SiteRepository::homepagePayload(),
+            'structuredData' => [$homeServiceSchema],
         ]);
         exit;
     }
 
-    if ($path === '/home-interior-hire-a-designer' || $path === '/hire-a-designer') {
+    if ($path === '/hire-a-designer') {
+        header('Location: /home-interior-hire-a-designer', true, 301);
+        exit;
+    }
+
+    if ($path === '/home-interior-hire-a-designer') {
         $serviceSchema = [
             '@context' => 'https://schema.org',
             '@type' => 'Service',
@@ -1993,12 +2870,367 @@ try {
         exit;
     }
 
+    if ($path === '/articles') {
+        $urlAlias = SiteRepository::getUrlAliasByPath('/articles');
+        $filters = [
+            'q' => $_GET['q'] ?? '',
+            'article_type' => $_GET['article_type'] ?? '',
+            'work_type' => $_GET['work_type'] ?? '',
+            'city' => $_GET['city'] ?? '',
+            'state' => $_GET['state'] ?? '',
+        ];
+        $articles = SiteRepository::listArticles($filters);
+        $articleItemListSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'ItemList',
+            'name' => 'Interior Design Articles & Guides',
+            'itemListElement' => array_map(static fn(array $article, int $index): array => [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'name' => (string)($article['title'] ?? ''),
+                'url' => absoluteUrl('/articles/' . (string)($article['slug'] ?? '')),
+            ], array_slice($articles, 0, 20), array_keys(array_slice($articles, 0, 20))),
+        ];
+        render('public/articles', [
+            'title' => (string)($urlAlias['meta_title'] ?? 'Interior Design Articles & Guides | HomeInteriors360'),
+            'metaDescription' => (string)($urlAlias['meta_description'] ?? 'Read interior design articles, cost guides, room ideas, city planning notes and professional growth guides from HomeInteriors360.'),
+            'canonicalUrl' => absoluteUrl('/articles'),
+            'active' => 'articles',
+            'content' => $content,
+            'articles' => $articles,
+            'filterOptions' => SiteRepository::articleFilterOptions(),
+            'globalAlias' => $urlAlias,
+            'structuredData' => [[
+                '@context' => 'https://schema.org',
+                '@type' => 'CollectionPage',
+                'name' => 'Interior Design Articles & Guides',
+                'url' => absoluteUrl('/articles'),
+            ], $articleItemListSchema],
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/articles/([a-z0-9-]+)$#', $path, $articleMatch)) {
+        $article = SiteRepository::getArticle((string)$articleMatch[1]);
+        if (!$article) {
+            http_response_code(404);
+            render('public/articles', [
+                'title' => 'Article Not Found | HomeInteriors360',
+                'metaDescription' => 'Browse HomeInteriors360 interior design articles and guides.',
+                'metaRobots' => 'noindex,follow',
+                'active' => 'articles',
+                'content' => $content,
+                'articles' => SiteRepository::listArticles(['limit' => 9]),
+                'filterOptions' => SiteRepository::articleFilterOptions(),
+            ]);
+            exit;
+        }
+        $urlAlias = SiteRepository::getUrlAliasByPath('/articles/' . (string)$article['slug']);
+        $faqSchema = null;
+        if (!empty($article['faqs'])) {
+            $faqSchema = [
+                '@context' => 'https://schema.org',
+                '@type' => 'FAQPage',
+                'mainEntity' => array_map(static fn(array $faq): array => [
+                    '@type' => 'Question',
+                    'name' => (string)$faq['question'],
+                    'acceptedAnswer' => [
+                        '@type' => 'Answer',
+                        'text' => (string)$faq['answer'],
+                    ],
+                ], $article['faqs']),
+            ];
+        }
+        $schemas = array_filter([
+            [
+                '@context' => 'https://schema.org',
+                '@type' => ['Article', 'BlogPosting'],
+                'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => absoluteUrl('/articles/' . (string)$article['slug'])],
+                'headline' => (string)$article['title'],
+                'description' => (string)$article['excerpt'],
+                'image' => !empty($article['image_path']) ? absoluteUrl((string)$article['image_path']) : absoluteUrl('/social-share-v2.jpg'),
+                'datePublished' => (string)($article['published_at'] ?? $article['created_at'] ?? ''),
+                'dateModified' => (string)($article['updated_at'] ?? ''),
+                'author' => ['@type' => 'Organization', 'name' => (string)($article['author_name'] ?: 'HomeInteriors360')],
+                'publisher' => ['@type' => 'Organization', 'name' => 'HomeInteriors360', 'url' => absoluteUrl('/'), 'logo' => ['@type' => 'ImageObject', 'url' => absoluteUrl('/logo.png')]],
+                'articleSection' => (string)($article['article_type'] ?? 'Interior Design'),
+                'keywords' => implode(', ', (array)($article['tags_json'] ?? [])),
+            ],
+            $faqSchema,
+            [
+                '@context' => 'https://schema.org',
+                '@type' => 'BreadcrumbList',
+                'itemListElement' => [
+                    ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => absoluteUrl('/')],
+                    ['@type' => 'ListItem', 'position' => 2, 'name' => 'Articles', 'item' => absoluteUrl('/articles')],
+                    ['@type' => 'ListItem', 'position' => 3, 'name' => (string)$article['title'], 'item' => absoluteUrl('/articles/' . (string)$article['slug'])],
+                ],
+            ],
+        ]);
+        render('public/article-detail', [
+            'title' => (string)($urlAlias['meta_title'] ?? ($article['meta_title'] ?: $article['title'] . ' | HomeInteriors360')),
+            'metaDescription' => (string)($urlAlias['meta_description'] ?? ($article['meta_description'] ?: $article['excerpt'])),
+            'metaKeywords' => implode(', ', array_filter(array_unique(array_merge(
+                (array)($article['tags_json'] ?? []),
+                [(string)($article['work_type'] ?? ''), (string)($article['article_type'] ?? ''), (string)($article['city'] ?? ''), 'interior designer leads', 'home interior design']
+            )))),
+            'canonicalUrl' => absoluteUrl((string)($urlAlias['canonical_url'] ?: '/articles/' . $article['slug'])),
+            'metaRobots' => (string)($urlAlias['robots'] ?: 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'),
+            'ogImage' => !empty($urlAlias['image_url']) ? absoluteUrl((string)$urlAlias['image_url']) : (!empty($article['image_path']) ? absoluteUrl((string)$article['image_path']) : absoluteUrl('/social-share-v2.jpg')),
+            'ogType' => 'article',
+            'articlePublishedTime' => !empty($article['published_at']) ? date('c', strtotime((string)$article['published_at'])) : null,
+            'articleModifiedTime' => !empty($article['updated_at']) ? date('c', strtotime((string)$article['updated_at'])) : null,
+            'metaModifiedTime' => !empty($article['updated_at']) ? date('c', strtotime((string)$article['updated_at'])) : null,
+            'active' => 'articles',
+            'content' => $content,
+            'article' => $article,
+            'related' => SiteRepository::relatedArticles($article, 3),
+            'latest' => SiteRepository::listArticles(['limit' => 4]),
+            'globalAlias' => $urlAlias,
+            'structuredData' => $schemas,
+        ]);
+        exit;
+    }
+
+    if ($path === '/home-services' || $path === '/services') {
+        if ($path === '/services') {
+            header('Location: /home-services', true, 301);
+            exit;
+        }
+        $catalogue = SiteRepository::homeServiceCatalog();
+        render('public/home-services', [
+            'title' => 'Home Services in Delhi NCR | Get Free Quotes | HomeInteriors360',
+            'metaDescription' => 'Find trusted home service professionals in Delhi NCR for interiors, electricians, plumbers, AC repair, cleaning, painting, moving and more. Get free quotes.',
+            'canonicalUrl' => absoluteUrl('/home-services'),
+            'active' => 'home-services',
+            'content' => $content,
+            'catalogue' => $catalogue,
+            // This is a public availability display, not the complete form catalogue.
+            'cities' => SiteRepository::homeServiceAvailableCitiesForSlug('interior-design'),
+            'structuredData' => [[
+                '@context' => 'https://schema.org', '@type' => 'CollectionPage',
+                'name' => 'Home Services in Delhi NCR', 'url' => absoluteUrl('/home-services'),
+                'description' => 'Find home service professionals for design, repair, cleaning, maintenance and household support.',
+            ]],
+        ]);
+        exit;
+    }
+
+    $serviceRoute = null;
+    $serviceCity = '';
+    $serviceLocality = null;
+    // Match the explicit /services/category/service route first. Otherwise its
+    // three segments also satisfy the generic city/service/locality pattern.
+    if (preg_match('#^/services/([a-z0-9-]+)/([a-z0-9-]+)$#', $path, $servicePathMatch)) {
+        $serviceRoute = SiteRepository::homeServiceByPath((string)$servicePathMatch[1], (string)$servicePathMatch[2]);
+    } elseif (preg_match('#^/([a-z-]+)/([a-z0-9-]+)/([a-z0-9-]+)$#', $path, $localityServiceMatch)) {
+        $locality = LocationLandingCatalog::locality((string)$localityServiceMatch[1], (string)$localityServiceMatch[3]);
+        if ($locality !== null && (string)$localityServiceMatch[2] === 'interior-design') {
+            $serviceLocality = $locality;
+            $serviceCity = (string)$locality['city'];
+            $serviceRoute = SiteRepository::homeServiceBySlug('interior-design');
+        }
+    } elseif (preg_match('#^/([a-z-]+)/([a-z0-9-]+)$#', $path, $cityServiceMatch)) {
+        $catalogueCity = LocationLandingCatalog::city((string)$cityServiceMatch[1]);
+        if ($catalogueCity !== null && (string)$cityServiceMatch[2] === 'interior-design') {
+            $serviceCity = (string)$catalogueCity['city'];
+            $serviceRoute = SiteRepository::homeServiceBySlug('interior-design');
+        } else {
+            foreach (SiteRepository::homeServiceCities() as $city) {
+                if (slugify($city) !== (string)$cityServiceMatch[1]) {
+                    continue;
+                }
+                $serviceCity = $city;
+                $serviceRoute = SiteRepository::homeServiceBySlug((string)$cityServiceMatch[2]);
+                break;
+            }
+        }
+    }
+    if ($serviceRoute) {
+        if ($serviceCity !== '' && $serviceLocality === null && !LocationLandingCatalog::cityForName($serviceCity) && !SiteRepository::homeServiceAvailableInCity((int)$serviceRoute['id'], $serviceCity)) {
+            http_response_code(404);
+            echo 'Service is not available in this city yet.';
+            exit;
+        }
+        $canonicalPath = $serviceLocality !== null
+            ? '/' . $serviceLocality['city_slug'] . '/' . $serviceRoute['slug'] . '/' . $serviceLocality['slug']
+            : ($serviceCity !== ''
+                ? '/' . slugify($serviceCity) . '/' . $serviceRoute['slug']
+                : '/services/' . $serviceRoute['category_slug'] . '/' . $serviceRoute['slug']);
+        $isInteriorDesignCityPage = (string)$serviceRoute['slug'] === 'interior-design' && $serviceCity !== '';
+        $isInteriorDesignLocalityPage = $serviceLocality !== null;
+        $isInteriorDesignHub = (string)$serviceRoute['slug'] === 'interior-design' && $serviceCity === '';
+        $isHomeCleaningHub = (string)$serviceRoute['slug'] === 'home-cleaning' && $serviceCity === '';
+        $serviceTitle = $isInteriorDesignLocalityPage
+            ? 'Interior Designers in ' . $serviceLocality['name'] . ', ' . $serviceCity . ' | HomeInteriors360'
+            : ($isHomeCleaningHub
+            ? 'Home Cleaning Services in Delhi NCR | Deep Cleaning | HomeInteriors360'
+            : ($isInteriorDesignCityPage
+            ? 'Interior Designers in ' . $serviceCity . ' | Home Design & Decor | HomeInteriors360'
+            : ($isInteriorDesignHub
+                ? 'Interior Designers, Home Decor & Renovation | HomeInteriors360'
+                : (string)$serviceRoute['name'] . ($serviceCity !== '' ? ' in ' . $serviceCity : '') . ' | HomeInteriors360')));
+        $serviceHeading = $isInteriorDesignLocalityPage
+            ? 'Interior Designers in ' . $serviceLocality['name'] . ', ' . $serviceCity
+            : ($isHomeCleaningHub
+            ? 'Home Cleaning Services for Deep, Move-in and Regular Cleaning'
+            : ($isInteriorDesignHub
+            ? 'Interior Designers for Home Design, Decor & Renovation'
+            : (string)$serviceRoute['name']));
+        $providers = $serviceCity !== '' ? SiteRepository::homeServiceProfessionals((int)$serviceRoute['id'], $serviceCity) : [];
+        $form = SiteRepository::homeServiceForm((int)$serviceRoute['id']);
+        $availableServiceCities = SiteRepository::homeServiceAvailableCities((int)$serviceRoute['id']);
+        $relatedServices = [];
+        foreach (SiteRepository::homeServiceCatalog() as $category) {
+            foreach ((array)($category['children'] ?? []) as $candidate) {
+                if ((int)($candidate['id'] ?? 0) !== (int)$serviceRoute['id'] && ($serviceCity === '' || SiteRepository::homeServiceAvailableInCity((int)$candidate['id'], $serviceCity))) {
+                    $candidate['category_slug'] = $category['slug'] ?? '';
+                    $relatedServices[] = $candidate;
+                }
+            }
+        }
+        $relatedServices = array_slice($relatedServices, 0, 8);
+        $cityPlanningLinks = $serviceCity === '' ? [] : [
+            ['label' => 'Find professionals in ' . $serviceCity, 'href' => '/professionals?city=' . rawurlencode($serviceCity)],
+            ['label' => 'Explore interior design ideas', 'href' => '/design-ideas'],
+            ['label' => 'Plan your interior budget', 'href' => '/full-home-cost-calculator'],
+            ['label' => 'Get a free design consultation', 'href' => '/home-interior-hire-a-designer?city=' . rawurlencode($serviceCity)],
+        ];
+        if ($isInteriorDesignLocalityPage) {
+            array_unshift($cityPlanningLinks, ['label' => 'Interior designers across ' . $serviceCity, 'href' => '/' . $serviceLocality['city_slug'] . '/interior-design']);
+        }
+        $serviceLabel = (string)$serviceRoute['name'] . ($serviceCity !== '' ? ' in ' . $serviceCity : '');
+        $serviceSearchLabel = $isInteriorDesignCityPage
+            ? 'an interior designer in ' . $serviceCity
+            : strtolower($serviceLabel);
+        $serviceFaqs = $isInteriorDesignLocalityPage ? [
+            ['question' => 'How do I find an interior designer in ' . $serviceLocality['name'] . '?', 'answer' => 'Share your property type, room list, budget range, possession date and locality. HomeInteriors360 uses these details to help connect you with relevant professionals serving ' . $serviceLocality['name'] . ' and ' . $serviceCity . '.'],
+            ['question' => 'What affects interior design pricing in ' . $serviceLocality['name'] . '?', 'answer' => 'Pricing depends on home size, scope, materials, custom furniture, civil changes, access rules and finish level. Compare written room-wise scopes, inclusions, exclusions, taxes and timelines before choosing a professional.'],
+            ['question' => 'Can I plan a full home, kitchen or renovation project?', 'answer' => 'Yes. You can share a full-home, modular kitchen, wardrobe, renovation or room-specific requirement. The selected professional will confirm site feasibility, exact scope, timeline and final pricing directly with you.'],
+        ] : [
+            ['question' => 'How do I find ' . $serviceSearchLabel . '?', 'answer' => 'Share your location, scope, timing and budget. HomeInteriors360 uses these details to help route your enquiry to suitable professionals.'],
+            ['question' => 'Is the consultation free?', 'answer' => 'Submitting your requirement is free. Final scope, site visit, pricing, availability and service terms are agreed directly with the professional you choose.'],
+            ['question' => 'What should I compare before choosing a professional?', 'answer' => 'Compare relevant experience, scope clarity, material or workmanship assumptions, timeline, warranty, payment schedule and communication before confirming work.'],
+        ];
+        if ($isHomeCleaningHub) {
+            $serviceFaqs = [
+                ['question' => 'What does a home cleaning service include?', 'answer' => 'The scope can include kitchen, bathroom, floor, window, appliance, sofa or upholstery cleaning depending on the brief. Confirm the rooms, surfaces, consumables, exclusions and disposal arrangement before booking.'],
+                ['question' => 'How much does home cleaning cost in Delhi NCR?', 'answer' => 'Home cleaning pricing varies by BHK size, occupancy, furnishing, condition, access, required equipment and whether the job is deep, move-in, move-out or recurring cleaning. Share the details to receive a relevant quote.'],
+                ['question' => 'How should I prepare for a deep cleaning visit?', 'answer' => 'Share the home size, locality, preferred date, furnished or vacant status and any priority areas. Keep valuables and fragile items aside, then confirm access, parking and lift rules with the professional.'],
+            ];
+        }
+        $offerSchema = [
+            '@context' => 'https://schema.org', '@type' => 'Service',
+            'name' => $serviceLabel,
+            'description' => (string)($serviceRoute['short_description'] ?? '') . ' Get matched with suitable professionals through HomeInteriors360.',
+            'url' => absoluteUrl($canonicalPath),
+            'areaServed' => $isInteriorDesignLocalityPage
+                ? ['@type' => 'Place', 'name' => $serviceLocality['name'] . ', ' . $serviceCity, 'containedInPlace' => ['@type' => 'City', 'name' => $serviceCity]]
+                : ['@type' => 'City', 'name' => $serviceCity ?: 'Delhi NCR'],
+            'provider' => ['@type' => 'Organization', 'name' => 'HomeInteriors360', 'url' => absoluteUrl('/')],
+            'offers' => ['@type' => 'Offer', 'price' => '0', 'priceCurrency' => 'INR', 'availability' => 'https://schema.org/InStock'],
+        ];
+        $faqSchema = ['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => array_map(static fn(array $faq): array => ['@type' => 'Question', 'name' => $faq['question'], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $faq['answer']]], $serviceFaqs)];
+        $breadcrumbItems = [
+            ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => absoluteUrl('/')],
+            ['@type' => 'ListItem', 'position' => 2, 'name' => 'Home Services', 'item' => absoluteUrl('/home-services')],
+        ];
+        if ($isInteriorDesignLocalityPage) {
+            $breadcrumbItems[] = ['@type' => 'ListItem', 'position' => 3, 'name' => 'Interior Design in ' . $serviceCity, 'item' => absoluteUrl('/' . $serviceLocality['city_slug'] . '/interior-design')];
+            $breadcrumbItems[] = ['@type' => 'ListItem', 'position' => 4, 'name' => 'Interior Designers in ' . $serviceLocality['name'], 'item' => absoluteUrl($canonicalPath)];
+        } else {
+            $breadcrumbItems[] = ['@type' => 'ListItem', 'position' => 3, 'name' => $serviceLabel, 'item' => absoluteUrl($canonicalPath)];
+        }
+        $breadcrumbSchema = ['@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => $breadcrumbItems];
+        $editorialContent = SiteRepository::homeServiceEditorialContent($serviceRoute, $serviceCity);
+        if ($isInteriorDesignLocalityPage) {
+            $editorialContent = [
+                'heading' => 'Interior design in ' . $serviceLocality['name'] . ', ' . $serviceCity,
+                'paragraphs' => [
+                    'Homes in ' . $serviceLocality['name'] . ' benefit from an interior brief that starts with the real space: the rooms to be completed, the storage you need, the expected possession or renovation date, and the design language you want to live with. For apartments, builder floors and independent homes alike, a useful first conversation should identify the work that is essential now and the pieces that can be phased later.',
+                    'A clear, room-wise scope helps you compare interior designers serving ' . $serviceLocality['name'] . ' on more than a headline estimate. Ask each professional to separate modular work, custom carpentry, civil changes, electrical work, lighting, loose furniture and taxes. Confirm material grades, hardware, timelines, site access requirements and exclusions before making a decision.',
+                    'HomeInteriors360 helps homeowners start with a locality-aware requirement and connect with professionals who serve ' . $serviceLocality['name'] . ' and the wider ' . $serviceCity . ' area. Final design, site assessment, availability, pricing and execution terms are agreed directly with the professional you choose.',
+                ],
+            ];
+        }
+        render('public/home-service-detail', [
+            'title' => $serviceTitle,
+            'metaDescription' => $isInteriorDesignLocalityPage
+                ? 'Find interior designers in ' . $serviceLocality['name'] . ', ' . $serviceCity . ' for home interiors, kitchens, wardrobes, renovation and decor. Get a free consultation.'
+                : ($isInteriorDesignCityPage
+                ? 'Find interior designers in ' . $serviceCity . ' for home interiors, modular kitchens, wardrobes, renovation, decor and turnkey design. Get a free consultation.'
+                : ($isHomeCleaningHub
+                    ? 'Find home cleaning services in Delhi NCR for deep cleaning, move-in cleaning, kitchens, bathrooms, sofas and carpets. Share your requirement for free quotes.'
+                    : ($isInteriorDesignHub
+                    ? 'Compare interior designers for home interiors, modular kitchens, wardrobes, renovation and decor across Delhi NCR. Get a free design consultation.'
+                    : 'Find ' . strtolower((string)$serviceRoute['name']) . ($serviceCity !== '' ? ' in ' . $serviceCity : ' across Delhi NCR') . '. Share your requirement and get free quotes from suitable professionals.'))),
+            'canonicalUrl' => absoluteUrl($canonicalPath),
+            'active' => 'home-services',
+            'content' => $content,
+            'service' => $serviceRoute,
+            'serviceHeading' => $serviceHeading,
+            'editorialContent' => $editorialContent,
+            'form' => $form,
+            'providers' => $providers,
+            'cities' => $availableServiceCities,
+            'relatedServices' => $relatedServices,
+            'cityPlanningLinks' => $cityPlanningLinks,
+            'locality' => $serviceLocality,
+            // City hubs expose the full directory. A locality page keeps nearby
+            // discovery useful without rendering hundreds of links in one page.
+            'localityLinks' => $isInteriorDesignCityPage
+                ? array_slice(array_values(array_filter(
+                    LocationLandingCatalog::localitiesForCity(slugify($serviceCity)),
+                    static fn(array $area): bool => !$isInteriorDesignLocalityPage || (string)$area['slug'] !== (string)$serviceLocality['slug']
+                )), 0, $isInteriorDesignLocalityPage ? 12 : null)
+                : [],
+            'serviceFaqs' => $serviceFaqs,
+            'selectedCity' => $serviceCity,
+            'structuredData' => [$offerSchema, $faqSchema, $breadcrumbSchema],
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/home-services') {
+        Auth::requireAdmin();
+        $rows = [];
+        $adminError = '';
+        try {
+            $rows = SiteRepository::homeServiceAdminRows();
+        } catch (Throwable) {
+            $adminError = 'Home Services tables are not available yet. Run the latest database migration on live.';
+        }
+        render('admin/home-services', [
+            'title' => 'Home Services Catalogue | HomeInteriors360',
+            'metaDescription' => 'Manage home service categories, enquiry forms and city availability.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin', 'content' => $content, 'rows' => $rows,
+            'categories' => array_values(array_filter($rows, static fn(array $row): bool => ($row['node_type'] ?? '') === 'category')),
+            'services' => array_values(array_filter($rows, static fn(array $row): bool => ($row['node_type'] ?? '') === 'service')),
+            'adminError' => $adminError,
+        ]);
+        exit;
+    }
+
     if ($path === '/professionals' || preg_match('#^/professionals/([a-z0-9-]+)$#i', $path, $match)) {
         $alias = $match[1] ?? null;
         if ($alias !== null) {
             $pro = SiteRepository::getProBySlug((string)$alias);
             if ($pro) {
                 $profileData = SiteRepository::proProfileData((int)$pro['id']);
+                $profileUrl = absoluteUrl('/professionals/' . (string)$pro['slug']);
+                $profileSchema = [
+                    '@context' => 'https://schema.org',
+                    '@type' => ['ProfessionalService', 'LocalBusiness'],
+                    'name' => (string)$pro['full_name'],
+                    'url' => $profileUrl,
+                    'image' => !empty($pro['profile_image']) ? absoluteUrl((string)$pro['profile_image']) : absoluteUrl('/logo.png'),
+                    'telephone' => (string)($pro['phone'] ?? '+91-9540573661'),
+                    'email' => (string)($pro['email'] ?? 'jitender@homeinteriors360.com'),
+                    'address' => ['@type' => 'PostalAddress', 'addressLocality' => (string)($pro['city'] ?? ''), 'addressCountry' => 'IN'],
+                    'areaServed' => (string)($pro['city'] ?? 'Delhi NCR'),
+                    'description' => (string)($pro['bio'] ?? $pro['profile_description'] ?? ''),
+                ];
                 render('public/professional-profile', [
                     'title' => $pro['full_name'] . ' | ' . (string)SiteRepository::content('seo.profile.title_suffix', 'HomeInteriors360'),
                     'metaDescription' => trim(sprintf(
@@ -2013,6 +3245,9 @@ try {
                     'pro' => $pro,
                     'projects' => $profileData['projects'],
                     'reviews' => $profileData['reviews'],
+                    'editorialContent' => SiteRepository::professionalEditorialContent($pro, $profileData),
+                    'canonicalUrl' => $profileUrl,
+                    'structuredData' => [$profileSchema],
                 ]);
                 exit;
             }
@@ -2035,16 +3270,37 @@ try {
                 'rating_min' => $_GET['rating_min'] ?? null,
                 'sort_by' => $_GET['sort_by'] ?? null,
             ]), static fn(mixed $value): bool => $value !== null && $value !== '');
+            $pros = SiteRepository::listPros($initialFilters);
+            $itemListSchema = [
+                '@context' => 'https://schema.org',
+                '@type' => 'ItemList',
+                'name' => $aliasData['title'],
+                'itemListElement' => array_map(static fn(array $pro, int $index): array => [
+                    '@type' => 'ListItem',
+                    'position' => $index + 1,
+                    'name' => (string)($pro['full_name'] ?? ''),
+                    'url' => absoluteUrl('/professionals/' . (string)($pro['slug'] ?? '')),
+                ], array_slice($pros, 0, 20), array_keys(array_slice($pros, 0, 20))),
+            ];
+            $collectionSchema = [
+                '@context' => 'https://schema.org',
+                '@type' => 'CollectionPage',
+                'name' => $aliasData['title'],
+                'description' => $aliasData['subtitle'],
+                'url' => absoluteUrl('/professionals/' . (string)$alias),
+            ];
             render('public/professionals', [
                 'title' => $aliasData['title'] . ' | ' . (string)SiteRepository::content('seo.directory.title', 'Find Professionals'),
                 'metaDescription' => $aliasData['subtitle'],
+                'canonicalUrl' => absoluteUrl('/professionals/' . (string)$alias),
                 'active' => 'directory',
                 'content' => $content,
-                'pros' => SiteRepository::listPros($initialFilters),
+                'pros' => $pros,
                 'filterOptions' => SiteRepository::proFilterOptions(),
                 'initialFilters' => $initialFilters,
                 'directoryTitle' => $aliasData['title'],
                 'directorySubtitle' => $aliasData['subtitle'],
+                'structuredData' => [$collectionSchema, $itemListSchema],
             ]);
             exit;
         }
@@ -2061,56 +3317,433 @@ try {
             'rating_min' => $_GET['rating_min'] ?? null,
             'sort_by' => $_GET['sort_by'] ?? null,
         ], static fn(mixed $value): bool => $value !== null && $value !== '');
+        $pros = SiteRepository::listPros($initialFilters);
+        $itemListSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'ItemList',
+            'name' => 'Find Interior Designers & Architects Near You',
+            'itemListElement' => array_map(static fn(array $pro, int $index): array => [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'name' => (string)($pro['full_name'] ?? ''),
+                'url' => absoluteUrl('/professionals/' . (string)($pro['slug'] ?? '')),
+            ], array_slice($pros, 0, 20), array_keys(array_slice($pros, 0, 20))),
+        ];
+        $collectionSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'CollectionPage',
+            'name' => 'Find Interior Designers & Architects Near You',
+            'description' => 'Browse verified architects, interior designers, and contractors by city, work type, budget, experience, and rating.',
+            'url' => absoluteUrl('/professionals'),
+        ];
         render('public/professionals', [
-            'title' => (string)SiteRepository::content('seo.directory.title', 'Find Professionals'),
-            'metaDescription' => (string)SiteRepository::content('seo.directory.description', 'Browse verified architects, designers, and contractors with filters for city, work type, budget, experience, and rating.'),
+            'title' => 'Find Interior Designers & Architects in Delhi NCR | HomeInteriors360',
+            'metaDescription' => 'Find interior designers, architects, contractors and turnkey firms in Delhi NCR. Compare portfolios, experience, work type, city and project budget.',
+            'canonicalUrl' => absoluteUrl('/professionals'),
             'active' => 'directory',
             'content' => $content,
-            'pros' => SiteRepository::listPros($initialFilters),
+            'pros' => $pros,
             'filterOptions' => SiteRepository::proFilterOptions(),
             'initialFilters' => $initialFilters,
+            'directoryTitle' => 'Find Interior Designers & Architects Near You',
+            'directorySubtitle' => 'Compare verified interior designers, architects, contractors and turnkey firms by city, work type, portfolio, budget and experience.',
+            'structuredData' => [$collectionSchema, $itemListSchema],
         ]);
         exit;
     }
 
-    if ($path === '/cost-calculator') {
+    $calculatorPages = [
+        '/cost-calculator' => [
+            'nav_label' => 'All calculators',
+            'title' => 'Home Interior Cost Calculator',
+            'seo_title' => 'Home Interior Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate full home, kitchen, wardrobe, room-wise and BHK-wise interior budgets in a guided calculator.',
+            'requirement' => 'Design Cost Calculator',
+        ],
+        '/full-home-cost-calculator' => [
+            'nav_label' => 'Full Home',
+            'title' => 'Full Home Interior Cost Calculator',
+            'seo_title' => 'Full Home Interior Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate a complete home interior budget by BHK, home size, rooms and finish package.',
+            'requirement' => 'Full Home Cost Calculator',
+        ],
+        '/kitchen-cost-calculator' => [
+            'nav_label' => 'Kitchen',
+            'title' => 'Kitchen Cost Calculator',
+            'seo_title' => 'Kitchen Cost Calculator | Modular Kitchen Estimate',
+            'subtitle' => 'Estimate modular kitchen pricing by BHK context, home size and material package.',
+            'requirement' => 'Kitchen Cost Calculator',
+            'rooms' => ['Kitchen'],
+            'fixed_rooms' => ['Kitchen'],
+        ],
+        '/modular-kitchen-cost-calculator' => [
+            'nav_label' => 'Modular Kitchen',
+            'title' => 'Modular Kitchen Cost Calculator',
+            'seo_title' => 'Modular Kitchen Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Calculate a practical starting budget for modular cabinets, countertop planning and kitchen accessories.',
+            'requirement' => 'Modular Kitchen Cost Calculator',
+            'rooms' => ['Kitchen'],
+            'fixed_rooms' => ['Kitchen'],
+        ],
+        '/wardrobe-cost-calculator' => [
+            'nav_label' => 'Wardrobe',
+            'title' => 'Wardrobe Cost Calculator',
+            'seo_title' => 'Wardrobe Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate wardrobe, loft and storage pricing for bedrooms by package and home context.',
+            'requirement' => 'Wardrobe Cost Calculator',
+            'rooms' => ['Wardrobe', 'Master Bedroom', 'Bedroom 2', 'Bedroom 3'],
+            'fixed_rooms' => ['Wardrobe'],
+        ],
+        '/1-bhk-cost-calculator' => [
+            'nav_label' => '1 BHK',
+            'title' => '1 BHK Interior Cost Calculator',
+            'seo_title' => '1 BHK Interior Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate 1 BHK interior cost for compact homes, rental upgrades and starter apartments.',
+            'requirement' => '1 BHK Cost Calculator',
+            'floor_plans' => ['1BHK'],
+            'fixed_floor_plan' => '1BHK',
+            'rooms' => ['Living Room', 'Kitchen', 'Master Bedroom', 'Bathroom', 'Pooja Unit'],
+        ],
+        '/2-bhk-cost-calculator' => [
+            'nav_label' => '2 BHK',
+            'title' => '2 BHK Interior Cost Calculator',
+            'seo_title' => '2 BHK Interior Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate 2 BHK interior cost for modular kitchen, wardrobes, living room and bedroom work.',
+            'requirement' => '2 BHK Cost Calculator',
+            'floor_plans' => ['2BHK'],
+            'fixed_floor_plan' => '2BHK',
+            'rooms' => ['Living Room', 'Kitchen', 'Master Bedroom', 'Bedroom 2', 'Bathroom', 'Pooja Unit'],
+        ],
+        '/3-bhk-cost-calculator' => [
+            'nav_label' => '3 BHK',
+            'title' => '3 BHK Interior Cost Calculator',
+            'seo_title' => '3 BHK Interior Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate 3 BHK interior cost for full home storage, kitchen, living, bedroom and pooja unit scope.',
+            'requirement' => '3 BHK Cost Calculator',
+            'floor_plans' => ['3BHK'],
+            'fixed_floor_plan' => '3BHK',
+        ],
+        '/4-bhk-cost-calculator' => [
+            'nav_label' => '4 BHK',
+            'title' => '4 BHK Interior Cost Calculator',
+            'seo_title' => '4 BHK Interior Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate 4 BHK interior cost for large apartments and premium full-home execution.',
+            'requirement' => '4 BHK Cost Calculator',
+            'floor_plans' => ['4BHK'],
+            'fixed_floor_plan' => '4BHK',
+        ],
+        '/living-room-cost-calculator' => [
+            'nav_label' => 'Living Room',
+            'title' => 'Living Room Cost Calculator',
+            'seo_title' => 'Living Room Interior Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate living room interior cost for TV units, seating wall, storage and decor scope.',
+            'requirement' => 'Living Room Cost Calculator',
+            'rooms' => ['Living Room'],
+            'fixed_rooms' => ['Living Room'],
+        ],
+        '/bathroom-cost-calculator' => [
+            'nav_label' => 'Bathroom',
+            'title' => 'Bathroom Cost Calculator',
+            'seo_title' => 'Bathroom Interior Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate bathroom vanity, mirror, storage and dry-zone upgrade costs.',
+            'requirement' => 'Bathroom Cost Calculator',
+            'rooms' => ['Bathroom'],
+            'fixed_rooms' => ['Bathroom'],
+        ],
+        '/pooja-room-cost-calculator' => [
+            'nav_label' => 'Pooja Room',
+            'title' => 'Pooja Room Cost Calculator',
+            'seo_title' => 'Pooja Room Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate compact and premium pooja unit budgets for apartments and homes.',
+            'requirement' => 'Pooja Room Cost Calculator',
+            'rooms' => ['Pooja Unit'],
+            'fixed_rooms' => ['Pooja Unit'],
+        ],
+        '/false-ceiling-cost-calculator' => [
+            'nav_label' => 'False Ceiling',
+            'title' => 'False Ceiling Cost Calculator',
+            'seo_title' => 'False Ceiling Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate gypsum false ceiling, cove lighting and ceiling detail costs.',
+            'requirement' => 'False Ceiling Cost Calculator',
+            'rooms' => ['False Ceiling'],
+            'fixed_rooms' => ['False Ceiling'],
+        ],
+        '/painting-cost-calculator' => [
+            'nav_label' => 'Painting',
+            'title' => 'Painting Cost Calculator',
+            'seo_title' => 'Home Painting Cost Calculator | HomeInteriors360',
+            'subtitle' => 'Estimate interior painting budgets for putty, primer and premium wall finishes.',
+            'requirement' => 'Painting Cost Calculator',
+            'rooms' => ['Painting'],
+            'fixed_rooms' => ['Painting'],
+        ],
+    ];
+
+    if (isset($calculatorPages[$path])) {
+        $calculatorPage = $calculatorPages[$path];
+        $calculatorSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'WebPage',
+            'name' => (string)($calculatorPage['seo_title'] ?? $calculatorPage['title']),
+            'url' => absoluteUrl($path),
+            'description' => (string)$calculatorPage['subtitle'],
+            'isPartOf' => [
+                '@type' => 'WebSite',
+                'name' => 'HomeInteriors360',
+                'url' => absoluteUrl('/'),
+            ],
+            'mainEntity' => [
+                '@type' => 'Service',
+                'name' => (string)$calculatorPage['title'],
+                'serviceType' => 'Home interior cost estimation',
+                'description' => (string)$calculatorPage['subtitle'],
+                'provider' => [
+                    '@type' => 'Organization',
+                    'name' => 'HomeInteriors360',
+                    'url' => absoluteUrl('/'),
+                ],
+                'areaServed' => [
+                    '@type' => 'AdministrativeArea',
+                    'name' => 'Delhi NCR',
+                ],
+            ],
+        ];
+        $calculatorFaqSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'FAQPage',
+            'mainEntity' => [
+                [
+                    '@type' => 'Question',
+                    'name' => 'How accurate is this ' . strtolower((string)$calculatorPage['title']) . '?',
+                    'acceptedAnswer' => [
+                        '@type' => 'Answer',
+                        'text' => 'It gives a practical starting range based on BHK type, home size, selected rooms and package level. Final pricing depends on site measurement, material selection, hardware brands, civil changes and custom design details.',
+                    ],
+                ],
+                [
+                    '@type' => 'Question',
+                    'name' => 'Can I compare designers after using the calculator?',
+                    'acceptedAnswer' => [
+                        '@type' => 'Answer',
+                        'text' => 'Yes. You can submit your estimate and request a free design consultation. HomeInteriors360 can connect you with relevant interior designers, architects or contractors in your city.',
+                    ],
+                ],
+                [
+                    '@type' => 'Question',
+                    'name' => 'What affects interior design cost the most?',
+                    'acceptedAnswer' => [
+                        '@type' => 'Answer',
+                        'text' => 'The biggest cost drivers are scope of work, number of wardrobes, kitchen size, finish quality, hardware, countertop material, false ceiling area, lighting, painting and any civil or renovation work.',
+                    ],
+                ],
+            ],
+        ];
         render('public/calculator', [
-            'title' => (string)SiteRepository::content('seo.calculator.title', 'Design Cost Calculator'),
-            'metaDescription' => (string)SiteRepository::content('seo.calculator.description', 'Estimate your interior design cost in a few steps and save your lead request with HomeInteriors360.'),
+            'title' => (string)($calculatorPage['seo_title'] ?? ($calculatorPage['title'] . ' | HomeInteriors360')),
+            'metaDescription' => (string)$calculatorPage['subtitle'],
+            'canonicalUrl' => absoluteUrl($path),
             'active' => 'calculator',
             'content' => $content,
+            'calculatorConfig' => $calculatorPage,
+            'calculatorPages' => $calculatorPages,
+            'structuredData' => [$calculatorSchema, $calculatorFaqSchema],
         ]);
         exit;
     }
 
     if ($path === '/ai-room-visualizer') {
-        render('public/ai-room-visualizer', [
-            'title' => 'AI Room Visualizer | Before After Interior Design Render',
-            'metaDescription' => 'Upload a room photo, choose a style, and create an AI-ready before-after interior design render brief with HomeInteriors360.',
-            'active' => 'visualizer',
-            'content' => $content,
-            'styles' => SiteRepository::aiVisualizerStyles(),
-        ]);
-        exit;
+        header('X-Robots-Tag: noindex, nofollow', true);
+        redirectTo('/');
     }
 
     if ($path === '/pricing') {
+        $softwareSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'SoftwareApplication',
+            'name' => 'BOQ/ Quotation Builder',
+            'applicationCategory' => 'BusinessApplication',
+            'operatingSystem' => 'Web',
+            'description' => 'Quotation builder and proposal generator for interior designers with PDF proposals, GST, discounts, milestones and WhatsApp sharing.',
+            'offers' => [
+                '@type' => 'Offer',
+                'price' => '999',
+                'priceCurrency' => 'INR',
+                'category' => 'subscription',
+                'url' => absoluteUrl('/pricing#designer-quotation-builder'),
+            ],
+        ];
         render('public/pricing', [
-            'title' => (string)SiteRepository::content('seo.pricing.title', 'Pricing for Architects & Interior Designers'),
-            'metaDescription' => (string)SiteRepository::content('seo.pricing.description', 'Choose lead purchase or managed account plans for architects and interior designers, with sales registration and growth support.'),
+            'title' => (string)SiteRepository::content('seo.pricing.title', 'BOQ/ Quotation Builder | HomeInteriors360'),
+            'metaDescription' => (string)SiteRepository::content('seo.pricing.description', 'Interior designer quotation builder pricing with 15 days free, PDF proposals, GST, payment milestones, lead tools and ₹999/month after trial.'),
+            'canonicalUrl' => absoluteUrl('/pricing'),
             'active' => 'pricing',
             'content' => $content,
             'reviews' => SiteRepository::pricingReviews(),
+            'structuredData' => [$softwareSchema],
         ]);
         exit;
     }
 
     if ($path === '/lead-marketplace') {
+        $leadServiceSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Service',
+            'name' => 'Buy Interior Design Leads',
+            'description' => 'Buy filtered homeowner interior design leads by city, society, budget, work type, and available quantity.',
+            'provider' => ['@type' => 'Organization', 'name' => 'HomeInteriors360', 'url' => absoluteUrl('/')],
+            'areaServed' => ['Delhi NCR', 'Gurgaon', 'Delhi', 'Noida', 'Greater Noida', 'Ghaziabad', 'Faridabad'],
+            'offers' => ['@type' => 'AggregateOffer', 'priceCurrency' => 'INR', 'lowPrice' => '0', 'highPrice' => '100', 'url' => absoluteUrl('/lead-marketplace')],
+        ];
         render('public/lead-marketplace', [
             'title' => 'Buy Filtered Interior Design Leads | HomeInteriors360',
-            'metaDescription' => 'Buy verified homeowner lead packages by city, society, budget, work type, and date range.',
+            'metaDescription' => 'Buy interior design leads by city, society, budget, work type and lead count with transparent cart pricing and secure checkout.',
+            'canonicalUrl' => absoluteUrl('/lead-marketplace'),
             'active' => 'leads',
             'content' => $content,
+            'structuredData' => [$leadServiceSchema],
+        ]);
+        exit;
+    }
+
+    $singleLeadFilterRoute = preg_match('#^/single-lead/(?:in-|work-|budget-)#', $path) === 1;
+    if ($path === '/single-lead' || $singleLeadFilterRoute) {
+        $routeSegments = $singleLeadFilterRoute ? explode('/', trim(substr($path, strlen('/single-lead/')), '/')) : [];
+        $filters = SiteRepository::singleLeadSaleFiltersFromPath($routeSegments);
+        if ($path === '/single-lead') {
+            $requestedFilters = [
+                'city' => trim((string)($_GET['city'] ?? '')),
+                'requirement' => trim((string)($_GET['work'] ?? $_GET['requirement'] ?? '')),
+                'budget' => trim((string)($_GET['budget'] ?? '')),
+            ];
+            $requestedFilters = array_filter($requestedFilters, static fn(string $value): bool => $value !== '');
+            if ($requestedFilters !== []) {
+                $candidatePath = SiteRepository::singleLeadSaleListingPath($requestedFilters);
+                $resolvedFilters = SiteRepository::singleLeadSaleFiltersFromPath(explode('/', trim(substr($candidatePath, strlen('/single-lead/')), '/')));
+                if ($resolvedFilters !== []) {
+                    header('Location: ' . $candidatePath, true, 302);
+                    exit;
+                }
+            }
+        }
+        $canonicalPath = SiteRepository::singleLeadSaleListingPath($filters);
+        if ($singleLeadFilterRoute && $path !== $canonicalPath) {
+            header('Location: ' . $canonicalPath, true, 301);
+            exit;
+        }
+        $sales = SiteRepository::listSingleLeadSales(false, $filters);
+        $filterOptions = SiteRepository::singleLeadSaleFilterOptions();
+        $titleParts = [];
+        if (!empty($filters['requirement'])) {
+            $titleParts[] = (string)$filters['requirement'];
+        }
+        $titleParts[] = 'Interior Leads';
+        if (!empty($filters['city'])) {
+            $titleParts[] = 'in ' . (string)$filters['city'];
+        }
+        if (!empty($filters['budget'])) {
+            $titleParts[] = 'for ' . (string)$filters['budget'] . ' budgets';
+        }
+        $listingHeading = implode(' ', $titleParts);
+        $listingDescription = 'Buy selected individual interior design leads priced from ₹199 to ₹999 by project quality.'
+            . (!empty($filters['city']) ? ' Browse available homeowner enquiries in ' . (string)$filters['city'] . '.' : '')
+            . (!empty($filters['requirement']) ? ' This page focuses on ' . (string)$filters['requirement'] . ' requirements.' : '')
+            . ' Phone numbers stay masked until secure payment is completed.';
+        $breadcrumbItems = [
+            ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => absoluteUrl('/')],
+            ['@type' => 'ListItem', 'position' => 2, 'name' => 'Single Interior Leads', 'item' => absoluteUrl('/single-lead')],
+        ];
+        if ($filters !== []) {
+            $breadcrumbItems[] = ['@type' => 'ListItem', 'position' => 3, 'name' => $listingHeading, 'item' => absoluteUrl($canonicalPath)];
+        }
+        $itemList = array_slice($sales, 0, 50);
+        $publicSaleTitle = static fn(array $sale): string => trim((string)preg_replace('/\s*#\d+\b/', '', (string)($sale['title'] ?? ''))) ?: 'Single Interior Lead';
+        render('public/single-lead-list', [
+            'title' => $listingHeading . ' | HomeInteriors360',
+            'metaDescription' => $listingDescription,
+            'canonicalUrl' => absoluteUrl($canonicalPath),
+            'active' => 'leads',
+            'content' => $content,
+            'sales' => $sales,
+            'filters' => $filters,
+            'filterOptions' => $filterOptions,
+            'listingHeading' => $listingHeading,
+            'listingDescription' => $listingDescription,
+            'listingPath' => $canonicalPath,
+            'buyer' => buyerUser(),
+            'autoOpenSaleId' => (int)($_GET['sale'] ?? 0),
+            'structuredData' => [[
+                '@context' => 'https://schema.org',
+                '@type' => 'CollectionPage',
+                'name' => $listingHeading,
+                'description' => $listingDescription,
+                'url' => absoluteUrl($canonicalPath),
+            ], [
+                '@context' => 'https://schema.org',
+                '@type' => 'BreadcrumbList',
+                'itemListElement' => $breadcrumbItems,
+            ], [
+                '@context' => 'https://schema.org',
+                '@type' => 'ItemList',
+                'name' => $listingHeading,
+                'numberOfItems' => count($sales),
+                'itemListElement' => array_map(static fn(array $sale, int $position): array => [
+                    '@type' => 'ListItem',
+                    'position' => $position + 1,
+                    'name' => $publicSaleTitle($sale),
+                    'url' => absoluteUrl('/single-lead/' . (string)($sale['slug'] ?? '')),
+                ], $itemList, array_keys($itemList)),
+            ]],
+        ]);
+        exit;
+    }
+
+    if (preg_match('#^/single-lead/([a-z0-9-]+)$#i', $path, $match)) {
+        $sale = SiteRepository::getSingleLeadSaleBySlug((string)$match[1], true);
+        if (!$sale) {
+            http_response_code(404);
+            echo 'Single lead not found or no longer available.';
+            exit;
+        }
+        header('Location: /single-lead?sale=' . (int)$sale['id'], true, 302);
+        exit;
+    }
+
+    if ($path === '/delhi-ncr-founding-partners') {
+        $foundingSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Service',
+            'name' => 'Delhi NCR Founding Partner Programme',
+            'description' => 'Professional partner programme for interior designers, architects, contractors and modular firms seeking matched Delhi NCR project opportunities.',
+            'provider' => ['@type' => 'Organization', 'name' => 'HomeInteriors360', 'url' => absoluteUrl('/')],
+            'areaServed' => ['Delhi NCR', 'Gurgaon', 'Delhi', 'Noida', 'Faridabad', 'Ghaziabad'],
+        ];
+        render('public/founding-partners', [
+            'title' => 'Delhi NCR Founding Partner Programme | HomeInteriors360',
+            'metaDescription' => 'Join HomeInteriors360 as a Delhi NCR founding professional partner for fresh location-matched interior project opportunities.',
+            'canonicalUrl' => absoluteUrl('/delhi-ncr-founding-partners'),
+            'active' => 'pricing',
+            'content' => $content,
+            'structuredData' => [$foundingSchema],
+        ]);
+        exit;
+    }
+
+    if ($path === '/for-professionals') {
+        $proServiceSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Service',
+            'name' => 'Growth Platform for Interior Designers and Architects',
+            'description' => 'Create profile, upload portfolio, get trial leads, buy homeowner enquiries and use quotation tools on HomeInteriors360.',
+            'provider' => ['@type' => 'Organization', 'name' => 'HomeInteriors360', 'url' => absoluteUrl('/')],
+            'serviceType' => 'Professional growth platform for interior businesses',
+        ];
+        render('public/for-professionals', [
+            'title' => 'Growth Platform for Interior Designers & Architects | HomeInteriors360',
+            'metaDescription' => 'Create a professional profile, upload portfolio work, get 3 free leads, buy preferred homeowner leads, and use proposal tools on HomeInteriors360.',
+            'canonicalUrl' => absoluteUrl('/for-professionals'),
+            'active' => 'professionals-growth',
+            'content' => $content,
+            'structuredData' => [$proServiceSchema],
         ]);
         exit;
     }
@@ -2160,6 +3793,25 @@ try {
                 ['@type' => 'ListItem', 'position' => 2, 'name' => 'Design Ideas', 'item' => absoluteUrl('/design-ideas')],
             ],
         ];
+        $ideas = SiteRepository::listDesignIdeas($filters);
+        $designCollectionSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'CollectionPage',
+            'name' => 'Interior Design Ideas',
+            'description' => 'Browse interior design ideas by room, colour, city, style and layout.',
+            'url' => absoluteUrl('/design-ideas'),
+        ];
+        $designItemListSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'ItemList',
+            'name' => 'Interior Design Ideas',
+            'itemListElement' => array_map(static fn(array $idea, int $index): array => [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'name' => (string)($idea['name'] ?? ''),
+                'url' => absoluteUrl('/design-ideas/idea/' . (string)($idea['slug'] ?? '')),
+            ], array_slice($ideas, 0, 20), array_keys(array_slice($ideas, 0, 20))),
+        ];
         render('public/design-ideas', [
             'title' => (string)($urlAlias['meta_title'] ?? 'Interior Design Ideas with Photos, Colours and Quotes | HomeInteriors360'),
             'metaDescription' => (string)($urlAlias['meta_description'] ?? 'Browse dynamic interior design ideas by room type, colour, city, style, layout, and dimensions. Save favourites and request a quotation.'),
@@ -2169,12 +3821,12 @@ try {
             'active' => 'design-ideas',
             'content' => $content,
             'globalAlias' => $urlAlias,
-            'ideas' => SiteRepository::listDesignIdeas($filters),
+            'ideas' => $ideas,
             'aliases' => SiteRepository::listDesignIdeaAliases(),
             'sections' => SiteRepository::listDesignIdeaSections(),
             'filterOptions' => SiteRepository::designIdeaFilterOptions(),
             'activeFilters' => $filters,
-            'structuredData' => [$breadcrumbSchema],
+            'structuredData' => [$breadcrumbSchema, $designCollectionSchema, $designItemListSchema],
         ]);
         exit;
     }
@@ -2214,7 +3866,7 @@ try {
             'metaDescription' => (string)($urlAlias['meta_description'] ?? ($idea['meta_description'] ?: $idea['short_description'])),
             'canonicalUrl' => absoluteUrl((string)($urlAlias['canonical_url'] ?: '/design-ideas/idea/' . $idea['slug'])),
             'metaRobots' => (string)($urlAlias['robots'] ?: 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'),
-            'ogImage' => !empty($urlAlias['image_url']) ? absoluteUrl((string)$urlAlias['image_url']) : ($image !== '' ? absoluteUrl($image) : absoluteUrl('/logo.png')),
+            'ogImage' => !empty($urlAlias['image_url']) ? absoluteUrl((string)$urlAlias['image_url']) : ($image !== '' ? absoluteUrl($image) : absoluteUrl('/social-share-v2.jpg')),
             'active' => 'design-ideas',
             'content' => $content,
             'globalAlias' => $urlAlias,
@@ -2251,12 +3903,30 @@ try {
                 ['@type' => 'ListItem', 'position' => 3, 'name' => (string)$alias['title'], 'item' => absoluteUrl('/design-ideas/' . $alias['slug'])],
             ],
         ];
+        $designCollectionSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'CollectionPage',
+            'name' => (string)$alias['title'],
+            'description' => (string)($alias['meta_description'] ?: $alias['subtitle']),
+            'url' => absoluteUrl('/design-ideas/' . (string)$alias['slug']),
+        ];
+        $designItemListSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'ItemList',
+            'name' => (string)$alias['title'],
+            'itemListElement' => array_map(static fn(array $idea, int $index): array => [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'name' => (string)($idea['name'] ?? ''),
+                'url' => absoluteUrl('/design-ideas/idea/' . (string)($idea['slug'] ?? '')),
+            ], array_slice($page['ideas'], 0, 20), array_keys(array_slice($page['ideas'], 0, 20))),
+        ];
         render('public/design-ideas', [
             'title' => (string)($urlAlias['meta_title'] ?? ($alias['meta_title'] ?: $alias['title'] . ' | HomeInteriors360')),
             'metaDescription' => (string)($urlAlias['meta_description'] ?? ($alias['meta_description'] ?: $alias['subtitle'])),
             'canonicalUrl' => absoluteUrl((string)($urlAlias['canonical_url'] ?: '/design-ideas/' . $alias['slug'])),
             'metaRobots' => (string)($urlAlias['robots'] ?: 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'),
-            'ogImage' => !empty($urlAlias['image_url']) ? absoluteUrl((string)$urlAlias['image_url']) : (!empty($alias['hero_image']) ? absoluteUrl((string)$alias['hero_image']) : absoluteUrl('/logo.png')),
+            'ogImage' => !empty($urlAlias['image_url']) ? absoluteUrl((string)$urlAlias['image_url']) : (!empty($alias['hero_image']) ? absoluteUrl((string)$alias['hero_image']) : absoluteUrl('/social-share-v2.jpg')),
             'active' => 'design-ideas',
             'content' => $content,
             'globalAlias' => $urlAlias,
@@ -2266,7 +3936,7 @@ try {
             'sections' => SiteRepository::listDesignIdeaSections(),
             'filterOptions' => SiteRepository::designIdeaFilterOptions(),
             'activeFilters' => $activeFilters,
-            'structuredData' => [$breadcrumbSchema],
+            'structuredData' => [$breadcrumbSchema, $designCollectionSchema, $designItemListSchema],
         ]);
         exit;
     }
@@ -2332,7 +4002,7 @@ try {
             'title' => (string)($project['meta_title'] ?: $project['project_name'] . ' | Price, Floor Plans & Photos'),
             'metaDescription' => (string)($project['meta_description'] ?: $project['short_description']),
             'canonicalUrl' => absoluteUrl('/property/' . $project['slug']),
-            'ogImage' => $image !== '' ? absoluteUrl($image) : absoluteUrl('/logo.png'),
+            'ogImage' => $image !== '' ? absoluteUrl($image) : absoluteUrl('/social-share-v2.jpg'),
             'active' => 'properties',
             'content' => $content,
             'project' => $project,
@@ -2352,27 +4022,41 @@ try {
         exit;
     }
 
-    if ($path === '/interior-designer-registration' || $path === '/register-interior-designer') {
+    if ($path === '/register-interior-designer') {
+        header('Location: /interior-designer-registration', true, 301);
+        exit;
+    }
+
+    if ($path === '/interior-designer-registration') {
+        Auth::start();
+        $googleIdentity = isset($_SESSION['google_designer_identity']) && is_array($_SESSION['google_designer_identity'])
+            ? $_SESSION['google_designer_identity']
+            : null;
+        $registrationSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Service',
+            'name' => 'Register as an Interior Designer',
+            'description' => 'Register an interior design firm, create a professional profile, upload portfolio work and access homeowner leads on HomeInteriors360.',
+            'provider' => ['@type' => 'Organization', 'name' => 'HomeInteriors360', 'url' => absoluteUrl('/')],
+            'serviceType' => 'Interior designer registration and lead access',
+        ];
         render('public/interior-designer-registration', [
             'title' => 'Register as Interior Designer | HomeInteriors360',
-            'metaDescription' => 'Register your interior design firm, create a professional profile, upload portfolio work, and get 10 free homeowner leads on HomeInteriors360.',
+            'metaDescription' => 'Register your interior design firm, create a professional profile, upload portfolio work, and get 3 free homeowner leads on HomeInteriors360.',
+            'canonicalUrl' => absoluteUrl('/interior-designer-registration'),
             'active' => 'pricing',
             'content' => $content,
             'standardOptions' => SiteRepository::professionalStandardOptions(),
+            'membershipPlans' => SiteRepository::designerMembershipPlans(),
+            'googleIdentity' => $googleIdentity,
+            'googleConfigured' => GoogleOAuthService::configured(),
+            'structuredData' => [$registrationSchema],
         ]);
         exit;
     }
 
     if ($path === '/lead-checkout') {
-        render('public/lead-checkout', [
-            'title' => 'Lead Checkout | HomeInteriors360',
-            'metaDescription' => 'Create your buyer account, login, and complete Razorpay payment for lead packages.',
-            'metaRobots' => 'noindex,nofollow',
-            'active' => 'leads',
-            'content' => $content,
-            'buyer' => buyerUser(),
-            'razorpayConfigured' => razorpayConfigured(),
-        ]);
+        redirectTo('/lead-cart');
         exit;
     }
 
@@ -2414,6 +4098,24 @@ try {
             echo 'Portfolio project not found';
             exit;
         }
+        $projectImages = array_values(array_filter((array)($project['media_json'] ?? [])));
+        $portfolioSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'CreativeWork',
+            'name' => (string)$project['project_name'],
+            'url' => absoluteUrl('/portfolio/' . (string)$project['slug']),
+            'description' => (string)($project['project_description'] ?? ''),
+            'creator' => ['@type' => 'Organization', 'name' => (string)($project['pro_name'] ?? 'HomeInteriors360 professional')],
+            'contentLocation' => ['@type' => 'Place', 'name' => (string)($project['location'] ?? '')],
+            'image' => array_map(static fn(string $url): string => absoluteUrl($url), $projectImages),
+        ];
+        $imageSchema = $projectImages ? [
+            '@context' => 'https://schema.org',
+            '@type' => 'ImageObject',
+            'contentUrl' => absoluteUrl((string)$projectImages[0]),
+            'name' => (string)$project['project_name'],
+            'description' => (string)($project['work_type'] ?? 'Interior design project'),
+        ] : null;
         render('public/portfolio-detail', [
             'title' => $project['project_name'] . ' | ' . (string)SiteRepository::content('seo.portfolio.title_suffix', 'HomeInteriors360'),
             'metaDescription' => sprintf(
@@ -2422,10 +4124,13 @@ try {
                 (string)($project['pro_name'] ?? 'this professional'),
                 (string)($project['location'] ?? 'Gurgaon')
             ),
+            'canonicalUrl' => absoluteUrl('/portfolio/' . (string)$project['slug']),
+            'ogImage' => $projectImages ? absoluteUrl((string)$projectImages[0]) : absoluteUrl('/social-share-v2.jpg'),
             'active' => 'directory',
             'content' => $content,
             'project' => $project,
             'relatedProjects' => SiteRepository::listOtherProjectsByPro((int)$project['pro_id'], (string)$project['slug']),
+            'structuredData' => array_values(array_filter([$portfolioSchema, $imageSchema])),
         ]);
         exit;
     }
@@ -2447,6 +4152,7 @@ try {
         if ($designerBuyer) {
             setBuyerSession($designerBuyer);
         }
+        $registrationLeadDelivery = SiteRepository::autoAssignDesignerRegistrationLeads($user, $designerBuyer);
         render('designer/dashboard', [
             'title' => 'Designer Workspace | HomeInteriors360',
             'metaDescription' => 'Designer-only workspace for assigned leads, quotations, and proposal generator.',
@@ -2455,11 +4161,18 @@ try {
             'content' => $content,
             'stats' => SiteRepository::designerDashboardStats((int)$user['pro_id']),
             'subscription' => SiteRepository::designerSubscriptionStatus($user),
+            'membership' => SiteRepository::designerMembershipStatus($user),
+            'membershipPlans' => SiteRepository::designerMembershipPlans(),
             'profileChecklist' => SiteRepository::designerProfileChecklist((int)$user['pro_id']),
             'buyer' => $designerBuyer,
-            'freeLeadEligible' => $designerBuyer ? SiteRepository::buyerFirstTimeLeadOfferEligible((int)$designerBuyer['id']) : false,
+            'freeLeadEligible' => false,
+            'registrationLeadDelivery' => $registrationLeadDelivery,
         ]);
         exit;
+    }
+
+    if ($path === '/designer/claim-registration-leads') {
+        redirectTo('/designer');
     }
 
     if ($path === '/designer/portfolio-onboarding') {
@@ -2476,6 +4189,24 @@ try {
         exit;
     }
 
+    if ($path === '/designer/profile') {
+        $user = Auth::requireDesigner();
+        $profile = SiteRepository::designerProfessional((int)$user['pro_id']);
+        if (!$profile) {
+            redirectTo('/designer');
+        }
+        render('designer/profile', [
+            'title' => 'My Professional Profile | HomeInteriors360',
+            'metaDescription' => 'Update your HomeInteriors360 professional profile.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'profile' => $profile,
+            'standardOptions' => SiteRepository::professionalStandardOptions(),
+        ]);
+        exit;
+    }
+
     if ($path === '/designer/leads') {
         $user = Auth::requireDesigner();
         render('designer/leads', [
@@ -2485,6 +4216,19 @@ try {
             'active' => 'admin',
             'content' => $content,
             'leads' => SiteRepository::listLeads(['designer_id' => (int)$user['pro_id']]),
+        ]);
+        exit;
+    }
+
+    if ($path === '/designer/alert-preferences') {
+        $user = Auth::requireDesigner();
+        render('designer/alert-preferences', [
+            'title' => 'Lead Alert Preferences | HomeInteriors360',
+            'metaDescription' => 'Manage lead matching and alert preferences.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'preferences' => LeadMatchingService::getPreferences((int)$user['pro_id']),
         ]);
         exit;
     }
@@ -2510,6 +4254,24 @@ try {
         exit;
     }
 
+    if ($path === '/designer/rate-card') {
+        $user = Auth::requireDesigner();
+        render('admin/quotation-rate-card', [
+            'title' => 'My BOQ Rate Card | HomeInteriors360',
+            'metaDescription' => 'Manage your private BOQ rates.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'rateCards' => SiteRepository::quotationRateCards(['designer_id' => (int)$user['pro_id']]),
+            'packages' => SiteRepository::quotationPackages(true),
+            'professionals' => array_values(array_filter(SiteRepository::professionalOptions(), static fn(array $pro): bool => (int)$pro['id'] === (int)$user['pro_id'])),
+            'portalBase' => '/designer',
+            'isDesignerPortal' => true,
+            'designerId' => (int)$user['pro_id'],
+        ]);
+        exit;
+    }
+
     if ($path === '/designer/quotations/create' || preg_match('#^/designer/quotations/(\\d+)/edit$#', $path, $designerQuoteEditMatch)) {
         $user = Auth::requireDesigner();
         $quote = null;
@@ -2521,7 +4283,8 @@ try {
                 exit;
             }
             $quote = SiteRepository::getQuotation($quoteId);
-        } elseif (!SiteRepository::designerCanCreateQuotation($user)) {
+        }
+        if (!$quote && !SiteRepository::designerCanCreateQuotation($user)) {
             render('designer/dashboard', [
                 'title' => 'Designer Workspace | HomeInteriors360',
                 'metaDescription' => 'Designer-only workspace for assigned leads, quotations, and proposal generator.',
@@ -2534,7 +4297,7 @@ try {
                 'createBlocked' => true,
             ]);
             exit;
-        } elseif (!empty($_GET['lead_id'])) {
+        } elseif (!$quote && !empty($_GET['lead_id'])) {
             $leadRows = SiteRepository::listLeads(['designer_id' => (int)$user['pro_id']]);
             $allowedLeadIds = array_map(static fn(array $lead): int => (int)$lead['id'], $leadRows);
             if (!in_array((int)$_GET['lead_id'], $allowedLeadIds, true)) {
@@ -2611,29 +4374,140 @@ try {
         exit;
     }
 
-    if ($path === '/admin/content') {
+    if (in_array($path, ['/admin/content', '/admin/content-manager'], true)) {
         Auth::requireAdmin();
+        $items = [];
+        $adminError = '';
+        try {
+            $items = SiteRepository::contentList();
+        } catch (Throwable $e) {
+            $adminError = 'Content records could not be loaded. Please check the site_content table on live.';
+        }
         render('admin/content', [
             'title' => (string)SiteRepository::content('admin.content.title', 'Content Manager'),
             'metaDescription' => 'Update homepage content, logos, SEO fields, and reusable site copy from the admin panel.',
             'metaRobots' => 'noindex,nofollow',
             'active' => 'admin',
             'content' => $content,
-            'items' => SiteRepository::contentList(),
+            'items' => $items,
+            'adminError' => $adminError,
         ]);
         exit;
     }
 
-    if ($path === '/admin/leads') {
+    if (in_array($path, ['/admin/articles', '/admin/article-manager'], true)) {
         Auth::requireAdmin();
+        $articles = [];
+        $adminError = '';
+        try {
+            $articles = SiteRepository::listArticles([], true);
+            foreach ($articles as &$article) {
+                $article['faqs'] = SiteRepository::articleFaqs((int)$article['id']);
+            }
+            unset($article);
+        } catch (Throwable $e) {
+            $adminError = 'Article records could not be loaded. Please run the article CMS migration on live.';
+        }
+        render('admin/articles', [
+            'title' => 'Article Content Management | HomeInteriors360',
+            'metaDescription' => 'Create and manage SEO articles, city and work-type mappings, FAQs, cover images, and public article pages.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'articles' => $articles,
+            'filterOptions' => SiteRepository::articleFilterOptions(),
+            'adminError' => $adminError,
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/lead-alerts') {
+        Auth::requireAdmin();
+        $leadId = isset($_GET['lead_id']) ? (int)$_GET['lead_id'] : 0;
+        render('admin/lead-alerts', [
+            'title' => 'Lead Alerts & Founding Partners | HomeInteriors360',
+            'metaDescription' => 'Manage Founding Partner applications, lead matching, alert waves, and notification delivery.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'settings' => LeadMatchingService::settings(),
+            'partners' => LeadMatchingService::listFoundingPartners(),
+            'matches' => $leadId > 0 ? LeadMatchingService::matchingReport($leadId) : [],
+            'jobs' => LeadMatchingService::recentNotificationJobs(100),
+        ]);
+        exit;
+    }
+
+    if (in_array($path, ['/admin/leads', '/admin/lead-tracker'], true)) {
+        Auth::requireAdmin();
+        $leads = [];
+        $adminError = '';
+        try {
+            $leads = SiteRepository::listLeads();
+        } catch (Throwable $e) {
+            $adminError = 'Lead records could not be loaded. Please check the leads table columns on live.';
+        }
         render('admin/leads', [
             'title' => (string)SiteRepository::content('admin.leads.title', 'Lead Tracker'),
             'metaDescription' => 'Review and update incoming leads with status tracking for the HomeInteriors360 sales team.',
             'metaRobots' => 'noindex,nofollow',
             'active' => 'admin',
             'content' => $content,
-            'leads' => SiteRepository::listLeads(),
+            'leads' => $leads,
+            'adminError' => $adminError,
         ]);
+        exit;
+    }
+
+    if ($path === '/admin/site-search') {
+        Auth::requireAdmin();
+        $filters = [
+            'days' => max(1, min(365, (int)($_GET['days'] ?? 30))),
+            'q' => trim((string)($_GET['q'] ?? '')),
+        ];
+        render('admin/site-search', [
+            'title' => 'Search Analytics | HomeInteriors360',
+            'metaDescription' => 'Review on-site searches and result clicks.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'filters' => $filters,
+            'analytics' => SiteRepository::siteSearchAnalytics($filters),
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/single-lead-sales') {
+        Auth::requireAdmin();
+        $adminError = '';
+        $sales = [];
+        $availableLeads = [];
+        try {
+            $sales = SiteRepository::listSingleLeadSales(true);
+            $availableLeads = SiteRepository::leadsAvailableForSingleSale();
+        } catch (Throwable $e) {
+            $adminError = 'Single lead sale panel could not be loaded. Please run the latest migration.';
+        }
+        render('admin/single-lead-sales', [
+            'title' => 'Single Lead Sale Backend | HomeInteriors360',
+            'metaDescription' => 'Create and manage single interior lead sale buckets.',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'sales' => $sales,
+            'availableLeads' => $availableLeads,
+            'adminError' => $adminError,
+        ]);
+        exit;
+    }
+
+    if ($path === '/admin/leads/sample.xlsx') {
+        Auth::requireAdmin();
+        $sample = SiteRepository::leadUploadSampleXlsx();
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="homeinteriors360-lead-upload-sample.xlsx"');
+        header('Content-Length: ' . strlen($sample));
+        echo $sample;
         exit;
     }
 
@@ -2797,6 +4671,19 @@ try {
         exit;
     }
 
+    if ($path === '/admin/checkout-recovery') {
+        Auth::requireAdmin();
+        render('admin/checkout-recovery', [
+            'title' => 'Checkout Recovery',
+            'metaRobots' => 'noindex,nofollow',
+            'active' => 'admin',
+            'content' => $content,
+            'attempts' => SiteRepository::abandonedCheckouts((string)($_GET['status'] ?? 'open')),
+            'statusFilter' => (string)($_GET['status'] ?? 'open'),
+        ]);
+        exit;
+    }
+
     if ($path === '/admin/portfolios') {
         Auth::requireAdmin();
         render('admin/portfolios', [
@@ -2851,6 +4738,15 @@ try {
         exit;
     }
 
+    if ($path === '/admin/designer-contact-queries') {
+        Auth::requireAdmin();
+        render('admin/designer-contact-queries', [
+            'title' => 'Designer Contact Queries', 'metaDescription' => 'CEO office designer contact inbox.', 'metaRobots' => 'noindex,nofollow', 'active' => 'admin', 'content' => $content,
+            'queries' => SiteRepository::listDesignerContactQueries(),
+        ]);
+        exit;
+    }
+
     if ($path === '/admin/url-aliases') {
         Auth::requireAdmin();
         render('admin/url-aliases', [
@@ -2873,6 +4769,8 @@ try {
             'active' => 'admin',
             'content' => $content,
             'ideas' => SiteRepository::listDesignIdeas([], true),
+            'professionals' => SiteRepository::professionalOptions(),
+            'filterOptions' => SiteRepository::designIdeaAdminOptions(),
         ]);
         exit;
     }
@@ -2908,11 +4806,30 @@ try {
         exit;
     }
 
-    echo '404 Not Found';
+    http_response_code(404);
+    header('X-Robots-Tag: noindex, follow', true);
+    render('public/not-found', [
+        'title' => 'Page Not Found | HomeInteriors360',
+        'metaDescription' => 'The requested page is unavailable. Explore HomeInteriors360 interior designers, design ideas, cost calculators, and consultation options.',
+        'metaRobots' => 'noindex,follow',
+        'canonicalUrl' => absoluteUrl('/'),
+        'active' => '',
+        'content' => $content,
+    ]);
 } catch (Throwable $e) {
+    error_log(sprintf(
+        '[HomeInteriors360] Public request failed: %s at %s for %s',
+        $e->getMessage(),
+        basename($e->getFile()) . ':' . $e->getLine(),
+        $path
+    ));
     if (str_starts_with($path, '/api/')) {
         jsonResponse(['error' => $e->getMessage()], 500);
     }
     http_response_code(500);
-    echo 'Server Error: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+    header('Cache-Control: no-store, max-age=0, must-revalidate', true);
+    header('Pragma: no-cache', true);
+    header('Surrogate-Control: no-store', true);
+    header('X-Robots-Tag: noindex, nofollow', true);
+    echo 'Server Error';
 }

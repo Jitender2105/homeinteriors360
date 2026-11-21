@@ -45,5 +45,11 @@ return [
         'key_id' => getenv('RAZORPAY_KEY_ID') ?: '',
         'key_secret' => getenv('RAZORPAY_KEY_SECRET') ?: '',
         'currency' => getenv('RAZORPAY_CURRENCY') ?: 'INR',
+        'quotation_plan_id' => getenv('RAZORPAY_QUOTATION_PLAN_ID') ?: '',
+        'designer_pro_monthly_plan_id' => getenv('RAZORPAY_DESIGNER_PRO_MONTHLY_PLAN_ID') ?: '',
+        'designer_pro_yearly_plan_id' => getenv('RAZORPAY_DESIGNER_PRO_YEARLY_PLAN_ID') ?: '',
+        'designer_featured_monthly_plan_id' => getenv('RAZORPAY_DESIGNER_FEATURED_MONTHLY_PLAN_ID') ?: '',
+        'designer_featured_yearly_plan_id' => getenv('RAZORPAY_DESIGNER_FEATURED_YEARLY_PLAN_ID') ?: '',
+        'webhook_secret' => getenv('RAZORPAY_WEBHOOK_SECRET') ?: '',
     ],
 ];
