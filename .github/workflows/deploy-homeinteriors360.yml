@@ -1,0 +1,63 @@
+name: Deploy HomeInteriors360
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'homeinteriors/**'
+      - '.github/workflows/deploy-homeinteriors360.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homeinteriors360-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Upload changed production files
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: homeinteriors
+    env:
+      FTP_HOST: ${{ secrets.FTP_HOST }}
+      FTP_USER: ${{ secrets.FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      FTP_REMOTE_ROOT: ${{ secrets.FTP_REMOTE_ROOT }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Validate deployment configuration
+        run: |
+          test -n "$FTP_HOST"
+          test -n "$FTP_USER"
+          test -n "$FTP_PASSWORD"
+
+      - name: Deploy changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          before='${{ github.event.before }}'
+          if [[ "$before" =~ ^0+$ ]] || ! git cat-file -e "$before^{commit}" 2>/dev/null; then
+            git ls-tree -r --name-only HEAD -- . \
+              | sed -E 's#^#homeinteriors/#' \
+              | sed 's#^homeinteriors/##' > /tmp/deploy-files.txt
+          else
+            git diff --name-only --diff-filter=ACMRT "$before" "${{ github.sha }}" -- homeinteriors/ \
+              | sed 's#^homeinteriors/##' > /tmp/deploy-files.txt
+          fi
+
+          mapfile -t files < <(grep -E '^(public|src|scripts|database)/' /tmp/deploy-files.txt || true)
+          if (( ${#files[@]} == 0 )); then
+            echo 'No deployable HomeInteriors360 files changed.'
+            exit 0
+          fi
+
+          printf 'Deploying %s changed file(s).\n' "${#files[@]}"
+          ./scripts/deploy-file.sh "${files[@]}"
